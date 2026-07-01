@@ -1,16 +1,18 @@
-import { ClipboardList, LayoutDashboard, Settings } from 'lucide-react'
+import { ClipboardList, LayoutDashboard, PackageCheck, Settings } from 'lucide-react'
 
 import type { AppPage, LegacyMenuItem, SessionNavItem } from '@/session/types'
 
 const FALLBACK_NAV_ITEMS: SessionNavItem[] = [
   { key: 'workspace', label: '工作台', icon: LayoutDashboard },
+  { key: 'orders', label: '订单列表', icon: PackageCheck },
   { key: 'registry', label: '页面注册表', icon: ClipboardList },
   { key: 'settings', label: '系统设置', icon: Settings },
 ]
 
 const PAGE_MATCHERS: Array<{ key: AppPage; icon: SessionNavItem['icon']; patterns: RegExp[] }> = [
   { key: 'workspace', icon: LayoutDashboard, patterns: [/workbench|dashboard|workspace|工作台|统计|首页/i] },
-  { key: 'registry', icon: ClipboardList, patterns: [/registry|system|user|role|menu|company|order|receipt|页面|订单|回单|用户|角色|菜单|公司/i] },
+  { key: 'orders', icon: PackageCheck, patterns: [/order\/orders|order\/list|\/order\b|订单列表|运单|订单管理/i] },
+  { key: 'registry', icon: ClipboardList, patterns: [/registry|system|user|role|menu|company|receipt|页面|回单|用户|角色|菜单|公司/i] },
   { key: 'settings', icon: Settings, patterns: [/setting|settings|profile|系统设置|设置/i] },
 ]
 

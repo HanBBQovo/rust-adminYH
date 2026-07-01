@@ -14,6 +14,7 @@ import { adaptLegacyMenus, fallbackNavItems } from '@/session/menu-adapter'
 import type { AdminSession, AppPage, SessionNavItem } from '@/session/types'
 
 const Workspace = lazy(() => import('@/pages/Workspace'))
+const OrdersList = lazy(() => import('@/pages/OrdersList'))
 const ResourceRegistry = lazy(() => import('@/pages/ResourceRegistry'))
 const SettingsPage = lazy(() => import('@/pages/Settings'))
 
@@ -237,6 +238,7 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
                     transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
                   >
                     {currentPage === 'workspace' ? <Workspace /> : null}
+                    {currentPage === 'orders' ? <OrdersList /> : null}
                     {currentPage === 'registry' ? <ResourceRegistry /> : null}
                     {currentPage === 'settings' ? <SettingsPage /> : null}
                   </motion.div>

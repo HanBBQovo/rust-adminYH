@@ -4,7 +4,7 @@ import { adaptLegacyMenus } from '@/session/menu-adapter'
 
 describe('adaptLegacyMenus', () => {
   it('falls back to template nav when old menus are empty', () => {
-    expect(adaptLegacyMenus([]).map((item) => item.key)).toEqual(['workspace', 'registry', 'settings'])
+    expect(adaptLegacyMenus([]).map((item) => item.key)).toEqual(['workspace', 'orders', 'registry', 'settings'])
   })
 
   it('maps old menu labels and urls into template pages', () => {
@@ -14,7 +14,7 @@ describe('adaptLegacyMenus', () => {
       { name: '系统设置', url: '/main/settings' },
     ])
 
-    expect(items.map((item) => item.key)).toEqual(['workspace', 'registry', 'settings'])
+    expect(items.map((item) => item.key)).toEqual(['workspace', 'orders', 'settings'])
     expect(items[1].label).toBe('订单管理')
   })
 
