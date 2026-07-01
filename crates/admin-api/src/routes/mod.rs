@@ -27,6 +27,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/health", get(health::health_check))
         .route("/login", post(auth::login))
         .route("/api/login", post(auth::login))
+        .route("/users/me", get(auth::me))
+        .route("/api/users/me", get(auth::me))
         .with_state(state)
         .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
         .layer(SetRequestIdLayer::new(request_id_header, MakeRequestUuid))

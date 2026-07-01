@@ -14,3 +14,10 @@ pub struct LoginResponse {
     pub name: String,
     pub token: String,
 }
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct CurrentUserResponse {
+    pub id: i64,
+    pub name: String,
+    pub roles: Vec<String>,
+}
