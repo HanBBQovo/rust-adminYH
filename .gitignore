@@ -1,0 +1,38 @@
+.DS_Store
+Thumbs.db
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+
+# Rust
+/target/
+**/*.rs.bk
+
+# Node / Vite
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Tauri generated bundles
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local reports and temporary outputs
+coverage/
+playwright-report/
+test-results/
+tmp/
+*.log

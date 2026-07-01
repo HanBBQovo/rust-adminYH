@@ -35,6 +35,15 @@
 - 提交前必须确认未改动不在当前任务范围内的目录；本轮文档/测试脚手架只允许改 `docs/`、`scripts/` 和必要的 Git 配置。
 - push 失败时不得伪造完成状态，必须记录失败原因、当前 commit hash、远程地址和下一步处理建议。
 
+### 测试与质量红线
+
+- 每个功能完成后必须测试，不允许“先做完最后再补测试”；测试缺失视为功能未完成。
+- 每次 commit 前必须至少跑通当前可执行质量门禁：`scripts/check-all.sh`；如果某一类测试因真实数据库、Tauri 签名、系统权限等外部条件无法执行，必须在提交说明或交付记录里写清楚跳过原因和替代验证。
+- 后端核心逻辑必须做到单元测试 + API 集成测试双覆盖；数据库 repository 和迁移逻辑必须在测试库/影子库跑对账验证。
+- 前端页面不能只看构建成功，必须覆盖 lint、类型检查、组件/交互测试、关键 E2E；涉及模板样式时还要人工/截图验收是否偏离 `frontend-template`。
+- 数据迁移必须做到 dry-run、apply、verify、rollback-plan 四段式闭环，且对账通过后才允许切换真实数据。
+- 所有 bug 修复都要先补可复现测试或校验脚本，再修实现，避免后续重构回归。
+
 ## 2. 旧系统审计结论
 
 ### 2.1 旧前端 adminYh
@@ -939,6 +948,8 @@ scripts/test-frontend.sh
 scripts/test-migration.sh
 scripts/test-e2e.sh
 ```
+
+当前仓库已提供 `scripts/check-all.sh`、`scripts/test-backend.sh`、`scripts/test-frontend.sh`、`scripts/test-migration.sh` 作为统一质量门禁入口。默认情况下，Rust 脚本使用 `CARGO_OFFLINE=true`，保证在依赖已缓存但网络不稳定时仍可稳定运行；需要在线拉取新依赖时可显式执行 `CARGO_OFFLINE=false scripts/check-all.sh`。
 
 ### 11.4 发布门禁
 

@@ -4,6 +4,12 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+CARGO_OFFLINE="${CARGO_OFFLINE:-true}"
+CARGO_FLAGS=()
+if [[ "$CARGO_OFFLINE" == "true" ]]; then
+  CARGO_FLAGS+=(--offline)
+fi
+
 OLD_DATABASE_URL="${OLD_DATABASE_URL:-}"
 NEW_DATABASE_URL="${NEW_DATABASE_URL:-}"
 OLD_AVATAR_DIR="${OLD_AVATAR_DIR:-/Users/hanhan/Desktop/code/adminYh-server/uploads/avatar}"
@@ -39,15 +45,15 @@ fi
 
 if [[ -f Cargo.toml ]] && cargo metadata --format-version=1 --no-deps 2>/dev/null | grep -q '"name":"admin-migration"'; then
   section "admin-migration unit tests"
-  cargo test -p admin-migration
+  cargo test "${CARGO_FLAGS[@]}" -p admin-migration
 
   section "admin-migration dry-run/verify"
   if require_url_pair_for_apply; then
-    cargo run -p admin-migration -- inspect-old --old "$OLD_DATABASE_URL"
-    cargo run -p admin-migration -- migrate --dry-run --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL"
-    cargo run -p admin-migration -- verify --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL"
+    cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- inspect-old --old "$OLD_DATABASE_URL"
+    cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- migrate --dry-run --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL"
+    cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- verify --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL"
     if [[ -n "$NEW_AVATAR_DIR" ]]; then
-      cargo run -p admin-migration -- verify-files --old-avatar-dir "$OLD_AVATAR_DIR" --new-avatar-dir "$NEW_AVATAR_DIR"
+      cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- verify-files --old-avatar-dir "$OLD_AVATAR_DIR" --new-avatar-dir "$NEW_AVATAR_DIR"
     fi
   fi
 else

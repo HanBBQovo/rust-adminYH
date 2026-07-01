@@ -1,0 +1,38 @@
+[workspace]
+members = [
+    "crates/admin-api",
+    "crates/admin-core",
+    "crates/admin-db",
+    "crates/admin-migration",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["rust-adminYH maintainers"]
+rust-version = "1.78"
+
+[workspace.dependencies]
+admin-core = { path = "crates/admin-core" }
+admin-db = { path = "crates/admin-db" }
+
+anyhow = "1.0"
+axum = { version = "0.8", features = ["macros"] }
+dotenvy = "0.15"
+http = "1.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+tokio = { version = "1.38", features = ["macros", "rt-multi-thread", "signal"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["cors", "request-id", "trace", "util"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+uuid = { version = "1.10", features = ["serde", "v4"] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = "symbols"

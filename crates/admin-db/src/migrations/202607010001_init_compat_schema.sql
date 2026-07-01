@@ -1,0 +1,5 @@
+-- Initial compatibility schema placeholder.
+--
+-- The first production migration must be generated from the audited old MySQL
+-- information_schema export. This file intentionally keeps the workspace
+-- migratable without guessing legacy column definitions before the dump exists.

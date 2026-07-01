@@ -4,6 +4,12 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+CARGO_OFFLINE="${CARGO_OFFLINE:-true}"
+CARGO_FLAGS=()
+if [[ "$CARGO_OFFLINE" == "true" ]]; then
+  CARGO_FLAGS+=(--offline)
+fi
+
 section() {
   printf '\n==> %s\n' "$1"
 }
@@ -22,15 +28,20 @@ if [[ ! -f Cargo.toml ]]; then
 fi
 
 run_if "Rust format check" cargo fmt --all -- --check
-run_if "Rust clippy workspace" cargo clippy --workspace --all-targets -- -D warnings
-run_if "Rust test workspace" cargo test --workspace
+run_if "Rust check workspace" cargo check "${CARGO_FLAGS[@]}" --workspace --all-targets
+if cargo clippy --version >/dev/null 2>&1; then
+  run_if "Rust clippy workspace" cargo clippy "${CARGO_FLAGS[@]}" --workspace --all-targets -- -D warnings
+else
+  echo "SKIP: cargo clippy 未安装。"
+fi
+run_if "Rust test workspace" cargo test "${CARGO_FLAGS[@]}" --workspace
 
 if cargo metadata --format-version=1 --no-deps | grep -q '"name":"admin-api"'; then
-  run_if "admin-api package tests" cargo test -p admin-api
+  run_if "admin-api package tests" cargo test "${CARGO_FLAGS[@]}" -p admin-api
 fi
 
 if cargo metadata --format-version=1 --no-deps | grep -q '"name":"admin-db"'; then
-  run_if "admin-db package tests" cargo test -p admin-db
+  run_if "admin-db package tests" cargo test "${CARGO_FLAGS[@]}" -p admin-db
 fi
 
 echo
