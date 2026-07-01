@@ -17,9 +17,14 @@ section "Frontend"
 section "Migration"
 "$ROOT_DIR/scripts/test-migration.sh"
 
-if [[ -f Cargo.toml ]] && cargo metadata --format-version=1 --no-deps 2>/dev/null | grep -q '"name":"desktop"'; then
-  section "Tauri build"
-  cargo tauri build
+if [[ -f "$ROOT_DIR/apps/desktop/src-tauri/Cargo.toml" ]]; then
+  if command -v cargo-tauri >/dev/null 2>&1; then
+    section "Tauri build"
+    (cd "$ROOT_DIR/apps/desktop/src-tauri" && cargo tauri build)
+  else
+    echo
+    echo "SKIP: cargo-tauri CLI 未安装，暂不执行 Tauri build。可通过 apps/desktop/web 的 npm run tauri:build 验证。"
+  fi
 else
   echo
   echo "SKIP: Tauri workspace 尚未初始化，暂不执行 cargo tauri build。"

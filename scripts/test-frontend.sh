@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WEB_DIR="${WEB_DIR:-$ROOT_DIR/apps/desktop/web}"
+RUN_E2E="${RUN_E2E:-false}"
 
 section() {
   printf '\n==> %s\n' "$1"
@@ -33,10 +34,29 @@ if [[ ! -d node_modules ]]; then
   npm ci
 fi
 
-run_script_if_present "lint" "Frontend lint"
-run_script_if_present "typecheck" "Frontend typecheck"
-run_script_if_present "test" "Frontend unit/component tests"
-run_script_if_present "build" "Frontend production build"
+run_required_script() {
+  local script_name="$1"
+  local label="$2"
+
+  if node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts['$script_name'] ? 0 : 1)" 2>/dev/null; then
+    section "$label"
+    npm run "$script_name"
+  else
+    echo "FAIL: npm script '$script_name' 未定义。"
+    exit 1
+  fi
+}
+
+run_required_script "lint" "Frontend lint"
+run_required_script "typecheck" "Frontend typecheck"
+run_required_script "test" "Frontend unit/component tests"
+run_required_script "build" "Frontend production build"
+
+if [[ "$RUN_E2E" == "true" ]]; then
+  run_required_script "e2e" "Frontend E2E tests"
+else
+  echo "SKIP: RUN_E2E=true 未设置，跳过 Playwright E2E。"
+fi
 
 echo
 echo "Frontend gate passed."
