@@ -1,4 +1,4 @@
-use admin_core::ApiResponse;
+use admin_core::{ApiResponse, EmptyResponse};
 use axum::{http::StatusCode, response::IntoResponse, Json};
 use serde::Serialize;
 
@@ -28,6 +28,18 @@ impl IntoResponse for ErrorResponse {
                 "data": null,
                 "message": body.message,
             })),
+        )
+            .into_response()
+    }
+}
+
+pub struct MessageResponse(pub String);
+
+impl IntoResponse for MessageResponse {
+    fn into_response(self) -> axum::response::Response {
+        (
+            StatusCode::OK,
+            Json(ApiResponse::with_message(EmptyResponse {}, self.0)),
         )
             .into_response()
     }

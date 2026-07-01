@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use admin_core::services::{
-    AuthService, DisabledAuthService, DisabledMenuService, HealthService, MenuService,
-    StaticHealthService,
+    AuthService, CompanyService, DisabledAuthService, DisabledCompanyService, DisabledMenuService,
+    HealthService, MenuService, StaticHealthService,
 };
 
 use crate::config::AppConfig;
@@ -13,6 +13,7 @@ pub struct AppState {
     pub health_service: Arc<dyn HealthService>,
     pub auth_service: Arc<dyn AuthService>,
     pub menu_service: Arc<dyn MenuService>,
+    pub company_service: Arc<dyn CompanyService>,
 }
 
 impl AppState {
@@ -22,6 +23,7 @@ impl AppState {
             Arc::new(health_service),
             Arc::new(DisabledAuthService),
             Arc::new(DisabledMenuService),
+            Arc::new(DisabledCompanyService),
         )
     }
 
@@ -30,12 +32,14 @@ impl AppState {
         health_service: Arc<dyn HealthService>,
         auth_service: Arc<dyn AuthService>,
         menu_service: Arc<dyn MenuService>,
+        company_service: Arc<dyn CompanyService>,
     ) -> Self {
         Self {
             config: Arc::new(config),
             health_service,
             auth_service,
             menu_service,
+            company_service,
         }
     }
 }

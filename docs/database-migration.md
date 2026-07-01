@@ -40,6 +40,7 @@
 - 订单创建会写入 `order_list` 和 `company_order`；`receiptnum > 0` 时写入 `receipt`。
 - 新建回单默认状态：`recoverystate='未回收'`、`issuestate='未发放'`、`poststate='未寄出'`。
 - `company_order.com_name` 与 `company.name` 文本关联，`receipt.oddnumber` 与 `order_list.oddnumber` 文本关联，第一版不强行改成纯 ID 模型。
+- 公司改名第一阶段保持旧行为：只更新 `company.name`，不自动级联历史 `order_list.company` 或 `company_order.com_name`。后续如要增强必须单独设计迁移脚本、对账和回滚策略。
 - 头像默认文件为 `default.jpg`；旧头像目录为 `/Users/hanhan/Desktop/code/adminYh-server/uploads/avatar`。
 
 ## 3. 迁移阶段
