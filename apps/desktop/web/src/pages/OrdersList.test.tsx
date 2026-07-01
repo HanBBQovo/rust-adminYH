@@ -1,14 +1,24 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ThemeProvider } from '@/components/theme'
+import { ConfirmDialogContext } from '@/components/ui/confirm-dialog-context'
+import { GlobalToastContext } from '@/components/ui/global-toast-context'
 import OrdersList from '@/pages/OrdersList'
 
 const listOrdersMock = vi.hoisted(() => vi.fn())
+const getOrderMock = vi.hoisted(() => vi.fn())
+const createOrderMock = vi.hoisted(() => vi.fn())
+const updateOrderMock = vi.hoisted(() => vi.fn())
+const deleteOrderMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/api/orders', () => ({
   listOrders: listOrdersMock,
+  getOrder: getOrderMock,
+  createOrder: createOrderMock,
+  updateOrder: updateOrderMock,
+  deleteOrder: deleteOrderMock,
 }))
 
 const ORDER_ROW = {
@@ -42,18 +52,41 @@ const ORDER_ROW = {
   remarks: '测试订单',
 }
 
-function renderOrdersList() {
+function renderOrdersList(options?: { confirm?: () => Promise<boolean>; showToast?: ReturnType<typeof vi.fn> }) {
+  const confirm = options?.confirm || vi.fn().mockResolvedValue(true)
+  const showToast = options?.showToast || vi.fn()
+
   render(
     <ThemeProvider>
-      <OrdersList />
+      <GlobalToastContext.Provider value={{ showToast }}>
+        <ConfirmDialogContext.Provider value={{ confirm }}>
+          <OrdersList />
+        </ConfirmDialogContext.Provider>
+      </GlobalToastContext.Provider>
     </ThemeProvider>,
   )
+
+  return { confirm, showToast }
+}
+
+function orderField(dialog: HTMLElement, key: string): HTMLInputElement | HTMLTextAreaElement {
+  const field = dialog.querySelector<HTMLInputElement | HTMLTextAreaElement>(`#order-${key}`)
+  if (!field) throw new Error(`missing order field: ${key}`)
+  return field
 }
 
 describe('OrdersList', () => {
   beforeEach(() => {
     listOrdersMock.mockReset()
+    getOrderMock.mockReset()
+    createOrderMock.mockReset()
+    updateOrderMock.mockReset()
+    deleteOrderMock.mockReset()
     listOrdersMock.mockResolvedValue({ rows: [ORDER_ROW], total: 11 })
+    getOrderMock.mockResolvedValue(ORDER_ROW)
+    createOrderMock.mockResolvedValue(undefined)
+    updateOrderMock.mockResolvedValue(undefined)
+    deleteOrderMock.mockResolvedValue(undefined)
   })
 
   it('renders old order columns and loads the first page', async () => {
@@ -95,6 +128,110 @@ describe('OrdersList', () => {
           consignor: '李四',
         }),
       )
+    })
+  })
+
+  it('validates required old order fields before creating', async () => {
+    const user = userEvent.setup()
+    renderOrdersList()
+
+    await screen.findByText('YD20260101001')
+    await user.click(screen.getByRole('button', { name: '新建订单' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: '保存' }))
+
+    expect(await screen.findByText('运单号不能为空')).toBeInTheDocument()
+    expect(screen.getByText('收货人不能为空')).toBeInTheDocument()
+    expect(createOrderMock).not.toHaveBeenCalled()
+  })
+
+  it('creates orders through the API wrapper and refreshes the list', async () => {
+    const user = userEvent.setup()
+    const { showToast } = renderOrdersList()
+
+    await screen.findByText('YD20260101001')
+    await user.click(screen.getByRole('button', { name: '新建订单' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(orderField(dialog, 'oddnumber'), 'YD20260701001')
+    await user.type(orderField(dialog, 'consignee'), '王五')
+    await user.type(orderField(dialog, 'address'), '北京市')
+    await user.type(orderField(dialog, 'goodsname'), '设备')
+    await user.type(orderField(dialog, 'number'), '2')
+    await user.type(orderField(dialog, 'consignor'), '赵六')
+    await user.type(orderField(dialog, 'freight'), '100')
+    await user.type(orderField(dialog, 'sumfreight'), '120')
+    await user.type(orderField(dialog, 'company'), '顺丰速运')
+    await user.click(within(dialog).getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(createOrderMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          oddnumber: 'YD20260701001',
+          consignee: '王五',
+          address: '北京市',
+          receiptnum: 0,
+        }),
+      )
+    })
+    expect(showToast).toHaveBeenCalledWith('success', '创建订单成功！', { translate: false })
+    expect(listOrdersMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('loads detail for view and keeps the form readonly', async () => {
+    const user = userEvent.setup()
+    renderOrdersList()
+
+    await screen.findByText('YD20260101001')
+    await user.click(screen.getByRole('button', { name: '查看订单' }))
+
+    expect(await screen.findByText('查看运单')).toBeInTheDocument()
+    const dialog = screen.getByRole('dialog')
+    expect(getOrderMock).toHaveBeenCalledWith(1)
+    expect(orderField(dialog, 'oddnumber')).toBeDisabled()
+    expect(within(dialog).queryByRole('button', { name: '保存' })).not.toBeInTheDocument()
+  })
+
+  it('updates orders through the API wrapper', async () => {
+    const user = userEvent.setup()
+    const { showToast } = renderOrdersList()
+
+    await screen.findByText('YD20260101001')
+    await user.click(screen.getByRole('button', { name: '编辑订单' }))
+    expect(await screen.findByText('编辑运单')).toBeInTheDocument()
+    const dialog = screen.getByRole('dialog')
+    await user.clear(orderField(dialog, 'consignee'))
+    await user.type(orderField(dialog, 'consignee'), '更新收货人')
+    await user.click(within(dialog).getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(updateOrderMock).toHaveBeenCalledWith(1, expect.objectContaining({ consignee: '更新收货人' }))
+    })
+    expect(showToast).toHaveBeenCalledWith('success', '修改订单信息成功！', { translate: false })
+  })
+
+  it('confirms before deleting an order', async () => {
+    const user = userEvent.setup()
+    const { confirm, showToast } = renderOrdersList()
+
+    await screen.findByText('YD20260101001')
+    await user.click(screen.getByRole('button', { name: '删除订单' }))
+
+    await waitFor(() => {
+      expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: '删除订单', variant: 'destructive' }))
+      expect(deleteOrderMock).toHaveBeenCalledWith(1)
+    })
+    expect(showToast).toHaveBeenCalledWith('success', '删除订单成功！', { translate: false })
+  })
+
+  it('does not delete when confirmation is cancelled', async () => {
+    const user = userEvent.setup()
+    renderOrdersList({ confirm: vi.fn().mockResolvedValue(false) })
+
+    await screen.findByText('YD20260101001')
+    await user.click(screen.getByRole('button', { name: '删除订单' }))
+
+    await waitFor(() => {
+      expect(deleteOrderMock).not.toHaveBeenCalled()
     })
   })
 })

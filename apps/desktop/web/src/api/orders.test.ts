@@ -1,8 +1,38 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { buildOrderListPayload, listOrders } from '@/api/orders'
+import { buildOrderListPayload, createOrder, deleteOrder, getOrder, listOrders, updateOrder } from '@/api/orders'
 
 const fetchMock = vi.fn()
+
+const ORDER_PAYLOAD = {
+  oddnumber: 'YD20260701001',
+  billingAt: '2026-07-01',
+  consignee: '张三',
+  consigneephone: '13800000000',
+  address: '上海市',
+  method: '送货',
+  goodsname: '设备',
+  number: '2',
+  pack: '木箱',
+  weight: '20',
+  measurement: '1',
+  cainsurance: '否',
+  value: '',
+  insurance: '',
+  consignor: '李四',
+  consignorphone: '13900000000',
+  freight: '100',
+  delivery: '20',
+  sumfreight: '120',
+  freightstate: '现付',
+  paynow: '120',
+  paygo: '',
+  payback: '',
+  paymonth: '',
+  receiptnum: 1,
+  company: '顺丰速运',
+  remarks: '',
+}
 
 function jsonResponse(data: unknown) {
   return Promise.resolve(
@@ -77,5 +107,31 @@ describe('orders api', () => {
         body: JSON.stringify({ offset: 10, size: 10, oddnumber: 'YD2026' }),
       }),
     )
+  })
+
+  it('wraps old order detail and mutation routes', async () => {
+    fetchMock
+      .mockImplementationOnce(() => jsonResponse({ id: 7, ...ORDER_PAYLOAD }))
+      .mockImplementationOnce(() => jsonResponse({}))
+      .mockImplementationOnce(() => jsonResponse({}))
+      .mockImplementationOnce(() => jsonResponse({}))
+
+    await expect(getOrder(7)).resolves.toEqual({ id: 7, ...ORDER_PAYLOAD })
+    await expect(createOrder(ORDER_PAYLOAD)).resolves.toBeUndefined()
+    await expect(updateOrder(7, ORDER_PAYLOAD)).resolves.toBeUndefined()
+    await expect(deleteOrder(7)).resolves.toBeUndefined()
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/order/7', expect.objectContaining({ method: 'GET' }))
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/order',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify(ORDER_PAYLOAD) }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/order/7',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify(ORDER_PAYLOAD) }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/order/7', expect.objectContaining({ method: 'DELETE' }))
   })
 })

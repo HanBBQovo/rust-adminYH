@@ -57,6 +57,8 @@ export interface OrderListResult {
   total: number
 }
 
+export type OrderMutationPayload = Omit<LegacyOrder, 'id'>
+
 function cleanFilters(filters: OrderListFilters): OrderListFilters {
   return Object.fromEntries(
     Object.entries(filters).filter(([, value]) => {
@@ -97,4 +99,30 @@ export async function listOrders(params: OrderListParams): Promise<OrderListResu
     rows: data.list,
     total: data.totalCount,
   }
+}
+
+export async function getOrder(orderId: number): Promise<LegacyOrder | null> {
+  return apiRequest<LegacyOrder | null>(`/order/${orderId}`, {
+    method: 'GET',
+  })
+}
+
+export async function createOrder(payload: OrderMutationPayload): Promise<void> {
+  await apiRequest<unknown>('/order', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function updateOrder(orderId: number, payload: OrderMutationPayload): Promise<void> {
+  await apiRequest<unknown>(`/order/${orderId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteOrder(orderId: number): Promise<void> {
+  await apiRequest<unknown>(`/order/${orderId}`, {
+    method: 'DELETE',
+  })
 }

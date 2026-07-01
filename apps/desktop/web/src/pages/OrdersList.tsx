@@ -1,7 +1,17 @@
-import { Download, RefreshCw, Search } from 'lucide-react'
+import { Download, Eye, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
-import { listOrders, type LegacyOrder, type OrderListFilters, type OrderListParams } from '@/api/orders'
+import {
+  createOrder,
+  deleteOrder,
+  getOrder,
+  listOrders,
+  updateOrder,
+  type LegacyOrder,
+  type OrderListFilters,
+  type OrderListParams,
+  type OrderMutationPayload,
+} from '@/api/orders'
 import { InlineLoader } from '@/components/PageLoader'
 import { FilterBar, FilterField } from '@/components/layout/FilterBar'
 import { PageShell, PageSurface } from '@/components/layout/PageScaffold'
@@ -13,7 +23,11 @@ import { ErrorState } from '@/components/ui/error-state'
 import { Input } from '@/components/ui/input'
 import { Pagination } from '@/components/ui/pagination'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useConfirm } from '@/components/ui/use-confirm'
+import { useGlobalToast } from '@/components/ui/use-global-toast'
 import { useResource } from '@/lib/use-resource'
+import { OrderFormDialog } from '@/pages/orders/OrderFormDialog'
+import type { OrderFormMode } from '@/pages/orders/order-form-config'
 
 interface OrderFilterDraft {
   oddnumber: string
@@ -121,9 +135,15 @@ function renderCell(row: LegacyOrder, column: OrderColumn) {
 }
 
 export default function OrdersList() {
+  const confirm = useConfirm()
+  const { showToast } = useGlobalToast()
   const [draft, setDraft] = useState<OrderFilterDraft>(() => emptyFilters())
   const [filters, setFilters] = useState<OrderListFilters>({})
   const [page, setPage] = useState(1)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogMode, setDialogMode] = useState<OrderFormMode>('create')
+  const [selectedOrder, setSelectedOrder] = useState<LegacyOrder | undefined>()
+  const [submitting, setSubmitting] = useState(false)
 
   const query = useMemo<OrderListParams>(() => ({ page, pageSize: PAGE_SIZE, ...filters }), [filters, page])
   const { data, loading, error, refresh } = useResource(() => listOrders(query), [query])
@@ -145,13 +165,72 @@ export default function OrdersList() {
     setFilters({})
   }
 
+  const openCreateDialog = () => {
+    setSelectedOrder(undefined)
+    setDialogMode('create')
+    setDialogOpen(true)
+  }
+
+  const openOrderDialog = async (mode: Extract<OrderFormMode, 'edit' | 'view'>, order: LegacyOrder) => {
+    setDialogMode(mode)
+    setSelectedOrder(order)
+    setDialogOpen(true)
+    try {
+      const detail = await getOrder(order.id)
+      if (detail) setSelectedOrder(detail)
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : '订单详情加载失败', { translate: false })
+    }
+  }
+
+  const submitOrder = async (values: OrderMutationPayload) => {
+    setSubmitting(true)
+    try {
+      if (dialogMode === 'edit' && selectedOrder) {
+        await updateOrder(selectedOrder.id, values)
+        showToast('success', '修改订单信息成功！', { translate: false })
+      } else {
+        await createOrder(values)
+        showToast('success', '创建订单成功！', { translate: false })
+      }
+      setDialogOpen(false)
+      refresh()
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : '订单保存失败', { translate: false })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const removeOrder = async (order: LegacyOrder) => {
+    const confirmed = await confirm({
+      title: '删除订单',
+      description: `确认删除运单 ${order.oddnumber}？该操作会按后端兼容逻辑删除订单。`,
+      confirmText: '删除',
+      variant: 'destructive',
+    })
+    if (!confirmed) return
+
+    try {
+      await deleteOrder(order.id)
+      showToast('success', '删除订单成功！', { translate: false })
+      refresh()
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : '订单删除失败', { translate: false })
+    }
+  }
+
   return (
     <PageShell
       title="订单列表"
-      description="按旧 adminYh 订单字段重建列表、搜索、分页和导出，接口通过封装层兼容 /order/list。"
+      description="按旧 adminYh 订单字段重建列表、搜索、分页、导出和运单维护，接口通过封装层兼容 /order。"
       width="full"
       actions={
         <>
+          <Button type="button" className="gap-2" onClick={openCreateDialog}>
+            <Plus className="h-4 w-4" />
+            新建订单
+          </Button>
           <Button type="button" variant="outline" className="gap-2" onClick={refresh} disabled={loading}>
             <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
             刷新
@@ -200,7 +279,7 @@ export default function OrdersList() {
 
       <PageSurface
         title="订单数据"
-        description="保留旧系统字段名和中文列名；新增/编辑/删除会在下一切片接入。"
+        description="保留旧系统字段名和中文列名；新增、查看、编辑、删除都通过 API 封装处理。"
         footer={data ? <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} /> : null}
         bodyClassName="p-0"
       >
@@ -218,6 +297,7 @@ export default function OrdersList() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-14 text-right">序号</TableHead>
+                  <TableHead className="sticky left-0 z-10 min-w-[160px] bg-background">操作</TableHead>
                   {ORDER_COLUMNS.map((column) => (
                     <TableHead key={column.key} className={column.className}>{column.label}</TableHead>
                   ))}
@@ -227,6 +307,19 @@ export default function OrdersList() {
                 {rows.map((row, index) => (
                   <TableRow key={row.id}>
                     <TableCell className="text-right font-mono text-xs text-muted-foreground">{(page - 1) * PAGE_SIZE + index + 1}</TableCell>
+                    <TableCell className="sticky left-0 z-10 bg-background">
+                      <div className="flex items-center gap-1">
+                        <Button type="button" variant="ghost" size="icon" aria-label="查看订单" onClick={() => openOrderDialog('view', row)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" aria-label="编辑订单" onClick={() => openOrderDialog('edit', row)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" aria-label="删除订单" onClick={() => removeOrder(row)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
                     {ORDER_COLUMNS.map((column) => (
                       <TableCell key={column.key} className={column.className}>{renderCell(row, column)}</TableCell>
                     ))}
@@ -239,6 +332,15 @@ export default function OrdersList() {
           <EmptyState title="暂无订单" description="调整筛选条件后重新查询，或在后续新增订单切片中创建数据。" />
         )}
       </PageSurface>
+
+      <OrderFormDialog
+        mode={dialogMode}
+        open={dialogOpen}
+        order={selectedOrder}
+        submitting={submitting}
+        onOpenChange={setDialogOpen}
+        onSubmit={submitOrder}
+      />
     </PageShell>
   )
 }
