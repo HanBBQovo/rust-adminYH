@@ -1,0 +1,195 @@
+# 数据库迁移校验清单
+
+日期：2026-07-01  
+范围：旧后端 `/Users/hanhan/Desktop/code/adminYh-server` 到新 Rust + Tauri 项目 `rust-adminYH`
+
+## 1. 目标
+
+- 完整迁移旧 MySQL 数据、头像文件和关键业务语义。
+- 所有生产写入前必须先在影子库执行 dry-run、apply、verify。
+- 第一阶段保留旧表名和旧字段名，通过 Rust DTO/Service 层做命名和安全增强。
+- 所有校验必须可重复执行，并纳入 `scripts/test-migration.sh`。
+
+## 2. 旧库事实
+
+代码审计确认旧后端使用 Koa + mysql2，数据库连接来自 `src/app/database.js`。该文件读取 `config.MYSQL_PROT`，而配置导出是 `MYSQL_PORT`，新系统必须修正为显式端口配置。
+
+旧代码没有 migration/schema 文件，真实字段类型、索引、字符集、约束必须以线上 MySQL `information_schema` 和 `mysqldump --no-data` 为准，代码反推只作为辅助。
+
+### 2.1 核心表
+
+| 表 | 用途 | 迁移策略 |
+|---|---|---|
+| `user` | 用户、旧 token、头像 URL、启用状态 | 保留 ID；旧 MD5 密码兼容登录后升级 Argon2；不要直接丢弃 `token` 语义 |
+| `role` | 角色 | 保留 ID、名称、说明、时间字段 |
+| `user_role` | 用户角色关系 | 校验用户和角色孤儿关系；新系统可加唯一约束 |
+| `permission` | 菜单/权限 | 保留 `pid/type/url/icon/sort`；修复响应拼写但兼容旧字段映射 |
+| `role_permission` | 角色菜单关系 | 分配前应先清理旧关系；迁移时报告重复关系 |
+| `company` | 发货公司 | 保留名称；重复名称先报告，不直接合并 |
+| `order_list` | 运单主表 | 保留旧字段名；`billingAt` 是毫秒时间戳语义 |
+| `company_order` | 公司-订单弱关联 | 保留 `com_name/order_id`；校验 `order_id` 是否存在 |
+| `receipt` | 回单 | 保留中文状态文本；`oddnumber` 弱关联订单号 |
+| `avatar` | 头像元数据 | 与磁盘 `uploads/avatar` 双向校验 |
+| `memory` | 收/发货人记忆词条 | 保留文本，报告重复 |
+
+### 2.2 隐式业务语义
+
+- `user.password` 是无 salt MD5；新系统必须提供旧密码兼容层。
+- 旧登录成功会把 token 写回 `user.token`，形成“单用户单 token”效果；新系统需明确是保留 token version 还是改 session 表。
+- `order_list.billingAt`、`receipt.billingAt` 是毫秒时间戳，不按秒级 Unix time 迁移。
+- 订单创建会写入 `order_list` 和 `company_order`；`receiptnum > 0` 时写入 `receipt`。
+- 新建回单默认状态：`recoverystate='未回收'`、`issuestate='未发放'`、`poststate='未寄出'`。
+- `company_order.com_name` 与 `company.name` 文本关联，`receipt.oddnumber` 与 `order_list.oddnumber` 文本关联，第一版不强行改成纯 ID 模型。
+- 头像默认文件为 `default.jpg`；旧头像目录为 `/Users/hanhan/Desktop/code/adminYh-server/uploads/avatar`。
+
+## 3. 迁移阶段
+
+### Phase 0：冻结和备份
+
+生产迁移前必须完成：
+
+```bash
+mysqldump --single-transaction --routines --triggers --default-character-set=utf8mb4 <OLD_DB> > backups/admin_yh_full.sql
+mysqldump --no-data --default-character-set=utf8mb4 <OLD_DB> > backups/admin_yh_schema.sql
+tar -C /Users/hanhan/Desktop/code/adminYh-server/uploads -czf backups/admin_yh_avatar.tgz avatar
+```
+
+同时记录：
+
+- MySQL 版本、字符集、排序规则、时区。
+- 每张表 `COUNT(*)`、主键 `MIN/MAX(id)`。
+- 每个索引、唯一约束、外键约束。
+- 头像文件路径、大小、SHA256。
+
+### Phase 1：影子库还原
+
+- 创建 `admin_yh_shadow_old` 并导入旧 dump。
+- 创建 `admin_yh_shadow_new` 并应用新 schema。
+- 所有迁移 CLI 先只连影子库，不允许直接写生产旧库。
+
+### Phase 2：dry-run 清洗报告
+
+dry-run 只读旧库和新库，输出：
+
+- 每表待迁移行数、最大 ID、关键字段空值数量。
+- 重复用户、重复公司、重复订单号、重复 memory。
+- 孤儿关系：`user_role`、`role_permission`、`company_order`、`receipt.oddnumber`、`avatar.user_id`。
+- 状态枚举：`receipt.recoverystate/issuestate/poststate` 的 `SELECT DISTINCT`。
+- 日期边界：`billingAt`、`createAt`、`updateAt` 的最小/最大值。
+- 头像文件缺失、DB 多余记录、磁盘孤儿文件。
+
+### Phase 3：apply 迁移
+
+建议顺序：
+
+1. `role`
+2. `permission`
+3. `user`
+4. `company`
+5. `memory`
+6. `avatar`
+7. `user_role`
+8. `role_permission`
+9. `order_list`
+10. `company_order`
+11. `receipt`
+12. 头像文件复制和 hash 校验
+13. 汇总业务对账
+
+每个阶段必须在事务中批量写入。核心业务表迁移后立即执行行数、最大 ID、抽样 hash 校验。
+
+### Phase 4：verify 对账
+
+阻断级校验必须全部通过：
+
+- 每张表行数一致。
+- 每张含自增 ID 的表最大 ID 一致。
+- `SUM(order_list.sumfreight)` 一致。
+- `SUM(order_list.receiptnum)` 一致。
+- `receipt` 按 `recoverystate/issuestate/poststate` 分组计数一致。
+- `company_order.order_id` 全部能找到 `order_list.id`。
+- `receipt.oddnumber` 缺失对应订单号的数量已记录并经人工确认。
+- 用户角色分布一致。
+- 角色菜单数量和根/子菜单数量一致。
+- 头像 DB 记录与磁盘文件 hash 一致；缺失文件有 fallback 策略。
+- 随机抽样 50 条订单、50 条回单、10 个用户详情字段一致。
+
+## 4. 推荐校验 SQL
+
+### 4.1 表行数和 ID
+
+```sql
+SELECT 'user' table_name, COUNT(*) row_count, MIN(id) min_id, MAX(id) max_id FROM user
+UNION ALL SELECT 'role', COUNT(*), MIN(id), MAX(id) FROM role
+UNION ALL SELECT 'permission', COUNT(*), MIN(id), MAX(id) FROM permission
+UNION ALL SELECT 'company', COUNT(*), MIN(id), MAX(id) FROM company
+UNION ALL SELECT 'order_list', COUNT(*), MIN(id), MAX(id) FROM order_list
+UNION ALL SELECT 'receipt', COUNT(*), MIN(id), MAX(id) FROM receipt;
+```
+
+### 4.2 关键汇总
+
+```sql
+SELECT COUNT(*) order_count, COALESCE(SUM(sumfreight), 0) total_sumfreight, COALESCE(SUM(receiptnum), 0) total_receipts
+FROM order_list;
+
+SELECT recoverystate, issuestate, poststate, COUNT(*) total
+FROM receipt
+GROUP BY recoverystate, issuestate, poststate
+ORDER BY recoverystate, issuestate, poststate;
+```
+
+### 4.3 脏数据扫描
+
+```sql
+SELECT name, COUNT(*) total FROM user GROUP BY name HAVING COUNT(*) > 1;
+SELECT name, COUNT(*) total FROM company GROUP BY name HAVING COUNT(*) > 1;
+SELECT oddnumber, COUNT(*) total FROM order_list GROUP BY oddnumber HAVING COUNT(*) > 1;
+
+SELECT ur.* FROM user_role ur LEFT JOIN user u ON u.id = ur.user_id WHERE u.id IS NULL;
+SELECT ur.* FROM user_role ur LEFT JOIN role r ON r.id = ur.role_id WHERE r.id IS NULL;
+SELECT rp.* FROM role_permission rp LEFT JOIN role r ON r.id = rp.role_id WHERE r.id IS NULL;
+SELECT rp.* FROM role_permission rp LEFT JOIN permission p ON p.id = rp.permission_id WHERE p.id IS NULL;
+SELECT co.* FROM company_order co LEFT JOIN order_list o ON o.id = co.order_id WHERE o.id IS NULL;
+SELECT r.* FROM receipt r LEFT JOIN order_list o ON o.oddnumber = r.oddnumber WHERE o.id IS NULL;
+SELECT a.* FROM avatar a LEFT JOIN user u ON u.id = a.user_id WHERE u.id IS NULL;
+```
+
+### 4.4 旧枚举固化
+
+```sql
+SELECT DISTINCT recoverystate FROM receipt ORDER BY recoverystate;
+SELECT DISTINCT issuestate FROM receipt ORDER BY issuestate;
+SELECT DISTINCT poststate FROM receipt ORDER BY poststate;
+```
+
+## 5. 脚本接入
+
+当前入口：
+
+```bash
+scripts/test-migration.sh
+```
+
+环境变量：
+
+- `OLD_DATABASE_URL`：旧库或影子旧库连接串。
+- `NEW_DATABASE_URL`：新库或影子新库连接串。
+- `OLD_AVATAR_DIR`：旧头像目录，默认 `/Users/hanhan/Desktop/code/adminYh-server/uploads/avatar`。
+- `NEW_AVATAR_DIR`：新头像目录；设置后执行双向文件校验。
+
+当 `admin-migration` crate 创建后，脚本会执行：
+
+```bash
+cargo test -p admin-migration
+cargo run -p admin-migration -- inspect-old --old "$OLD_DATABASE_URL"
+cargo run -p admin-migration -- migrate --dry-run --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL"
+cargo run -p admin-migration -- verify --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL"
+```
+
+## 6. 未决策项
+
+- 是否保留旧 `user.token` 单点登录语义，或迁到 session 表。
+- 订单删除是否继续兼容“只删 `order_list`”，或改为事务级联清理 `receipt/company_order`。
+- 重复 `role_permission` 是否迁移时去重，还是保留并在清洗报告中阻断。
+- `receipt.oddnumber` 无订单时是允许历史脏数据保留，还是迁移前修复。
