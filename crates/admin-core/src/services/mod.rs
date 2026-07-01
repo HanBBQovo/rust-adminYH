@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod chart;
 pub mod company;
 pub mod health;
 pub mod menu;
@@ -9,6 +10,10 @@ pub mod user;
 pub use auth::{
     development_auth_service, AuthService, AuthUserStore, CompatAuthService,
     DevelopmentTokenIssuer, DisabledAuthService, InMemoryAuthUserStore, TokenIssuer,
+};
+pub use chart::{
+    development_chart_service, ChartService, ChartStore, CompatChartService, DisabledChartService,
+    InMemoryChartStore,
 };
 pub use company::{
     development_company_service, CompanyService, CompanyStore, CompatCompanyService,

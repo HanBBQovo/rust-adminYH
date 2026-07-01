@@ -45,6 +45,7 @@
 - 公司改名第一阶段保持旧行为：只更新 `company.name`，不自动级联历史 `order_list.company` 或 `company_order.com_name`。后续如要增强必须单独设计迁移脚本、对账和回滚策略。
 - 订单/回单兼容接口第一阶段保留 `company_order.com_name`、`receipt.oddnumber` 文本关联；新 SQLx 仓储必须把订单创建、公司关联、回单创建、memory 记忆写入放进同一个事务。
 - `/memory/list` 旧响应只有 `{ data }`、无 `code/message`；迁移后的 API 兼容层要保留该形状，前端自动补全依赖 `SELECT name value FROM memory` 的 `value` 字段。
+- 图表统计接口直接依赖 `order_list.sumfreight`、`order_list.receiptnum`、`company.name`、`company_order.com_name`、`receipt` 总行数；迁移校验要按旧 SQL 口径对比四个 `/chart/*` 响应，不要先改成新维表口径。
 - 旧前端回单“接收”会写入 `issuestate='已接收'`，但筛选枚举里还有 `已发放/未发放`；迁移时不得强行归一化，必须先按真实 `SELECT DISTINCT issuestate` 输出分布并由人工确认。
 - 头像默认文件为 `default.jpg`；旧头像目录为 `/Users/hanhan/Desktop/code/adminYh-server/uploads/avatar`。
 

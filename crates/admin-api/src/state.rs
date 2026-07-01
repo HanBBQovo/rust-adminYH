@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use admin_core::services::{
-    AuthService, CompanyService, DisabledAuthService, DisabledCompanyService, DisabledMenuService,
-    DisabledOrderService, DisabledReceiptService, DisabledRoleService, DisabledUserService,
-    HealthService, MemoryService, MenuService, OrderService, ReceiptService, RoleService,
-    StaticHealthService, UserService,
+    AuthService, ChartService, CompanyService, DisabledAuthService, DisabledChartService,
+    DisabledCompanyService, DisabledMenuService, DisabledOrderService, DisabledReceiptService,
+    DisabledRoleService, DisabledUserService, HealthService, MemoryService, MenuService,
+    OrderService, ReceiptService, RoleService, StaticHealthService, UserService,
 };
 
 use crate::config::AppConfig;
@@ -14,6 +14,7 @@ pub struct AppServices {
     pub health_service: Arc<dyn HealthService>,
     pub auth_service: Arc<dyn AuthService>,
     pub menu_service: Arc<dyn MenuService>,
+    pub chart_service: Arc<dyn ChartService>,
     pub company_service: Arc<dyn CompanyService>,
     pub user_service: Arc<dyn UserService>,
     pub role_service: Arc<dyn RoleService>,
@@ -28,6 +29,7 @@ impl AppServices {
             health_service: Arc::new(health_service),
             auth_service: Arc::new(DisabledAuthService),
             menu_service: Arc::new(DisabledMenuService),
+            chart_service: Arc::new(DisabledChartService),
             company_service: Arc::new(DisabledCompanyService),
             user_service: Arc::new(DisabledUserService),
             role_service: Arc::new(DisabledRoleService),
@@ -44,6 +46,7 @@ pub struct AppState {
     pub health_service: Arc<dyn HealthService>,
     pub auth_service: Arc<dyn AuthService>,
     pub menu_service: Arc<dyn MenuService>,
+    pub chart_service: Arc<dyn ChartService>,
     pub company_service: Arc<dyn CompanyService>,
     pub user_service: Arc<dyn UserService>,
     pub role_service: Arc<dyn RoleService>,
@@ -63,6 +66,7 @@ impl AppState {
             health_service: services.health_service,
             auth_service: services.auth_service,
             menu_service: services.menu_service,
+            chart_service: services.chart_service,
             company_service: services.company_service,
             user_service: services.user_service,
             role_service: services.role_service,

@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use admin_api::{build_router, AppConfig, AppServices, AppState};
 use admin_core::services::{
-    development_auth_service, development_company_service, development_menu_service,
-    development_order_services, development_role_service, development_user_service,
-    InMemoryAuthUserStore, StaticHealthService,
+    development_auth_service, development_chart_service, development_company_service,
+    development_menu_service, development_order_services, development_role_service,
+    development_user_service, InMemoryAuthUserStore, StaticHealthService,
 };
 use axum::body::Body;
 use http::{header::CONTENT_TYPE, Request, StatusCode};
@@ -25,6 +25,7 @@ fn test_state() -> AppState {
             )),
             auth_service: Arc::new(development_auth_service(store)),
             menu_service: Arc::new(development_menu_service()),
+            chart_service: Arc::new(development_chart_service()),
             company_service: Arc::new(development_company_service()),
             user_service: Arc::new(development_user_service()),
             role_service: Arc::new(development_role_service()),

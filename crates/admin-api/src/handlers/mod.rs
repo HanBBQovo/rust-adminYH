@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod chart;
 pub mod company;
 pub mod health;
 pub mod memory;

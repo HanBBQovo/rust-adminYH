@@ -10,7 +10,7 @@ use tower_http::{
 };
 
 use crate::{
-    handlers::{auth, company, health, memory, menu, order, receipt, role, user},
+    handlers::{auth, chart, company, health, memory, menu, order, receipt, role, user},
     AppState,
 };
 
@@ -71,6 +71,32 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/role/{role_id}/menuIds", get(menu::role_menu_ids))
         .route("/menu/tree", get(menu::menu_tree))
         .route("/api/menu/tree", get(menu::menu_tree))
+        .route("/chart/headerList", get(chart::header_list))
+        .route("/api/chart/headerList", get(chart::header_list))
+        .route(
+            "/chart/company/order/count",
+            get(chart::company_order_count),
+        )
+        .route(
+            "/api/chart/company/order/count",
+            get(chart::company_order_count),
+        )
+        .route(
+            "/chart/company/order/sumfreight",
+            get(chart::company_order_sumfreight),
+        )
+        .route(
+            "/api/chart/company/order/sumfreight",
+            get(chart::company_order_sumfreight),
+        )
+        .route(
+            "/chart/company/receipt/sumreceipt",
+            get(chart::company_receipt_sumreceipt),
+        )
+        .route(
+            "/api/chart/company/receipt/sumreceipt",
+            get(chart::company_receipt_sumreceipt),
+        )
         .route("/order", post(order::create))
         .route("/api/order", post(order::create))
         .route("/order/list", post(order::list))

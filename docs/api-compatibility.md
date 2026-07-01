@@ -224,6 +224,7 @@ POST /api/recovery/list
 - `/api/role/list`、`/api/role/:roleId`、`POST/PATCH/DELETE /api/role`、`/api/role/assign` 已先落地内存角色仓储和集成测试，兼容旧 `totalCount`、角色详情、中文成功文案和菜单分配幂等替换。
 - `/api/order/list`、`/api/order/:orderId`、`POST/PATCH/DELETE /api/order`、`/api/receipt/list`、`PATCH /api/receipt/:receiptId`、`/api/notrecovery/list`、`/api/recovery/list` 已先落地内存订单/回单仓储和集成测试，兼容旧运单字段、`billingAt` 日期格式、回单状态文案、订单创建联动 `company_order/receipt/memory`。
 - `/api/memory/list` 已先落地内存记忆词条仓储和集成测试，兼容旧 `{ data: [{ value }] }` 这种不带 `code/message` 的响应结构，并复用订单创建副作用写入的 memory 数据。
+- `/api/chart/headerList`、`/api/chart/company/order/count`、`/api/chart/company/order/sumfreight`、`/api/chart/company/receipt/sumreceipt` 已先落地内存图表统计仓储和集成测试，兼容旧顶部统计标题、公司维度字段名 `ordercount/sumfreight/sumReceipt`、登录鉴权要求。
 - 第一阶段登录服务通过 `AuthService` / `AuthUserStore` / `TokenIssuer` 抽象解耦；当前测试使用内存用户仓储，不声称已经连接旧 MySQL。
 - 第一阶段菜单服务通过 `MenuService` / `MenuStore` 抽象解耦；当前测试使用内存菜单仓储，不声称已经连接旧 MySQL。
 - 第一阶段公司服务通过 `CompanyService` / `CompanyStore` 抽象解耦；当前测试使用内存公司仓储，不声称已经连接旧 MySQL。
@@ -231,4 +232,5 @@ POST /api/recovery/list
 - 第一阶段角色管理服务通过 `RoleService` / `RoleStore` 抽象解耦；当前测试使用内存角色仓储，不声称已经连接旧 MySQL。
 - 第一阶段订单/回单服务通过 `OrderService` / `ReceiptService` / `OrderStore` 抽象解耦；当前测试使用内存订单仓储，不声称已经连接旧 MySQL。
 - 第一阶段记忆词条通过 `MemoryService` 复用订单聚合仓储，保持与订单创建副作用在同一事务边界内演进。
+- 第一阶段图表统计服务通过 `ChartService` / `ChartStore` 抽象解耦；当前测试使用内存图表仓储，不声称已经连接旧 MySQL，后续 SQLx 仓储应直接复刻旧 `order_list/company/company_order/receipt` 聚合口径。
 - 旧 MD5 密码算法已在兼容层实现并测试；后续接入真实 `user` 表后，再把 `AuthUserStore` 替换为 SQLx/MySQL repository，并补充影子库登录回归。

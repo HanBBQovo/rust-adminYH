@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod chart;
 pub mod company;
 pub mod health;
 pub mod menu;
@@ -7,6 +8,9 @@ pub mod role;
 pub mod user;
 
 pub use auth::{CurrentUserResponse, LoginRequest, LoginResponse};
+pub use chart::{
+    ChartHeaderItem, CompanyOrderCountItem, CompanyOrderFreightItem, CompanyReceiptSumItem,
+};
 pub use company::{
     CompanyListRequest, CompanyListResponse, CompanyMutationRequest, LegacyCompanyRecord,
 };
