@@ -43,6 +43,7 @@
 - 新建回单默认状态：`recoverystate='未回收'`、`issuestate='未发放'`、`poststate='未寄出'`。
 - `company_order.com_name` 与 `company.name` 文本关联，`receipt.oddnumber` 与 `order_list.oddnumber` 文本关联，第一版不强行改成纯 ID 模型。
 - 公司改名第一阶段保持旧行为：只更新 `company.name`，不自动级联历史 `order_list.company` 或 `company_order.com_name`。后续如要增强必须单独设计迁移脚本、对账和回滚策略。
+- 订单/回单兼容接口第一阶段保留 `company_order.com_name`、`receipt.oddnumber` 文本关联；新 SQLx 仓储必须把订单创建、公司关联、回单创建、memory 记忆写入放进同一个事务。
 - 头像默认文件为 `default.jpg`；旧头像目录为 `/Users/hanhan/Desktop/code/adminYh-server/uploads/avatar`。
 
 ## 3. 迁移阶段

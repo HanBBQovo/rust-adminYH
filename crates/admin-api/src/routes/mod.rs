@@ -10,7 +10,7 @@ use tower_http::{
 };
 
 use crate::{
-    handlers::{auth, company, health, menu, role, user},
+    handlers::{auth, company, health, menu, order, receipt, role, user},
     AppState,
 };
 
@@ -71,6 +71,36 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/role/{role_id}/menuIds", get(menu::role_menu_ids))
         .route("/menu/tree", get(menu::menu_tree))
         .route("/api/menu/tree", get(menu::menu_tree))
+        .route("/order", post(order::create))
+        .route("/api/order", post(order::create))
+        .route("/order/list", post(order::list))
+        .route("/api/order/list", post(order::list))
+        .route(
+            "/order/{order_id}",
+            get(order::detail)
+                .patch(order::update)
+                .delete(order::remove),
+        )
+        .route(
+            "/api/order/{order_id}",
+            get(order::detail)
+                .patch(order::update)
+                .delete(order::remove),
+        )
+        .route("/receipt/list", post(receipt::list))
+        .route("/api/receipt/list", post(receipt::list))
+        .route(
+            "/receipt/{receipt_id}",
+            axum::routing::patch(receipt::update_status),
+        )
+        .route(
+            "/api/receipt/{receipt_id}",
+            axum::routing::patch(receipt::update_status),
+        )
+        .route("/notrecovery/list", post(receipt::not_recovery))
+        .route("/api/notrecovery/list", post(receipt::not_recovery))
+        .route("/recovery/list", post(receipt::recovery))
+        .route("/api/recovery/list", post(receipt::recovery))
         .route("/company", post(company::create))
         .route("/api/company", post(company::create))
         .route(

@@ -2,6 +2,7 @@ pub mod auth;
 pub mod company;
 pub mod health;
 pub mod menu;
+pub mod order;
 pub mod role;
 pub mod user;
 
@@ -17,6 +18,10 @@ pub use health::{HealthService, StaticHealthService};
 pub use menu::{
     development_menu_service, CompatMenuService, DisabledMenuService, InMemoryMenuStore,
     MenuService, MenuStore, RoleSummary,
+};
+pub use order::{
+    development_order_services, CompatOrderService, CompatReceiptService, DisabledOrderService,
+    DisabledReceiptService, InMemoryOrderStore, OrderService, OrderStore, ReceiptService,
 };
 pub use role::{
     development_role_service, CompatRoleService, DisabledRoleService, InMemoryRoleStore,

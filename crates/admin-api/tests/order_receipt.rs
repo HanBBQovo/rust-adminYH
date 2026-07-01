@@ -105,151 +105,69 @@ async fn json_request(
 }
 
 #[tokio::test]
-async fn users_list_returns_legacy_shape_and_filters() {
+async fn order_list_returns_legacy_shape_and_filters() {
     let app = build_router(admin_state());
     let token = login_token(app.clone(), "admin").await;
 
     let (status, json) = json_request(
         app,
         "POST",
-        "/api/users/list",
+        "/api/order/list",
         Some(&token),
-        r#"{"offset":0,"size":10,"name":"admin","enable":1,"roleId":1,"createAt":["2026-01-01","2026-01-31"]}"#,
+        r#"{"offset":0,"size":10,"oddnumber":"YD202601","consignee":"张","company":"顺丰","createAt":["2026-01-01","2026-01-31"]}"#,
     )
     .await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json["code"], 0);
     assert_eq!(json["data"]["totalCount"], 1);
-    assert_eq!(json["data"]["list"][0]["id"], 58);
-    assert_eq!(json["data"]["list"][0]["roleId"], 1);
-    assert!(json["data"]["list"][0]["avatarUrl"]
-        .as_str()
-        .unwrap()
-        .ends_with("/users/58/avatar"));
+    assert_eq!(json["data"]["list"][0]["oddnumber"], "YD20260101001");
+    assert_eq!(json["data"]["list"][0]["billingAt"], "2026-01-01");
 }
 
 #[tokio::test]
-async fn user_detail_returns_role_object() {
-    let app = build_router(admin_state());
-    let token = login_token(app.clone(), "admin").await;
-
-    let (status, json) = json_request(app, "GET", "/api/users/58", Some(&token), "").await;
-
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(json["code"], 0);
-    assert_eq!(json["data"]["id"], 58);
-    assert_eq!(json["data"]["role"]["id"], 1);
-    assert_eq!(json["data"]["role"]["name"], "超级管理员");
-}
-
-#[tokio::test]
-async fn admin_can_create_update_password_and_delete_user() {
+async fn admin_can_create_order_and_receipt_side_effect() {
     let app = build_router(admin_state());
     let token = login_token(app.clone(), "admin").await;
 
     let (_, created) = json_request(
         app.clone(),
         "POST",
-        "/api/users",
+        "/api/order",
         Some(&token),
-        r#"{"name":"new_user","password":"secret2","roleId":2}"#,
+        r#"{"oddnumber":"YD20260701001","billingAt":"2026-07-01","consignee":"新收货人","consigneephone":"","address":"新地址","method":"送货","goodsname":"设备","number":"2","pack":"木箱","weight":"20","measurement":"1","cainsurance":"否","value":"","insurance":"","consignor":"新发货人","consignorphone":"","freight":"100","delivery":"20","sumfreight":"120","freightstate":"现付","paynow":"120","paygo":"","payback":"","paymonth":"","receiptnum":1,"company":"顺丰速运","remarks":""}"#,
     )
     .await;
     assert_eq!(created["code"], 0);
-    assert_eq!(created["message"], "创建用户成功！");
+    assert_eq!(created["message"], "创建订单成功！");
 
-    let (_, updated) = json_request(
+    let (_, receipt_list) = json_request(
         app.clone(),
-        "PATCH",
-        "/api/users/60",
-        Some(&token),
-        r#"{"name":"renamed","roleId":1}"#,
-    )
-    .await;
-    assert_eq!(updated["code"], 0);
-    assert_eq!(updated["message"], "修改用户信息成功!");
-
-    let (_, password_updated) = json_request(
-        app.clone(),
-        "PATCH",
-        "/api/users/60/password",
-        Some(&token),
-        r#"{"password":"new-secret"}"#,
-    )
-    .await;
-    assert_eq!(password_updated["code"], 0);
-    assert_eq!(password_updated["message"], "修改密码成功！");
-
-    let (_, deleted) = json_request(app.clone(), "DELETE", "/api/users/60", Some(&token), "").await;
-    assert_eq!(deleted["code"], 0);
-    assert_eq!(deleted["message"], "删除用户成功！");
-
-    let (_, detail) = json_request(app, "GET", "/api/users/60", Some(&token), "").await;
-    assert!(detail["data"].is_null());
-}
-
-#[tokio::test]
-async fn user_password_accepts_raw_string_body() {
-    let app = build_router(admin_state());
-    let token = login_token(app.clone(), "admin").await;
-
-    let (status, json) = json_request(
-        app,
-        "PATCH",
-        "/api/users/59/password",
-        Some(&token),
-        r#""raw-secret""#,
-    )
-    .await;
-
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(json["code"], 0);
-    assert_eq!(json["message"], "修改密码成功！");
-}
-
-#[tokio::test]
-async fn protected_user_58_delete_keeps_legacy_error() {
-    let app = build_router(admin_state());
-    let token = login_token(app.clone(), "admin").await;
-
-    let (status, json) = json_request(app, "DELETE", "/api/users/58", Some(&token), "").await;
-
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(json["code"], -200);
-    assert_eq!(json["message"], "删除用户失败！");
-}
-
-#[tokio::test]
-async fn user_create_rejects_duplicate_name() {
-    let app = build_router(admin_state());
-    let token = login_token(app.clone(), "admin").await;
-
-    let (status, json) = json_request(
-        app,
         "POST",
-        "/api/users",
+        "/api/receipt/list",
         Some(&token),
-        r#"{"name":"admin","password":"secret","roleId":1}"#,
+        r#"{"offset":0,"size":10,"oddnumber":"YD20260701001","recoverystate":"未回收"}"#,
     )
     .await;
+    assert_eq!(receipt_list["data"]["totalCount"], 1);
+    assert_eq!(receipt_list["data"]["list"][0]["recoverynumber"], 1);
 
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert_eq!(json["code"], -400);
-    assert_eq!(json["message"], "请求参数错误: 用户已存在");
+    let (_, detail) = json_request(app, "GET", "/api/order/3", Some(&token), "").await;
+    assert_eq!(detail["data"]["oddnumber"], "YD20260701001");
+    assert_eq!(detail["data"]["billingAt"], "2026-07-01");
 }
 
 #[tokio::test]
-async fn user_writes_require_admin_role() {
+async fn order_writes_require_admin_role() {
     let app = build_router(operator_state());
     let token = login_token(app.clone(), "operator").await;
 
     let (status, json) = json_request(
         app,
         "POST",
-        "/api/users",
+        "/api/order",
         Some(&token),
-        r#"{"name":"new_user","password":"secret2","roleId":2}"#,
+        r#"{"oddnumber":"YD20260701001","consignee":"新收货人","consignor":"新发货人"}"#,
     )
     .await;
 
@@ -259,40 +177,67 @@ async fn user_writes_require_admin_role() {
 }
 
 #[tokio::test]
-async fn user_list_rejects_missing_token() {
+async fn receipt_lists_and_status_update_keep_legacy_messages() {
+    let app = build_router(admin_state());
+    let token = login_token(app.clone(), "admin").await;
+
+    let (_, not_recovery) = json_request(
+        app.clone(),
+        "POST",
+        "/api/notrecovery/list",
+        Some(&token),
+        r#"{"offset":0,"size":10,"oddnumber":"YD20260101001"}"#,
+    )
+    .await;
+    assert_eq!(not_recovery["code"], 0);
+    assert_eq!(not_recovery["data"]["totalCount"], 1);
+    assert_eq!(not_recovery["data"]["list"][0]["recoverystate"], "未回收");
+
+    let (_, updated) = json_request(
+        app.clone(),
+        "PATCH",
+        "/api/receipt/1",
+        Some(&token),
+        r#"{"recoverystate":"已回收"}"#,
+    )
+    .await;
+    assert_eq!(updated["code"], 0);
+    assert_eq!(updated["message"], "回单回收成功！");
+
+    let (_, recovery) = json_request(
+        app,
+        "POST",
+        "/api/recovery/list",
+        Some(&token),
+        r#"{"offset":0,"size":10,"oddnumber":"YD20260101001"}"#,
+    )
+    .await;
+    assert_eq!(recovery["data"]["totalCount"], 1);
+}
+
+#[tokio::test]
+async fn order_and_receipt_lists_reject_missing_token() {
     let app = build_router(admin_state());
 
     let (status, json) = json_request(
-        app,
+        app.clone(),
         "POST",
-        "/api/users/list",
+        "/api/order/list",
         None,
         r#"{"offset":0,"size":10}"#,
     )
     .await;
-
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(json["code"], -200);
+
+    let (status, json) = json_request(
+        app,
+        "POST",
+        "/api/receipt/list",
+        None,
+        r#"{"offset":0,"size":10}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(json["message"], "未登录或登录已失效");
-}
-
-#[tokio::test]
-async fn user_avatar_route_is_public_and_sets_mimetype() {
-    let app = build_router(admin_state());
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/api/users/58/avatar")
-                .body(Body::empty())
-                .expect("request should build"),
-        )
-        .await
-        .expect("request should succeed");
-
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response.headers().get("content-type").unwrap(),
-        "image/jpeg"
-    );
 }

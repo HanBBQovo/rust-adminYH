@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use admin_api::{build_router, AppConfig, AppState};
+use admin_api::{build_router, AppConfig, AppServices, AppState};
 use admin_core::{
     domain::AuthUser,
     services::{
         development_auth_service, development_company_service, development_menu_service,
-        development_role_service, development_user_service, InMemoryAuthUserStore,
-        StaticHealthService,
+        development_order_services, development_role_service, development_user_service,
+        InMemoryAuthUserStore, StaticHealthService,
     },
 };
 use axum::body::Body;
@@ -16,17 +16,22 @@ use tower::ServiceExt;
 fn test_state_with_user(user: AuthUser) -> AppState {
     let config = AppConfig::from_env().expect("config should load");
     let store = Arc::new(InMemoryAuthUserStore::new([user]));
+    let (order_service, receipt_service) = development_order_services();
     AppState::with_services(
         config,
-        Arc::new(StaticHealthService::new(
-            "rust-adminYH",
-            env!("CARGO_PKG_VERSION"),
-        )),
-        Arc::new(development_auth_service(store)),
-        Arc::new(development_menu_service()),
-        Arc::new(development_company_service()),
-        Arc::new(development_user_service()),
-        Arc::new(development_role_service()),
+        AppServices {
+            health_service: Arc::new(StaticHealthService::new(
+                "rust-adminYH",
+                env!("CARGO_PKG_VERSION"),
+            )),
+            auth_service: Arc::new(development_auth_service(store)),
+            menu_service: Arc::new(development_menu_service()),
+            company_service: Arc::new(development_company_service()),
+            user_service: Arc::new(development_user_service()),
+            role_service: Arc::new(development_role_service()),
+            order_service: Arc::new(order_service),
+            receipt_service: Arc::new(receipt_service),
+        },
     )
 }
 

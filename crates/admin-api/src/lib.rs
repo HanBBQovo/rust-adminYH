@@ -8,4 +8,4 @@ pub mod state;
 
 pub use config::AppConfig;
 pub use routes::build_router;
-pub use state::AppState;
+pub use state::{AppServices, AppState};
