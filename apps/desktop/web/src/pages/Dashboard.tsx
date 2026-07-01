@@ -1,14 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type ElementType } from 'react'
-import {
-  Boxes,
-  ChevronLeft,
-  ChevronRight,
-  ClipboardList,
-  LayoutDashboard,
-  LogOut,
-  PanelLeft,
-  Settings,
-} from 'lucide-react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { Boxes, ChevronLeft, ChevronRight, LogOut, PanelLeft } from 'lucide-react'
 
 import { logout } from '@/api/auth'
 import { ChunkLoadBoundary } from '@/components/ChunkLoadBoundary'
@@ -19,6 +10,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { BRAND_NAME, nsKey } from '@/config'
 import { AnimatePresence, motion } from '@/lib/motion'
 import { cn } from '@/lib/utils'
+import { adaptLegacyMenus, fallbackNavItems } from '@/session/menu-adapter'
+import type { AdminSession, AppPage, SessionNavItem } from '@/session/types'
 
 const Workspace = lazy(() => import('@/pages/Workspace'))
 const ResourceRegistry = lazy(() => import('@/pages/ResourceRegistry'))
@@ -32,45 +25,36 @@ const SettingsPage = lazy(() => import('@/pages/Settings'))
  * 真要做深链接/多级路由时,把 `currentPage` 状态换成 router 即可,其余结构不动。
  */
 
-type Page = 'workspace' | 'registry' | 'settings'
-
-interface NavItem {
-  key: Page
-  label: string
-  icon: ElementType
-}
-
-const navItems: NavItem[] = [
-  { key: 'workspace', label: '工作台', icon: LayoutDashboard },
-  { key: 'registry', label: '页面注册表', icon: ClipboardList },
-  { key: 'settings', label: '系统设置', icon: Settings },
-]
-
 const PAGE_STORAGE_KEY = nsKey('last-page')
 
-function isPage(value: string | null): value is Page {
+function isPage(value: string | null, navItems: SessionNavItem[]): value is AppPage {
   return navItems.some((item) => item.key === value)
 }
 
-function readStoredPage(): Page {
+function readStoredPage(navItems: SessionNavItem[]): AppPage {
   if (typeof window === 'undefined') return 'workspace'
   const value = window.localStorage.getItem(PAGE_STORAGE_KEY)
-  return isPage(value) ? value : 'workspace'
+  return isPage(value, navItems) ? value : navItems[0]?.key || 'workspace'
 }
 
 interface DashboardProps {
+  session: AdminSession
   onLogout: () => void
 }
 
-export default function Dashboard({ onLogout }: DashboardProps) {
-  const [currentPage, setCurrentPage] = useState<Page>(() => readStoredPage())
+export default function Dashboard({ session, onLogout }: DashboardProps) {
+  const navItems = useMemo(() => {
+    const adapted = adaptLegacyMenus(session.menus)
+    return adapted.length ? adapted : fallbackNavItems()
+  }, [session.menus])
+  const [currentPage, setCurrentPage] = useState<AppPage>(() => readStoredPage(navItems))
   const [collapsed, setCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [isMobileViewport, setIsMobileViewport] = useState(false)
 
   const currentItem = useMemo(
     () => navItems.find((item) => item.key === currentPage) || navItems[0],
-    [currentPage],
+    [currentPage, navItems],
   )
   const CurrentIcon = currentItem.icon
 
@@ -78,6 +62,12 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     document.title = `${currentItem.label} - ${BRAND_NAME}`
     window.localStorage.setItem(PAGE_STORAGE_KEY, currentPage)
   }, [currentItem.label, currentPage])
+
+  useEffect(() => {
+    if (!navItems.some((item) => item.key === currentPage)) {
+      setCurrentPage(navItems[0]?.key || 'workspace')
+    }
+  }, [currentPage, navItems])
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 767px)')
@@ -95,7 +85,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     onLogout()
   }
 
-  const renderNavItem = (item: NavItem, options?: { collapsed?: boolean; onSelect?: () => void }) => {
+  const renderNavItem = (item: SessionNavItem, options?: { collapsed?: boolean; onSelect?: () => void }) => {
     const active = currentPage === item.key
     const Icon = item.icon
     const compact = options?.collapsed ?? collapsed

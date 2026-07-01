@@ -1,4 +1,6 @@
-import { apiRequest, clearAuthToken, getAuthToken, setAuthToken } from '@/api/client'
+import { apiRequest } from '@/api/client'
+import { clearSession, readStoredSession, readStoredToken, saveSession } from '@/session/session-store'
+import type { AdminSession, LegacyMenuItem, SessionUser } from '@/session/types'
 
 /**
  * 鉴权相关接口。token 的存取与请求头注入都在 api/client 里,
@@ -19,28 +21,74 @@ export interface CurrentUser {
   roles: string[]
 }
 
-export async function login(input: LoginInput): Promise<void> {
-  const result = await apiRequest<{ token: string; userInfo?: CurrentUser }>('/login', {
+interface LoginPayload {
+  id: number
+  name: string
+  token: string
+}
+
+function toSessionUser(user: CurrentUser | LoginPayload): SessionUser {
+  return {
+    id: user.id,
+    name: user.name,
+    roles: 'roles' in user && Array.isArray(user.roles) ? user.roles : [],
+  }
+}
+
+async function fetchMenus(user: SessionUser): Promise<LegacyMenuItem[]> {
+  try {
+    return await apiRequest<LegacyMenuItem[]>(`/role/${user.roles[0] || 1}/menu`)
+  } catch {
+    return []
+  }
+}
+
+export async function loginSession(input: LoginInput): Promise<AdminSession> {
+  const result = await apiRequest<LoginPayload>('/login', {
     method: 'POST',
     body: JSON.stringify(input),
   })
-  setAuthToken(result.token)
+  const user = toSessionUser(result)
+  const session: AdminSession = {
+    token: result.token,
+    user,
+    menus: await fetchMenus(user),
+  }
+  saveSession(session)
+  return session
+}
+
+export async function restoreSession(): Promise<AdminSession | null> {
+  if (!readStoredToken()) return null
+
+  try {
+    const user = toSessionUser(await apiRequest<CurrentUser>('/users/me'))
+    const cached = readStoredSession()
+    const session: AdminSession = {
+      token: readStoredToken(),
+      user,
+      menus: cached?.menus?.length ? cached.menus : await fetchMenus(user),
+    }
+    saveSession(session)
+    return session
+  } catch {
+    clearSession()
+    return null
+  }
+}
+
+export async function login(input: LoginInput): Promise<void> {
+  await loginSession(input)
 }
 
 export async function logout(): Promise<void> {
   try {
     await apiRequest('/auth/logout', { method: 'POST', body: '{}' })
   } finally {
-    clearAuthToken()
+    clearSession()
   }
 }
 
 export async function getAuthStatus(): Promise<boolean> {
-  if (!getAuthToken()) return false
-  try {
-    await apiRequest<CurrentUser>('/users/me')
-    return true
-  } catch {
-    return false
-  }
+  return (await restoreSession()) !== null
 }

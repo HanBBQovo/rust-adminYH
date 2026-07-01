@@ -1,9 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 
-import { getAuthStatus } from '@/api/auth'
+import { restoreSession } from '@/api/auth'
 import { ChunkLoadBoundary } from '@/components/ChunkLoadBoundary'
 import { PageLoader } from '@/components/PageLoader'
 import { BRAND_NAME } from '@/config'
+import type { AdminSession } from '@/session/types'
 
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
 const Login = lazy(() => import('@/pages/Login'))
@@ -14,16 +15,16 @@ const Login = lazy(() => import('@/pages/Login'))
  */
 export default function App() {
   const [checking, setChecking] = useState(true)
-  const [authenticated, setAuthenticated] = useState(false)
+  const [session, setSession] = useState<AdminSession | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    getAuthStatus()
-      .then((status) => {
-        if (!cancelled) setAuthenticated(status)
+    restoreSession()
+      .then((restoredSession) => {
+        if (!cancelled) setSession(restoredSession)
       })
       .catch(() => {
-        if (!cancelled) setAuthenticated(false)
+        if (!cancelled) setSession(null)
       })
       .finally(() => {
         if (!cancelled) setChecking(false)
@@ -39,10 +40,10 @@ export default function App() {
   return (
     <ChunkLoadBoundary scopeLabel={BRAND_NAME}>
       <Suspense fallback={<PageLoader />}>
-        {authenticated ? (
-          <Dashboard onLogout={() => setAuthenticated(false)} />
+        {session ? (
+          <Dashboard session={session} onLogout={() => setSession(null)} />
         ) : (
-          <Login onAuthenticated={() => setAuthenticated(true)} />
+          <Login onAuthenticated={setSession} />
         )}
       </Suspense>
     </ChunkLoadBoundary>

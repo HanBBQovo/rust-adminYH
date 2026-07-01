@@ -1,16 +1,17 @@
 import { FormEvent, useState } from 'react'
 import { Boxes, Loader2, LogIn } from 'lucide-react'
 
-import { login } from '@/api/auth'
+import { loginSession } from '@/api/auth'
 import { ThemeToggleButton } from '@/components/theme'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BRAND_NAME, PRODUCT_SUBTITLE } from '@/config'
 import { motion } from '@/lib/motion'
+import type { AdminSession } from '@/session/types'
 
 interface LoginProps {
-  onAuthenticated: () => void
+  onAuthenticated: (session: AdminSession) => void
 }
 
 export default function Login({ onAuthenticated }: LoginProps) {
@@ -24,8 +25,8 @@ export default function Login({ onAuthenticated }: LoginProps) {
     setError('')
     setSubmitting(true)
     try {
-      await login({ name, password })
-      onAuthenticated()
+      const session = await loginSession({ name, password })
+      onAuthenticated(session)
     } catch (err) {
       setError(err instanceof Error ? err.message : '登录失败')
     } finally {
