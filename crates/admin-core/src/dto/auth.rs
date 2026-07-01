@@ -20,4 +20,6 @@ pub struct CurrentUserResponse {
     pub id: i64,
     pub name: String,
     pub roles: Vec<String>,
+    #[serde(rename = "roleIds")]
+    pub role_ids: Vec<i64>,
 }

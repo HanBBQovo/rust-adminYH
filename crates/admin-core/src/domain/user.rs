@@ -5,6 +5,7 @@ pub struct AuthUser {
     pub id: i64,
     pub name: String,
     pub password_hash: PasswordHash,
+    pub role_ids: Vec<i64>,
 }
 
 impl AuthUser {
@@ -13,6 +14,7 @@ impl AuthUser {
             id,
             name: name.into(),
             password_hash,
+            role_ids: Vec::new(),
         }
     }
 
@@ -22,5 +24,10 @@ impl AuthUser {
             name,
             PasswordHash::new(legacy_md5_hex(password.as_bytes())),
         )
+    }
+
+    pub fn with_role_ids(mut self, role_ids: impl IntoIterator<Item = i64>) -> Self {
+        self.role_ids = role_ids.into_iter().collect();
+        self
     }
 }

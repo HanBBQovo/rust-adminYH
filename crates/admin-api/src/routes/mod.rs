@@ -10,7 +10,7 @@ use tower_http::{
 };
 
 use crate::{
-    handlers::{auth, health},
+    handlers::{auth, health, menu},
     AppState,
 };
 
@@ -29,6 +29,12 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/login", post(auth::login))
         .route("/users/me", get(auth::me))
         .route("/api/users/me", get(auth::me))
+        .route("/role/{role_id}/menu", get(menu::role_menu))
+        .route("/api/role/{role_id}/menu", get(menu::role_menu))
+        .route("/role/{role_id}/menuIds", get(menu::role_menu_ids))
+        .route("/api/role/{role_id}/menuIds", get(menu::role_menu_ids))
+        .route("/menu/tree", get(menu::menu_tree))
+        .route("/api/menu/tree", get(menu::menu_tree))
         .with_state(state)
         .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
         .layer(SetRequestIdLayer::new(request_id_header, MakeRequestUuid))

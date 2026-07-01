@@ -113,7 +113,8 @@ impl AuthService for CompatAuthService {
             Ok(CurrentUserResponse {
                 id: user.id,
                 name: user.name,
-                roles: Vec::new(),
+                roles: user.role_ids.iter().map(ToString::to_string).collect(),
+                role_ids: user.role_ids,
             })
         })
     }
@@ -188,7 +189,7 @@ impl InMemoryAuthUserStore {
     }
 
     pub fn single_legacy_user(id: i64, name: impl Into<String>, password: &str) -> Self {
-        Self::new([AuthUser::with_legacy_md5_password(id, name, password)])
+        Self::new([AuthUser::with_legacy_md5_password(id, name, password).with_role_ids([1])])
     }
 
     pub fn saved_token(&self, user_id: i64) -> AppResult<Option<String>> {
@@ -331,7 +332,8 @@ mod tests {
 
         assert_eq!(current_user.id, 58);
         assert_eq!(current_user.name, "admin");
-        assert!(current_user.roles.is_empty());
+        assert_eq!(current_user.roles, ["1"]);
+        assert_eq!(current_user.role_ids, [1]);
     }
 
     #[tokio::test]
