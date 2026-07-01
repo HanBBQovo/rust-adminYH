@@ -44,6 +44,7 @@
 - `company_order.com_name` 与 `company.name` 文本关联，`receipt.oddnumber` 与 `order_list.oddnumber` 文本关联，第一版不强行改成纯 ID 模型。
 - 公司改名第一阶段保持旧行为：只更新 `company.name`，不自动级联历史 `order_list.company` 或 `company_order.com_name`。后续如要增强必须单独设计迁移脚本、对账和回滚策略。
 - 订单/回单兼容接口第一阶段保留 `company_order.com_name`、`receipt.oddnumber` 文本关联；新 SQLx 仓储必须把订单创建、公司关联、回单创建、memory 记忆写入放进同一个事务。
+- 旧前端回单“接收”会写入 `issuestate='已接收'`，但筛选枚举里还有 `已发放/未发放`；迁移时不得强行归一化，必须先按真实 `SELECT DISTINCT issuestate` 输出分布并由人工确认。
 - 头像默认文件为 `default.jpg`；旧头像目录为 `/Users/hanhan/Desktop/code/adminYh-server/uploads/avatar`。
 
 ## 3. 迁移阶段
