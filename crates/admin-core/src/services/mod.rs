@@ -20,8 +20,9 @@ pub use menu::{
     MenuService, MenuStore, RoleSummary,
 };
 pub use order::{
-    development_order_services, CompatOrderService, CompatReceiptService, DisabledOrderService,
-    DisabledReceiptService, InMemoryOrderStore, OrderService, OrderStore, ReceiptService,
+    development_order_services, CompatMemoryService, CompatOrderService, CompatReceiptService,
+    DisabledMemoryService, DisabledOrderService, DisabledReceiptService, InMemoryOrderStore,
+    MemoryService, OrderService, OrderStore, ReceiptService,
 };
 pub use role::{
     development_role_service, CompatRoleService, DisabledRoleService, InMemoryRoleStore,

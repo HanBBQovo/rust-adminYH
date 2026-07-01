@@ -226,6 +226,11 @@ pub struct ReceiptListResponse {
     pub total_count: usize,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct MemoryRecord {
+    pub value: String,
+}
+
 fn legacy_date_text_to_millis(value: &str) -> i64 {
     let value = value.trim();
     if value.is_empty() {

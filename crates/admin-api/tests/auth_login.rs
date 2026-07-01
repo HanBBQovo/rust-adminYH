@@ -15,7 +15,7 @@ fn test_state() -> AppState {
     let store = Arc::new(InMemoryAuthUserStore::single_legacy_user(
         58, "admin", "secret",
     ));
-    let (order_service, receipt_service) = development_order_services();
+    let (order_service, receipt_service, memory_service) = development_order_services();
     AppState::with_services(
         config,
         AppServices {
@@ -30,6 +30,7 @@ fn test_state() -> AppState {
             role_service: Arc::new(development_role_service()),
             order_service: Arc::new(order_service),
             receipt_service: Arc::new(receipt_service),
+            memory_service: Arc::new(memory_service),
         },
     )
 }

@@ -10,7 +10,7 @@ use tower_http::{
 };
 
 use crate::{
-    handlers::{auth, company, health, menu, order, receipt, role, user},
+    handlers::{auth, company, health, memory, menu, order, receipt, role, user},
     AppState,
 };
 
@@ -101,6 +101,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/notrecovery/list", post(receipt::not_recovery))
         .route("/recovery/list", post(receipt::recovery))
         .route("/api/recovery/list", post(receipt::recovery))
+        .route("/memory/list", post(memory::list))
+        .route("/api/memory/list", post(memory::list))
         .route("/company", post(company::create))
         .route("/api/company", post(company::create))
         .route(

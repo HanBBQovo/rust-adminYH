@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod company;
 pub mod health;
+pub mod memory;
 pub mod menu;
 pub mod order;
 pub mod receipt;

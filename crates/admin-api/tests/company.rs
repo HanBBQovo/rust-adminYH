@@ -16,7 +16,7 @@ use tower::ServiceExt;
 fn test_state_with_user(user: AuthUser) -> AppState {
     let config = AppConfig::from_env().expect("config should load");
     let store = Arc::new(InMemoryAuthUserStore::new([user]));
-    let (order_service, receipt_service) = development_order_services();
+    let (order_service, receipt_service, memory_service) = development_order_services();
     AppState::with_services(
         config,
         AppServices {
@@ -31,6 +31,7 @@ fn test_state_with_user(user: AuthUser) -> AppState {
             role_service: Arc::new(development_role_service()),
             order_service: Arc::new(order_service),
             receipt_service: Arc::new(receipt_service),
+            memory_service: Arc::new(memory_service),
         },
     )
 }

@@ -3,8 +3,8 @@ use std::sync::Arc;
 use admin_core::services::{
     AuthService, CompanyService, DisabledAuthService, DisabledCompanyService, DisabledMenuService,
     DisabledOrderService, DisabledReceiptService, DisabledRoleService, DisabledUserService,
-    HealthService, MenuService, OrderService, ReceiptService, RoleService, StaticHealthService,
-    UserService,
+    HealthService, MemoryService, MenuService, OrderService, ReceiptService, RoleService,
+    StaticHealthService, UserService,
 };
 
 use crate::config::AppConfig;
@@ -19,6 +19,7 @@ pub struct AppServices {
     pub role_service: Arc<dyn RoleService>,
     pub order_service: Arc<dyn OrderService>,
     pub receipt_service: Arc<dyn ReceiptService>,
+    pub memory_service: Arc<dyn MemoryService>,
 }
 
 impl AppServices {
@@ -32,6 +33,7 @@ impl AppServices {
             role_service: Arc::new(DisabledRoleService),
             order_service: Arc::new(DisabledOrderService),
             receipt_service: Arc::new(DisabledReceiptService),
+            memory_service: Arc::new(admin_core::services::DisabledMemoryService),
         }
     }
 }
@@ -47,6 +49,7 @@ pub struct AppState {
     pub role_service: Arc<dyn RoleService>,
     pub order_service: Arc<dyn OrderService>,
     pub receipt_service: Arc<dyn ReceiptService>,
+    pub memory_service: Arc<dyn MemoryService>,
 }
 
 impl AppState {
@@ -65,6 +68,7 @@ impl AppState {
             role_service: services.role_service,
             order_service: services.order_service,
             receipt_service: services.receipt_service,
+            memory_service: services.memory_service,
         }
     }
 }

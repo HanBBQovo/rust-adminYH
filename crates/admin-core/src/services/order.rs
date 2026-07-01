@@ -8,7 +8,7 @@ use std::{
 use crate::{
     domain::{OrderRecord, ReceiptRecord},
     dto::{
-        LegacyDateInput, LegacyOrderRecord, LegacyReceiptRecord, OrderListRequest,
+        LegacyDateInput, LegacyOrderRecord, LegacyReceiptRecord, MemoryRecord, OrderListRequest,
         OrderListResponse, OrderMutationRequest, ReceiptListRequest, ReceiptListResponse,
         ReceiptStatusRequest,
     },
@@ -62,6 +62,10 @@ pub trait ReceiptService: Send + Sync {
     ) -> ServiceFuture<'a, AppResult<&'static str>>;
 }
 
+pub trait MemoryService: Send + Sync {
+    fn list<'a>(&'a self) -> ServiceFuture<'a, AppResult<Vec<MemoryRecord>>>;
+}
+
 pub trait OrderStore: Send + Sync {
     fn list<'a>(
         &'a self,
@@ -98,6 +102,8 @@ pub trait OrderStore: Send + Sync {
         receipt_id: i64,
         input: ReceiptStatusChange,
     ) -> ServiceFuture<'a, AppResult<()>>;
+
+    fn list_memories<'a>(&'a self) -> ServiceFuture<'a, AppResult<Vec<MemoryRecord>>>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -206,6 +212,23 @@ pub struct CompatReceiptService {
 impl CompatReceiptService {
     pub fn new(store: Arc<dyn OrderStore>) -> Self {
         Self { store }
+    }
+}
+
+pub struct CompatMemoryService {
+    store: Arc<dyn OrderStore>,
+}
+
+impl CompatMemoryService {
+    pub fn new(store: Arc<dyn OrderStore>) -> Self {
+        Self { store }
+    }
+}
+
+impl MemoryService for CompatMemoryService {
+    fn list<'a>(&'a self) -> ServiceFuture<'a, AppResult<Vec<MemoryRecord>>> {
+        let store = Arc::clone(&self.store);
+        Box::pin(async move { store.list_memories().await })
     }
 }
 
@@ -351,6 +374,19 @@ impl ReceiptService for DisabledReceiptService {
     ) -> ServiceFuture<'a, AppResult<&'static str>> {
         Box::pin(async {
             Err(AppError::Database("回单服务尚未连接数据库仓储".to_owned()))
+        })
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct DisabledMemoryService;
+
+impl MemoryService for DisabledMemoryService {
+    fn list<'a>(&'a self) -> ServiceFuture<'a, AppResult<Vec<MemoryRecord>>> {
+        Box::pin(async {
+            Err(AppError::Database(
+                "记忆词条服务尚未连接数据库仓储".to_owned(),
+            ))
         })
     }
 }
@@ -631,6 +667,22 @@ impl OrderStore for InMemoryOrderStore {
             Ok(())
         })
     }
+
+    fn list_memories<'a>(&'a self) -> ServiceFuture<'a, AppResult<Vec<MemoryRecord>>> {
+        Box::pin(async move {
+            let mut list: Vec<_> = self
+                .memories
+                .lock()
+                .map_err(|_| AppError::Internal)?
+                .iter()
+                .map(|value| MemoryRecord {
+                    value: value.to_owned(),
+                })
+                .collect();
+            list.sort_by(|left, right| left.value.cmp(&right.value));
+            Ok(list)
+        })
+    }
 }
 
 impl InMemoryOrderStore {
@@ -688,11 +740,16 @@ impl InMemoryOrderStore {
     }
 }
 
-pub fn development_order_services() -> (CompatOrderService, CompatReceiptService) {
+pub fn development_order_services() -> (
+    CompatOrderService,
+    CompatReceiptService,
+    CompatMemoryService,
+) {
     let store = Arc::new(InMemoryOrderStore::with_seed_data());
     (
         CompatOrderService::new(store.clone()),
-        CompatReceiptService::new(store),
+        CompatReceiptService::new(store.clone()),
+        CompatMemoryService::new(store),
     )
 }
 
@@ -906,12 +963,12 @@ mod tests {
             LegacyDateInput, OrderListRequest, OrderMutationRequest, ReceiptListRequest,
             ReceiptStatusRequest,
         },
-        services::{development_order_services, OrderService, ReceiptService},
+        services::{development_order_services, MemoryService, OrderService, ReceiptService},
     };
 
     #[tokio::test]
     async fn order_create_writes_company_order_receipt_and_memory() {
-        let (orders, receipts) = development_order_services();
+        let (orders, receipts, memories) = development_order_services();
         orders
             .create(OrderMutationRequest {
                 oddnumber: Some("YD20260701001".to_owned()),
@@ -961,11 +1018,17 @@ mod tests {
             .expect("receipt should list");
         assert_eq!(receipt_list.total_count, 1);
         assert_eq!(receipt_list.list[0].billing_at, "2026-07-01");
+        assert!(memories
+            .list()
+            .await
+            .expect("memories should list")
+            .iter()
+            .any(|record| record.value == "新收货人"));
     }
 
     #[tokio::test]
     async fn order_list_filters_and_formats_legacy_dates() {
-        let (orders, _) = development_order_services();
+        let (orders, _, _) = development_order_services();
         let response = orders
             .list(OrderListRequest {
                 offset: 0,
@@ -991,7 +1054,7 @@ mod tests {
 
     #[tokio::test]
     async fn receipt_status_update_uses_first_legacy_status_field() {
-        let (_, receipts) = development_order_services();
+        let (_, receipts, _) = development_order_services();
         let message = receipts
             .update_status(
                 1,

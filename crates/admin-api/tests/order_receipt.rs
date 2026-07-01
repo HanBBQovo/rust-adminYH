@@ -16,7 +16,7 @@ use tower::ServiceExt;
 fn test_state_with_user(user: AuthUser) -> AppState {
     let config = AppConfig::from_env().expect("config should load");
     let store = Arc::new(InMemoryAuthUserStore::new([user]));
-    let (order_service, receipt_service) = development_order_services();
+    let (order_service, receipt_service, memory_service) = development_order_services();
     AppState::with_services(
         config,
         AppServices {
@@ -31,6 +31,7 @@ fn test_state_with_user(user: AuthUser) -> AppState {
             role_service: Arc::new(development_role_service()),
             order_service: Arc::new(order_service),
             receipt_service: Arc::new(receipt_service),
+            memory_service: Arc::new(memory_service),
         },
     )
 }
@@ -155,6 +156,40 @@ async fn admin_can_create_order_and_receipt_side_effect() {
     let (_, detail) = json_request(app, "GET", "/api/order/3", Some(&token), "").await;
     assert_eq!(detail["data"]["oddnumber"], "YD20260701001");
     assert_eq!(detail["data"]["billingAt"], "2026-07-01");
+}
+
+#[tokio::test]
+async fn memory_list_keeps_old_data_only_shape_and_order_side_effect() {
+    let app = build_router(admin_state());
+    let token = login_token(app.clone(), "admin").await;
+
+    let (_, before) = json_request(app.clone(), "POST", "/api/memory/list", Some(&token), "").await;
+    assert!(before["code"].is_null());
+    assert!(before["data"]
+        .as_array()
+        .expect("memory data should be array")
+        .iter()
+        .any(|record| record["value"] == "张三"));
+
+    let _ = json_request(
+        app.clone(),
+        "POST",
+        "/api/order",
+        Some(&token),
+        r#"{"oddnumber":"YD20260701002","billingAt":"2026-07-01","consignee":"自动补全收货人","consignor":"自动补全发货人","receiptnum":0}"#,
+    )
+    .await;
+
+    let (_, after) = json_request(app, "POST", "/api/memory/list", Some(&token), "").await;
+    let memory_values = after["data"]
+        .as_array()
+        .expect("memory data should be array");
+    assert!(memory_values
+        .iter()
+        .any(|record| record["value"] == "自动补全收货人"));
+    assert!(memory_values
+        .iter()
+        .any(|record| record["value"] == "自动补全发货人"));
 }
 
 #[tokio::test]
