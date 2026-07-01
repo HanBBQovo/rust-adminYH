@@ -10,7 +10,7 @@ use tower_http::{
 };
 
 use crate::{
-    handlers::{auth, company, health, menu},
+    handlers::{auth, company, health, menu, user},
     AppState,
 };
 
@@ -29,6 +29,28 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/login", post(auth::login))
         .route("/users/me", get(auth::me))
         .route("/api/users/me", get(auth::me))
+        .route("/users", post(user::create))
+        .route("/api/users", post(user::create))
+        .route("/users/list", post(user::list))
+        .route("/api/users/list", post(user::list))
+        .route(
+            "/users/{user_id}",
+            get(user::detail).patch(user::update).delete(user::remove),
+        )
+        .route(
+            "/api/users/{user_id}",
+            get(user::detail).patch(user::update).delete(user::remove),
+        )
+        .route(
+            "/users/{user_id}/password",
+            axum::routing::patch(user::update_password),
+        )
+        .route(
+            "/api/users/{user_id}/password",
+            axum::routing::patch(user::update_password),
+        )
+        .route("/users/{user_id}/avatar", get(user::avatar))
+        .route("/api/users/{user_id}/avatar", get(user::avatar))
         .route("/role/{role_id}/menu", get(menu::role_menu))
         .route("/api/role/{role_id}/menu", get(menu::role_menu))
         .route("/role/{role_id}/menuIds", get(menu::role_menu_ids))

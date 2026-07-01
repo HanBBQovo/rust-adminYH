@@ -3,7 +3,7 @@ use std::sync::Arc;
 use admin_api::{build_router, AppConfig, AppState};
 use admin_core::services::{
     development_auth_service, development_company_service, development_menu_service,
-    InMemoryAuthUserStore, StaticHealthService,
+    development_user_service, InMemoryAuthUserStore, StaticHealthService,
 };
 use axum::body::Body;
 use http::{header::CONTENT_TYPE, Request, StatusCode};
@@ -23,6 +23,7 @@ fn test_state() -> AppState {
         Arc::new(development_auth_service(store)),
         Arc::new(development_menu_service()),
         Arc::new(development_company_service()),
+        Arc::new(development_user_service()),
     )
 }
 

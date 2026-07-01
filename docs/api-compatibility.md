@@ -218,7 +218,9 @@ POST /api/recovery/list
 - `/api/users/me` 已先落地会话校验入口和集成测试，支持 Bearer token 解析、当前用户返回、角色 ID 返回、缺失 token 失败、二次登录挤掉旧 token。
 - `/api/role/:roleId/menu`、`/api/role/:roleId/menuIds`、`/api/menu/tree` 已先落地内存菜单仓储和集成测试，兼容旧 `children` / `chilren` / `partentId` 字段。
 - `/api/company/list`、`/api/company/:companyId`、`POST/PATCH/DELETE /api/company` 已先落地内存公司仓储和集成测试，兼容旧 `Countorder`、`totalCount`、详情数组和中文成功文案。
+- `/api/users/list`、`/api/users/:userId`、`POST/PATCH/DELETE /api/users`、`/api/users/:userId/password`、`/api/users/:userId/avatar` 已先落地内存用户仓储和集成测试，兼容旧 `avatarUrl`、`roleId`、角色对象、用户 58 删除保护、对象/裸字符串改密和公开头像读取。
 - 第一阶段登录服务通过 `AuthService` / `AuthUserStore` / `TokenIssuer` 抽象解耦；当前测试使用内存用户仓储，不声称已经连接旧 MySQL。
 - 第一阶段菜单服务通过 `MenuService` / `MenuStore` 抽象解耦；当前测试使用内存菜单仓储，不声称已经连接旧 MySQL。
 - 第一阶段公司服务通过 `CompanyService` / `CompanyStore` 抽象解耦；当前测试使用内存公司仓储，不声称已经连接旧 MySQL。
+- 第一阶段用户管理服务通过 `UserService` / `UserStore` 抽象解耦；当前测试使用内存用户管理仓储，不声称已经连接旧 MySQL 或真实头像文件存储。
 - 旧 MD5 密码算法已在兼容层实现并测试；后续接入真实 `user` 表后，再把 `AuthUserStore` 替换为 SQLx/MySQL repository，并补充影子库登录回归。
