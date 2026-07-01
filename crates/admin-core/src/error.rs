@@ -12,6 +12,8 @@ pub enum AppError {
     Database(String),
     #[error("请求参数错误: {0}")]
     Validation(String),
+    #[error("{0}")]
+    LegacyAuth(String),
     #[error("未登录或登录已失效")]
     Unauthorized,
     #[error("没有权限执行该操作")]
@@ -32,6 +34,7 @@ impl AppError {
     pub fn status_code(&self) -> StatusCode {
         match self {
             Self::Validation(_) => StatusCode::BAD_REQUEST,
+            Self::LegacyAuth(_) => StatusCode::OK,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::Forbidden => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
@@ -43,7 +46,7 @@ impl AppError {
 
     pub fn legacy_code(&self) -> i32 {
         match self {
-            Self::Unauthorized => -200,
+            Self::LegacyAuth(_) | Self::Unauthorized => -200,
             Self::Forbidden => -403,
             Self::Validation(_) => -400,
             Self::NotFound(_) => -404,

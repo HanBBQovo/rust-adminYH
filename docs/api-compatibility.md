@@ -211,3 +211,9 @@ POST /api/recovery/list
 - 旧字段名是否存在。
 - 未登录、普通用户、管理员三类权限边界。
 - 同条件下与旧库查询结果数量一致。
+
+## 8. 当前实现进度
+
+- `/api/login` 已先落地兼容入口和集成测试，返回旧 `{ code, data, message }` 结构。
+- 第一阶段登录服务通过 `AuthService` / `AuthUserStore` / `TokenIssuer` 抽象解耦；当前测试使用内存用户仓储，不声称已经连接旧 MySQL。
+- 旧 MD5 密码算法已在兼容层实现并测试；后续接入真实 `user` 表后，再把 `AuthUserStore` 替换为 SQLx/MySQL repository，并补充影子库登录回归。

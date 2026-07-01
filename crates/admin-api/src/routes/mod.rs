@@ -1,11 +1,18 @@
-use axum::{http::HeaderName, routing::get, Router};
+use axum::{
+    http::HeaderName,
+    routing::{get, post},
+    Router,
+};
 use tower_http::{
     cors::{Any, CorsLayer},
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
     trace::TraceLayer,
 };
 
-use crate::{handlers::health, AppState};
+use crate::{
+    handlers::{auth, health},
+    AppState,
+};
 
 pub fn build_router(state: AppState) -> Router {
     let request_id_header: HeaderName = state
@@ -18,6 +25,8 @@ pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health::health_check))
         .route("/api/health", get(health::health_check))
+        .route("/login", post(auth::login))
+        .route("/api/login", post(auth::login))
         .with_state(state)
         .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
         .layer(SetRequestIdLayer::new(request_id_header, MakeRequestUuid))
