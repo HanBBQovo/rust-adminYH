@@ -225,10 +225,12 @@ POST /api/recovery/list
 - `/api/order/list`、`/api/order/:orderId`、`POST/PATCH/DELETE /api/order`、`/api/receipt/list`、`PATCH /api/receipt/:receiptId`、`/api/notrecovery/list`、`/api/recovery/list` 已先落地内存订单/回单仓储和集成测试，兼容旧运单字段、`billingAt` 日期格式、回单状态文案、订单创建联动 `company_order/receipt/memory`。
 - `/api/memory/list` 已先落地内存记忆词条仓储和集成测试，兼容旧 `{ data: [{ value }] }` 这种不带 `code/message` 的响应结构，并复用订单创建副作用写入的 memory 数据。
 - `/api/chart/headerList`、`/api/chart/company/order/count`、`/api/chart/company/order/sumfreight`、`/api/chart/company/receipt/sumreceipt` 已先落地内存图表统计仓储和集成测试，兼容旧顶部统计标题、公司维度字段名 `ordercount/sumfreight/sumReceipt`、登录鉴权要求。
+- `/api/upload/avatar` 已先落地 multipart 头像上传兼容入口和集成测试，兼容旧字段名 `avatar`、上传成功文案、头像读取 bytes + `Content-Type` 直出。
 - 第一阶段登录服务通过 `AuthService` / `AuthUserStore` / `TokenIssuer` 抽象解耦；当前测试使用内存用户仓储，不声称已经连接旧 MySQL。
 - 第一阶段菜单服务通过 `MenuService` / `MenuStore` 抽象解耦；当前测试使用内存菜单仓储，不声称已经连接旧 MySQL。
 - 第一阶段公司服务通过 `CompanyService` / `CompanyStore` 抽象解耦；当前测试使用内存公司仓储，不声称已经连接旧 MySQL。
 - 第一阶段用户管理服务通过 `UserService` / `UserStore` 抽象解耦；当前测试使用内存用户管理仓储，不声称已经连接旧 MySQL 或真实头像文件存储。
+- 第一阶段头像上传通过 `UserService::update_avatar` 与文件落盘解耦；当前文件目录默认指向旧 `adminYh-server/uploads/avatar`，后续 SQLx 实现必须把 avatar 表更新和 user.avatar_url 更新纳入同一事务。
 - 第一阶段角色管理服务通过 `RoleService` / `RoleStore` 抽象解耦；当前测试使用内存角色仓储，不声称已经连接旧 MySQL。
 - 第一阶段订单/回单服务通过 `OrderService` / `ReceiptService` / `OrderStore` 抽象解耦；当前测试使用内存订单仓储，不声称已经连接旧 MySQL。
 - 第一阶段记忆词条通过 `MemoryService` 复用订单聚合仓储，保持与订单创建副作用在同一事务边界内演进。

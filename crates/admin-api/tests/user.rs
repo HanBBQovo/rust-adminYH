@@ -11,6 +11,7 @@ use admin_core::{
 };
 use axum::body::Body;
 use http::{header::CONTENT_TYPE, Request, StatusCode};
+use std::path::Path;
 use tower::ServiceExt;
 
 fn test_state_with_user(user: AuthUser) -> AppState {
@@ -104,6 +105,26 @@ async fn json_request(
     let json: serde_json::Value = serde_json::from_slice(&body).expect("body should be JSON");
 
     (status, json)
+}
+
+async fn raw_request(
+    app: axum::Router,
+    method: &str,
+    uri: &str,
+    token: Option<&str>,
+    content_type: Option<&str>,
+    body: impl Into<Body>,
+) -> http::Response<Body> {
+    let mut builder = Request::builder().method(method).uri(uri);
+    if let Some(content_type) = content_type {
+        builder = builder.header(CONTENT_TYPE, content_type);
+    }
+    if let Some(token) = token {
+        builder = builder.header("authorization", format!("Bearer {token}"));
+    }
+    app.oneshot(builder.body(body.into()).expect("request should build"))
+        .await
+        .expect("request should succeed")
 }
 
 #[tokio::test]
@@ -297,4 +318,69 @@ async fn user_avatar_route_is_public_and_sets_mimetype() {
         response.headers().get("content-type").unwrap(),
         "image/jpeg"
     );
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("body should be readable");
+    assert!(!bytes.is_empty());
+}
+
+#[tokio::test]
+async fn avatar_upload_accepts_multipart_and_updates_public_image() {
+    let app = build_router(admin_state());
+    let token = login_token(app.clone(), "admin").await;
+    let boundary = "admin-yh-test-boundary";
+    let body = format!(
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"avatar.png\"\r\nContent-Type: image/png\r\n\r\nPNGDATA\r\n--{boundary}--\r\n"
+    );
+
+    let upload_response = raw_request(
+        app.clone(),
+        "POST",
+        "/api/upload/avatar",
+        Some(&token),
+        Some(&format!("multipart/form-data; boundary={boundary}")),
+        Body::from(body),
+    )
+    .await;
+    let status = upload_response.status();
+    let body = axum::body::to_bytes(upload_response.into_body(), usize::MAX)
+        .await
+        .expect("body should be readable");
+    let json: serde_json::Value = serde_json::from_slice(&body).expect("body should be JSON");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["code"], 0);
+    assert_eq!(json["message"], "上传头像成功！");
+
+    let image_response = raw_request(
+        app,
+        "GET",
+        "/api/users/58/avatar",
+        None,
+        None,
+        Body::empty(),
+    )
+    .await;
+    assert_eq!(image_response.status(), StatusCode::OK);
+    assert_eq!(
+        image_response.headers().get("content-type").unwrap(),
+        "image/png"
+    );
+    let bytes = axum::body::to_bytes(image_response.into_body(), usize::MAX)
+        .await
+        .expect("body should be readable");
+    assert_eq!(&bytes[..], b"PNGDATA");
+
+    if let Ok(entries) = std::fs::read_dir(Path::new("../adminYh-server/uploads/avatar")) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| name.ends_with(".png"))
+                .unwrap_or(false)
+            {
+                let _ = std::fs::remove_file(path);
+            }
+        }
+    }
 }

@@ -26,7 +26,7 @@ pub use role::{
     RoleMutationRequest,
 };
 pub use user::{
-    AvatarInfo, LegacyRoleRecord as UserRoleRecord, LegacyUserRecord, UserCreateRequest,
-    UserDetailResponse, UserListItemResponse, UserListRequest, UserListResponse,
+    AvatarInfo, AvatarUploadInput, LegacyRoleRecord as UserRoleRecord, LegacyUserRecord,
+    UserCreateRequest, UserDetailResponse, UserListItemResponse, UserListRequest, UserListResponse,
     UserPasswordRequest, UserUpdateRequest,
 };

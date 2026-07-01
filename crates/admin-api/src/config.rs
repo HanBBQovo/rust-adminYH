@@ -11,6 +11,7 @@ pub struct AppConfig {
     pub http: HttpConfig,
     pub logging: LoggingConfig,
     pub database: DatabaseConfig,
+    pub storage: StorageConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +25,11 @@ pub struct HttpConfig {
 pub struct LoggingConfig {
     pub level: String,
     pub json_logs: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StorageConfig {
+    pub avatar_dir: String,
 }
 
 impl AppConfig {
@@ -50,6 +56,12 @@ impl AppConfig {
                 max_connections: parse_env("DATABASE_MAX_CONNECTIONS", "10")?,
                 min_connections: parse_env("DATABASE_MIN_CONNECTIONS", "1")?,
                 connect_timeout_seconds: parse_env("DATABASE_CONNECT_TIMEOUT_SECONDS", "5")?,
+            },
+            storage: StorageConfig {
+                avatar_dir: env_or(
+                    "APP_STORAGE__AVATAR_DIR",
+                    "../adminYh-server/uploads/avatar",
+                ),
             },
         })
     }

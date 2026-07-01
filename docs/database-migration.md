@@ -48,6 +48,7 @@
 - 图表统计接口直接依赖 `order_list.sumfreight`、`order_list.receiptnum`、`company.name`、`company_order.com_name`、`receipt` 总行数；迁移校验要按旧 SQL 口径对比四个 `/chart/*` 响应，不要先改成新维表口径。
 - 旧前端回单“接收”会写入 `issuestate='已接收'`，但筛选枚举里还有 `已发放/未发放`；迁移时不得强行归一化，必须先按真实 `SELECT DISTINCT issuestate` 输出分布并由人工确认。
 - 头像默认文件为 `default.jpg`；旧头像目录为 `/Users/hanhan/Desktop/code/adminYh-server/uploads/avatar`。
+- 头像上传旧字段名为 multipart `avatar`，上传成功响应 `{ code: 0, message: '上传头像成功！' }`；迁移后仍要保留 `/upload/avatar` 与 `/users/:userId/avatar`，后者必须直接输出图片 bytes 与原 `mimetype`。
 
 ## 3. 迁移阶段
 

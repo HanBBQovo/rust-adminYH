@@ -7,8 +7,9 @@ use std::{
 use crate::{
     auth::legacy_md5_hex,
     dto::{
-        AvatarInfo, LegacyUserRecord, UserCreateRequest, UserDetailResponse, UserListItemResponse,
-        UserListRequest, UserListResponse, UserPasswordRequest, UserRoleRecord, UserUpdateRequest,
+        AvatarInfo, AvatarUploadInput, LegacyUserRecord, UserCreateRequest, UserDetailResponse,
+        UserListItemResponse, UserListRequest, UserListResponse, UserPasswordRequest,
+        UserRoleRecord, UserUpdateRequest,
     },
     AppError, AppResult,
 };
@@ -41,6 +42,12 @@ pub trait UserService: Send + Sync {
     fn remove<'a>(&'a self, user_id: i64) -> ServiceFuture<'a, AppResult<()>>;
 
     fn avatar<'a>(&'a self, user_id: i64) -> ServiceFuture<'a, AppResult<Option<AvatarInfo>>>;
+
+    fn update_avatar<'a>(
+        &'a self,
+        user_id: i64,
+        input: AvatarUploadInput,
+    ) -> ServiceFuture<'a, AppResult<AvatarInfo>>;
 }
 
 pub trait UserStore: Send + Sync {
@@ -78,6 +85,12 @@ pub trait UserStore: Send + Sync {
     fn remove<'a>(&'a self, user_id: i64) -> ServiceFuture<'a, AppResult<()>>;
 
     fn avatar<'a>(&'a self, user_id: i64) -> ServiceFuture<'a, AppResult<Option<AvatarInfo>>>;
+
+    fn update_avatar<'a>(
+        &'a self,
+        user_id: i64,
+        input: AvatarUploadInput,
+    ) -> ServiceFuture<'a, AppResult<AvatarInfo>>;
 }
 
 pub struct CompatUserService {
@@ -193,6 +206,15 @@ impl UserService for CompatUserService {
         let store = Arc::clone(&self.store);
         Box::pin(async move { store.avatar(user_id).await })
     }
+
+    fn update_avatar<'a>(
+        &'a self,
+        user_id: i64,
+        input: AvatarUploadInput,
+    ) -> ServiceFuture<'a, AppResult<AvatarInfo>> {
+        let store = Arc::clone(&self.store);
+        Box::pin(async move { store.update_avatar(user_id, input).await })
+    }
 }
 
 #[derive(Debug, Default)]
@@ -250,6 +272,16 @@ impl UserService for DisabledUserService {
     }
 
     fn avatar<'a>(&'a self, _user_id: i64) -> ServiceFuture<'a, AppResult<Option<AvatarInfo>>> {
+        Box::pin(async {
+            Err(AppError::Database("用户服务尚未连接数据库仓储".to_owned()))
+        })
+    }
+
+    fn update_avatar<'a>(
+        &'a self,
+        _user_id: i64,
+        _input: AvatarUploadInput,
+    ) -> ServiceFuture<'a, AppResult<AvatarInfo>> {
         Box::pin(async {
             Err(AppError::Database("用户服务尚未连接数据库仓储".to_owned()))
         })
@@ -426,6 +458,34 @@ impl UserStore for InMemoryUserStore {
                 .cloned())
         })
     }
+
+    fn update_avatar<'a>(
+        &'a self,
+        user_id: i64,
+        input: AvatarUploadInput,
+    ) -> ServiceFuture<'a, AppResult<AvatarInfo>> {
+        Box::pin(async move {
+            if self.find_by_id(user_id).await?.is_none() {
+                return Err(AppError::NotFound(format!("user {user_id}")));
+            }
+            let avatar = AvatarInfo {
+                filename: input.filename,
+                mimetype: input.mimetype,
+                size: input.size,
+                user_id,
+            };
+            let mut avatars = self.avatars.lock().map_err(|_| AppError::Internal)?;
+            if let Some(existing) = avatars
+                .iter_mut()
+                .find(|existing| existing.user_id == user_id)
+            {
+                *existing = avatar.clone();
+            } else {
+                avatars.push(avatar.clone());
+            }
+            Ok(avatar)
+        })
+    }
 }
 
 pub fn development_user_service() -> CompatUserService {
@@ -554,6 +614,20 @@ mod tests {
             .expect("password should update");
         let avatar = service.avatar(60).await.unwrap().unwrap();
         assert_eq!(avatar.filename, "default.jpg");
+
+        let updated_avatar = service
+            .update_avatar(
+                60,
+                crate::dto::AvatarUploadInput {
+                    filename: "1700000000000.jpg".to_owned(),
+                    mimetype: "image/jpeg".to_owned(),
+                    size: 128,
+                },
+            )
+            .await
+            .expect("avatar should update");
+        assert_eq!(updated_avatar.filename, "1700000000000.jpg");
+        assert_eq!(service.avatar(60).await.unwrap().unwrap().size, 128);
 
         service.remove(60).await.expect("user should delete");
         assert!(service.detail(60).await.unwrap().is_none());

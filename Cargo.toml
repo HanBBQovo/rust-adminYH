@@ -19,13 +19,13 @@ admin-core = { path = "crates/admin-core" }
 admin-db = { path = "crates/admin-db" }
 
 anyhow = "1.0"
-axum = { version = "0.8", features = ["macros"] }
+axum = { version = "0.8", features = ["macros", "multipart"] }
 dotenvy = "0.15"
 http = "1.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2.0"
-tokio = { version = "1.38", features = ["macros", "rt-multi-thread", "signal"] }
+tokio = { version = "1.38", features = ["fs", "macros", "rt-multi-thread", "signal"] }
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["cors", "request-id", "trace", "util"] }
 tracing = "0.1"

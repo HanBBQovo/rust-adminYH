@@ -195,3 +195,10 @@ impl AvatarInfo {
         }
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AvatarUploadInput {
+    pub filename: String,
+    pub mimetype: String,
+    pub size: usize,
+}

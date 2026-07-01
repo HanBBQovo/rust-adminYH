@@ -51,6 +51,8 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/users/{user_id}/avatar", get(user::avatar))
         .route("/api/users/{user_id}/avatar", get(user::avatar))
+        .route("/upload/avatar", post(user::upload_avatar))
+        .route("/api/upload/avatar", post(user::upload_avatar))
         .route("/role", post(role::create))
         .route("/api/role", post(role::create))
         .route("/role/list", post(role::list))
