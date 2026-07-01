@@ -100,167 +100,118 @@ async fn json_request(
 }
 
 #[tokio::test]
-async fn users_list_returns_legacy_shape_and_filters() {
+async fn role_list_returns_legacy_shape_and_filters() {
     let app = build_router(admin_state());
     let token = login_token(app.clone(), "admin").await;
 
     let (status, json) = json_request(
         app,
         "POST",
-        "/api/users/list",
+        "/api/role/list",
         Some(&token),
-        r#"{"offset":0,"size":10,"name":"admin","enable":1,"roleId":1,"createAt":["2026-01-01","2026-01-31"]}"#,
+        r#"{"offset":0,"size":10,"name":"超级","intro":"所有","createAt":["2026-01-01","2026-01-31"]}"#,
     )
     .await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json["code"], 0);
     assert_eq!(json["data"]["totalCount"], 1);
-    assert_eq!(json["data"]["list"][0]["id"], 58);
-    assert_eq!(json["data"]["list"][0]["roleId"], 1);
-    assert!(json["data"]["list"][0]["avatarUrl"]
-        .as_str()
-        .unwrap()
-        .ends_with("/users/58/avatar"));
+    assert_eq!(json["data"]["list"][0]["id"], 1);
+    assert_eq!(json["data"]["list"][0]["name"], "超级管理员");
+    assert!(json["data"]["list"][0]["createAt"].is_string());
+    assert!(json["data"]["list"][0]["updateAt"].is_string());
 }
 
 #[tokio::test]
-async fn user_detail_returns_role_object() {
+async fn role_detail_returns_legacy_role_record() {
     let app = build_router(admin_state());
     let token = login_token(app.clone(), "admin").await;
 
-    let (status, json) = json_request(app, "GET", "/api/users/58", Some(&token), "").await;
+    let (status, json) = json_request(app, "GET", "/api/role/1", Some(&token), "").await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json["code"], 0);
-    assert_eq!(json["data"]["id"], 58);
-    assert_eq!(json["data"]["role"]["id"], 1);
-    assert_eq!(json["data"]["role"]["name"], "超级管理员");
+    assert_eq!(json["data"]["id"], 1);
+    assert_eq!(json["data"]["name"], "超级管理员");
+    assert_eq!(json["data"]["intro"], "所有权限");
 }
 
 #[tokio::test]
-async fn admin_can_create_update_password_and_delete_user() {
+async fn admin_can_create_update_assign_and_delete_role() {
     let app = build_router(admin_state());
     let token = login_token(app.clone(), "admin").await;
 
     let (_, created) = json_request(
         app.clone(),
         "POST",
-        "/api/users",
+        "/api/role",
         Some(&token),
-        r#"{"name":"new_user","password":"secret2","roleId":2}"#,
+        r#"{"name":"财务","intro":"部分权限"}"#,
     )
     .await;
     assert_eq!(created["code"], 0);
-    assert_eq!(created["message"], "创建用户成功！");
+    assert_eq!(created["message"], "创建权限角色成功！");
 
     let (_, updated) = json_request(
         app.clone(),
         "PATCH",
-        "/api/users/60",
+        "/api/role/3",
         Some(&token),
-        r#"{"name":"renamed","roleId":1}"#,
+        r#"{"name":"财务主管","intro":"所有权限"}"#,
     )
     .await;
     assert_eq!(updated["code"], 0);
-    assert_eq!(updated["message"], "修改用户信息成功!");
+    assert_eq!(updated["message"], "修改角色信息成功!");
 
-    let (_, password_updated) = json_request(
+    let (_, assigned) = json_request(
         app.clone(),
-        "PATCH",
-        "/api/users/60/password",
+        "POST",
+        "/api/role/assign",
         Some(&token),
-        r#"{"password":"new-secret"}"#,
+        r#"{"roleId":3,"menuList":[1,11,11,21]}"#,
     )
     .await;
-    assert_eq!(password_updated["code"], 0);
-    assert_eq!(password_updated["message"], "修改密码成功！");
+    assert_eq!(assigned["code"], 0);
+    assert_eq!(assigned["message"], "分配权限成功！");
 
-    let (_, deleted) = json_request(app.clone(), "DELETE", "/api/users/60", Some(&token), "").await;
+    let (_, detail) = json_request(app.clone(), "GET", "/api/role/3", Some(&token), "").await;
+    assert_eq!(detail["data"]["name"], "财务主管");
+
+    let (_, deleted) = json_request(app.clone(), "DELETE", "/api/role/3", Some(&token), "").await;
     assert_eq!(deleted["code"], 0);
-    assert_eq!(deleted["message"], "删除用户成功！");
+    assert_eq!(deleted["message"], "删除权限角色成功！");
 
-    let (_, detail) = json_request(app, "GET", "/api/users/60", Some(&token), "").await;
-    assert!(detail["data"].is_null());
+    let (_, detail_after_delete) = json_request(app, "GET", "/api/role/3", Some(&token), "").await;
+    assert!(detail_after_delete["data"].is_null());
 }
 
 #[tokio::test]
-async fn user_password_accepts_raw_string_body() {
-    let app = build_router(admin_state());
-    let token = login_token(app.clone(), "admin").await;
-
-    let (status, json) = json_request(
-        app,
-        "PATCH",
-        "/api/users/59/password",
-        Some(&token),
-        r#""raw-secret""#,
-    )
-    .await;
-
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(json["code"], 0);
-    assert_eq!(json["message"], "修改密码成功！");
-}
-
-#[tokio::test]
-async fn protected_user_58_delete_keeps_legacy_error() {
-    let app = build_router(admin_state());
-    let token = login_token(app.clone(), "admin").await;
-
-    let (status, json) = json_request(app, "DELETE", "/api/users/58", Some(&token), "").await;
-
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(json["code"], -200);
-    assert_eq!(json["message"], "删除用户失败！");
-}
-
-#[tokio::test]
-async fn user_create_rejects_duplicate_name() {
+async fn role_create_rejects_empty_name() {
     let app = build_router(admin_state());
     let token = login_token(app.clone(), "admin").await;
 
     let (status, json) = json_request(
         app,
         "POST",
-        "/api/users",
+        "/api/role",
         Some(&token),
-        r#"{"name":"admin","password":"secret","roleId":1}"#,
+        r#"{"name":"  ","intro":"部分权限"}"#,
     )
     .await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(json["code"], -400);
-    assert_eq!(json["message"], "请求参数错误: 用户已存在");
+    assert_eq!(json["message"], "请求参数错误: 角色名不能为空");
 }
 
 #[tokio::test]
-async fn user_writes_require_admin_role() {
-    let app = build_router(operator_state());
-    let token = login_token(app.clone(), "operator").await;
-
-    let (status, json) = json_request(
-        app,
-        "POST",
-        "/api/users",
-        Some(&token),
-        r#"{"name":"new_user","password":"secret2","roleId":2}"#,
-    )
-    .await;
-
-    assert_eq!(status, StatusCode::FORBIDDEN);
-    assert_eq!(json["code"], -403);
-    assert_eq!(json["message"], "没有权限执行该操作");
-}
-
-#[tokio::test]
-async fn user_list_rejects_missing_token() {
+async fn role_list_rejects_missing_token() {
     let app = build_router(admin_state());
 
     let (status, json) = json_request(
         app,
         "POST",
-        "/api/users/list",
+        "/api/role/list",
         None,
         r#"{"offset":0,"size":10}"#,
     )
@@ -272,22 +223,20 @@ async fn user_list_rejects_missing_token() {
 }
 
 #[tokio::test]
-async fn user_avatar_route_is_public_and_sets_mimetype() {
-    let app = build_router(admin_state());
+async fn role_writes_require_admin_role() {
+    let app = build_router(operator_state());
+    let token = login_token(app.clone(), "operator").await;
 
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/api/users/58/avatar")
-                .body(Body::empty())
-                .expect("request should build"),
-        )
-        .await
-        .expect("request should succeed");
+    let (status, json) = json_request(
+        app,
+        "POST",
+        "/api/role",
+        Some(&token),
+        r#"{"name":"财务","intro":"部分权限"}"#,
+    )
+    .await;
 
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response.headers().get("content-type").unwrap(),
-        "image/jpeg"
-    );
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(json["code"], -403);
+    assert_eq!(json["message"], "没有权限执行该操作");
 }

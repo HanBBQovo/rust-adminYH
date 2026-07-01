@@ -10,7 +10,7 @@ use tower_http::{
 };
 
 use crate::{
-    handlers::{auth, company, health, menu, user},
+    handlers::{auth, company, health, menu, role, user},
     AppState,
 };
 
@@ -51,6 +51,20 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/users/{user_id}/avatar", get(user::avatar))
         .route("/api/users/{user_id}/avatar", get(user::avatar))
+        .route("/role", post(role::create))
+        .route("/api/role", post(role::create))
+        .route("/role/list", post(role::list))
+        .route("/api/role/list", post(role::list))
+        .route("/role/assign", post(role::assign))
+        .route("/api/role/assign", post(role::assign))
+        .route(
+            "/role/{role_id}",
+            get(role::detail).patch(role::update).delete(role::remove),
+        )
+        .route(
+            "/api/role/{role_id}",
+            get(role::detail).patch(role::update).delete(role::remove),
+        )
         .route("/role/{role_id}/menu", get(menu::role_menu))
         .route("/api/role/{role_id}/menu", get(menu::role_menu))
         .route("/role/{role_id}/menuIds", get(menu::role_menu_ids))

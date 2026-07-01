@@ -5,7 +5,8 @@ use admin_core::{
     domain::AuthUser,
     services::{
         development_auth_service, development_company_service, development_menu_service,
-        development_user_service, InMemoryAuthUserStore, StaticHealthService,
+        development_role_service, development_user_service, InMemoryAuthUserStore,
+        StaticHealthService,
     },
 };
 use axum::body::Body;
@@ -25,6 +26,7 @@ fn test_state_with_user(user: AuthUser) -> AppState {
         Arc::new(development_menu_service()),
         Arc::new(development_company_service()),
         Arc::new(development_user_service()),
+        Arc::new(development_role_service()),
     )
 }
 

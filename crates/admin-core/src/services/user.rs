@@ -7,9 +7,8 @@ use std::{
 use crate::{
     auth::legacy_md5_hex,
     dto::{
-        AvatarInfo, LegacyRoleRecord, LegacyUserRecord, UserCreateRequest, UserDetailResponse,
-        UserListItemResponse, UserListRequest, UserListResponse, UserPasswordRequest,
-        UserUpdateRequest,
+        AvatarInfo, LegacyUserRecord, UserCreateRequest, UserDetailResponse, UserListItemResponse,
+        UserListRequest, UserListResponse, UserPasswordRequest, UserRoleRecord, UserUpdateRequest,
     },
     AppError, AppResult,
 };
@@ -268,8 +267,8 @@ impl InMemoryUserStore {
     pub fn with_seed_data() -> Self {
         Self {
             users: Mutex::new(vec![
-                LegacyUserRecord::new(58, "admin", "secret", LegacyRoleRecord::admin()),
-                LegacyUserRecord::new(59, "operator", "secret", LegacyRoleRecord::operator()),
+                LegacyUserRecord::new(58, "admin", "secret", UserRoleRecord::admin()),
+                LegacyUserRecord::new(59, "operator", "secret", UserRoleRecord::operator()),
             ]),
             avatars: Mutex::new(vec![
                 AvatarInfo::default_for_user(58),
@@ -443,10 +442,10 @@ fn normalize_new_user(input: &UserCreateRequest) -> AppResult<()> {
     Ok(())
 }
 
-fn role_for_id(role_id: i64) -> AppResult<LegacyRoleRecord> {
+fn role_for_id(role_id: i64) -> AppResult<UserRoleRecord> {
     match role_id {
-        1 => Ok(LegacyRoleRecord::admin()),
-        2 => Ok(LegacyRoleRecord::operator()),
+        1 => Ok(UserRoleRecord::admin()),
+        2 => Ok(UserRoleRecord::operator()),
         _ => Err(AppError::Validation("权限角色不存在".to_owned())),
     }
 }

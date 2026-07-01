@@ -37,6 +37,7 @@
 - `user.password` 是无 salt MD5；新系统必须提供旧密码兼容层。
 - 旧登录成功会把 token 写回 `user.token`，形成“单用户单 token”效果；新系统需明确是保留 token version 还是改 session 表。
 - 旧用户 `58` 是硬编码保护账号，第一阶段兼容删除保护；用户创建会同时写 `user`、`user_role`、默认头像记录和 `avatar_url`，后续 SQLx 实现必须放到事务中。
+- 旧角色菜单分配逻辑只插入 `role_permission`，不清理旧关系；新系统兼容接口必须改为事务内先删除再插入，并在迁移报告中统计重复关系。
 - `order_list.billingAt`、`receipt.billingAt` 是毫秒时间戳，不按秒级 Unix time 迁移。
 - 订单创建会写入 `order_list` 和 `company_order`；`receiptnum > 0` 时写入 `receipt`。
 - 新建回单默认状态：`recoverystate='未回收'`、`issuestate='未发放'`、`poststate='未寄出'`。
