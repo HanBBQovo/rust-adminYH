@@ -79,7 +79,7 @@ export default function Workspace() {
           </PageStatStrip>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(360px,0.85fr)]">
-            <PageSurface title="运费趋势" description="Rust API 就绪后接 /api/chart/dashboard，当前开发态保留确定性 mock。">
+            <PageSurface title="运费趋势" description="读取旧系统 chart 接口并保持 frontend-template 的页面结构。">
               <div className="h-[320px] min-w-0">
                 <ChartContainer config={chartConfig} className="h-full w-full">
                   <AreaChart accessibilityLayer data={data.freightTrend} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
