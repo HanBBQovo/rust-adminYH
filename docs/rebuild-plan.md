@@ -953,6 +953,10 @@ scripts/test-e2e.sh
 
 前端质量门禁必须包含 `lint`、`typecheck`、`test`、`build` 四段；Playwright E2E 通过 `RUN_E2E=true scripts/test-frontend.sh` 显式开启，避免本地缺少浏览器二进制时阻塞普通提交，但发布候选版本必须开启 E2E。
 
+当前生产 API 已接入 SQLx MySQL 仓储，普通 `scripts/check-all.sh` 覆盖编译、clippy、内存仓储 API 集成测试、前端组件测试和构建；连接真实数据库的 repository/迁移回归必须在影子库设置 `OLD_DATABASE_URL`、`NEW_DATABASE_URL`、`DATABASE_URL` 后单独执行，不允许用本地空库冒充迁移验收。
+
+每次接入一个真实 SQLx 仓储后，必须至少完成三层验证：`cargo test --offline -p admin-db` 验证仓储编译和 schema 契约、`cargo test --offline -p admin-api -p admin-db` 验证 API 装配编译、`scripts/check-all.sh` 验证全仓库回归。
+
 ### 11.4 发布门禁
 
 任何一个发布候选版本必须满足：

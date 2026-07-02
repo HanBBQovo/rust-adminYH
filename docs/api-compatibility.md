@@ -236,14 +236,17 @@ POST /api/recovery/list
 - 迁移审计工具已在 `admin-migration` 落地 `inspect-old`、`migrate --dry-run`、`verify-files` 第一阶段：通过 SQLx MySQL 只读旧库，输出表行数/ID 边界、重复数据、孤儿关系、回单状态分布、日期边界、头像 SHA256 与 DB/磁盘差异；`scripts/test-migration.sh` 已纳入单元测试和 JSON 审计命令。
 - `admin-db` 已落地 SQLx MySQL 连接池、兼容 schema baseline 和 `MySqlOrderRepository` 第一阶段：保留 11 张旧表和旧字段名，不加硬外键/唯一约束，订单写入通过事务联动 `order_list/company_order/receipt/memory`，查询条件全部走参数化 SQL。
 - `admin-db` 已补齐 `MySqlCompanyRepository` 和 `MySqlChartRepository` 第一阶段：公司 `Countorder` 按 `company_order.com_name` 统计，详情保留旧数组语义；图表保留旧 SQL 口径，订单数/运费/回单维度分别沿用 `company_order`、`order_list`、`receipt` 的弱关联统计。
+- `admin-db` 已补齐 `MySqlUserRepository` 第一阶段：同一个 SQLx 仓储同时实现 `AuthUserStore` 和 `UserStore`，覆盖旧 MD5 登录查用户、登录 token 写回 `user.token`、按 token 查询当前用户、用户列表/详情/创建/修改/改密/删除、默认头像和头像元数据更新；用户创建、用户角色、默认头像写入放在同一事务中。
+- `admin-db` 已补齐 `MySqlMenuRepository` 和 `MySqlRoleRepository` 第一阶段：菜单树从 `permission` 拉平后在 Rust 构树，保留 `/menu/tree` 的 `chilren` 和 `/role/:id/menu` 的 `children` 输出差异；角色列表、详情、创建、修改、删除和 `role_permission` 菜单分配均使用参数化 SQL，分配采用事务化先删后插和去重语义。
+- `admin-api` 启动路径已接入真实 SQLx 仓储：生产运行时通过 `DATABASE_URL` 建立 `MySqlPool`，并装配 `CompatAuthService`、`CompatUserService`、`CompatMenuService`、`CompatRoleService`、`CompatCompanyService`、`CompatOrderService`、`CompatReceiptService`、`CompatMemoryService`、`CompatChartService`；测试仍可通过 `AppState::with_services` 注入内存仓储，保证业务测试和生产装配解耦。
 - `/api/upload/avatar` 已先落地 multipart 头像上传兼容入口和集成测试，兼容旧字段名 `avatar`、上传成功文案、头像读取 bytes + `Content-Type` 直出。
-- 第一阶段登录服务通过 `AuthService` / `AuthUserStore` / `TokenIssuer` 抽象解耦；当前测试使用内存用户仓储，不声称已经连接旧 MySQL。
-- 第一阶段菜单服务通过 `MenuService` / `MenuStore` 抽象解耦；当前测试使用内存菜单仓储，不声称已经连接旧 MySQL。
-- 第一阶段公司服务通过 `CompanyService` / `CompanyStore` 抽象解耦；当前测试使用内存公司仓储，不声称已经连接旧 MySQL。
-- 第一阶段用户管理服务通过 `UserService` / `UserStore` 抽象解耦；当前测试使用内存用户管理仓储，不声称已经连接旧 MySQL 或真实头像文件存储。
-- 第一阶段头像上传通过 `UserService::update_avatar` 与文件落盘解耦；当前文件目录默认指向旧 `adminYh-server/uploads/avatar`，后续 SQLx 实现必须把 avatar 表更新和 user.avatar_url 更新纳入同一事务。
-- 第一阶段角色管理服务通过 `RoleService` / `RoleStore` 抽象解耦；当前测试使用内存角色仓储，不声称已经连接旧 MySQL。
-- 第一阶段订单/回单服务通过 `OrderService` / `ReceiptService` / `OrderStore` 抽象解耦；当前测试使用内存订单仓储，不声称已经连接旧 MySQL。
+- 登录服务通过 `AuthService` / `AuthUserStore` / `TokenIssuer` 抽象解耦；生产路径已装配 `MySqlUserRepository`，API 集成测试继续使用内存仓储做快速兼容回归，影子库回归需通过真实 `DATABASE_URL` 单独执行。
+- 菜单服务通过 `MenuService` / `MenuStore` 抽象解耦；生产路径已装配 `MySqlMenuRepository`，API 集成测试继续使用内存菜单仓储验证旧响应形状和权限边界。
+- 公司服务通过 `CompanyService` / `CompanyStore` 抽象解耦；生产路径已装配 `MySqlCompanyRepository`，测试保留内存仓储用于接口兼容回归。
+- 用户管理服务通过 `UserService` / `UserStore` 抽象解耦；生产路径已装配 `MySqlUserRepository`，真实头像文件目录仍由 `APP_STORAGE__AVATAR_DIR` 控制。
+- 头像上传通过 `UserService::update_avatar` 与文件落盘解耦；SQLx 实现已把 `avatar` 表更新和 `user.avatar_url` 更新纳入同一事务，文件写入失败不会污染数据库记录。
+- 角色管理服务通过 `RoleService` / `RoleStore` 抽象解耦；生产路径已装配 `MySqlRoleRepository`，菜单授权替换使用事务保证不留下半写入。
+- 订单/回单服务通过 `OrderService` / `ReceiptService` / `OrderStore` 抽象解耦；生产路径已装配 `MySqlOrderRepository`，测试保留内存订单仓储做快速接口回归。
 - 第一阶段记忆词条通过 `MemoryService` 复用订单聚合仓储，保持与订单创建副作用在同一事务边界内演进。
-- 第一阶段图表统计服务通过 `ChartService` / `ChartStore` 抽象解耦；当前测试使用内存图表仓储，不声称已经连接旧 MySQL，后续 SQLx 仓储应直接复刻旧 `order_list/company/company_order/receipt` 聚合口径。
-- 旧 MD5 密码算法已在兼容层实现并测试；后续接入真实 `user` 表后，再把 `AuthUserStore` 替换为 SQLx/MySQL repository，并补充影子库登录回归。
+- 图表统计服务通过 `ChartService` / `ChartStore` 抽象解耦；生产路径已装配 `MySqlChartRepository`，继续复刻旧 `order_list/company/company_order/receipt` 聚合口径。
+- 旧 MD5 密码算法已在兼容层实现并测试；真实 `user` 表仓储已接入，下一步需要补充影子库登录回归和 legacy JWT 兼容策略确认。

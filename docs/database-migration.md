@@ -101,6 +101,9 @@ dry-run 只读旧库和新库，输出：
 - `MySqlOrderRepository` 已实现订单、回单、memory 的 SQLx 参数化仓储：订单创建在事务内写入 `order_list`、`company_order`、可选 `receipt`，并对收/发货人 memory 做存在性检查后再插入。
 - `MySqlCompanyRepository` 已实现公司分页、详情、新增、修改、删除；`Countorder` 按旧口径从 `company_order.com_name` 统计，未命中详情保持空数组语义，公司改名不级联历史订单或公司订单文本。
 - `MySqlChartRepository` 已实现旧图表 snapshot 查询，继续保留旧口径差异：公司订单数来自 `company_order.com_name`，运费和回单数来自 `order_list.company/sumfreight/receiptnum`，回单总数来自 `receipt`。
+- `MySqlUserRepository` 已实现旧用户和认证 SQLx 仓储，登录 token 继续写回 `user.token`，用户创建在事务内写入 `user`、`user_role`、默认 `avatar`，头像更新在事务内同步 `avatar` 和 `user.avatar_url`。
+- `MySqlMenuRepository`、`MySqlRoleRepository` 已实现旧 RBAC SQLx 仓储，菜单从 `permission` 拉平后在 Rust 构树，角色授权通过事务替换 `role_permission`，并对重复 `menuList` 做幂等去重。
+- `admin-api` 生产启动路径已通过 `build_mysql_pool` 装配全部 SQLx 仓储；未设置可连接 `DATABASE_URL` 时生产 API 会启动失败，测试路径仍通过 `AppState::with_services` 注入内存仓储。
 
 ### Phase 3：apply 迁移
 
