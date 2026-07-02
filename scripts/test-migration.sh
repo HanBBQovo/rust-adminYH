@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 CARGO_OFFLINE="${CARGO_OFFLINE:-true}"
+RELEASE_GATE="${RELEASE_GATE:-false}"
 CARGO_FLAGS=()
 if [[ "$CARGO_OFFLINE" == "true" ]]; then
   CARGO_FLAGS+=(--offline)
@@ -23,9 +24,18 @@ section() {
 
 require_url_pair_for_apply() {
   if [[ -z "$OLD_DATABASE_URL" || -z "$NEW_DATABASE_URL" ]]; then
+    if [[ "$RELEASE_GATE" == "true" ]]; then
+      echo "FAIL: RELEASE_GATE=true 不允许跳过真实数据库迁移 dry-run/verify；请设置 OLD_DATABASE_URL 和 NEW_DATABASE_URL。"
+      exit 1
+    fi
     echo "SKIP: OLD_DATABASE_URL 或 NEW_DATABASE_URL 未设置，跳过需要真实数据库连接的迁移校验。"
     echo "示例：OLD_DATABASE_URL=mysql://user:pass@127.0.0.1/admin_yh_old NEW_DATABASE_URL=mysql://user:pass@127.0.0.1/admin_yh_new scripts/test-migration.sh"
     return 1
+  fi
+
+  if [[ "$RELEASE_GATE" == "true" && -z "$NEW_AVATAR_DIR" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要 NEW_AVATAR_DIR，发布候选必须执行 verify-files 头像迁移校验。"
+    exit 1
   fi
 }
 
