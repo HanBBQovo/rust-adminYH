@@ -87,6 +87,40 @@ async fn mysql_role_repository_lists_filters_and_mutates_roles() {
 
 #[tokio::test]
 #[ignore = "requires RUN_DB_TESTS=true and ADMIN_DB_TEST_DATABASE_URL"]
+async fn mysql_role_repository_lists_without_filters() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let scope = TestScope::new(&pool).await;
+    let repository = MySqlRoleRepository::new(pool.clone());
+    let service = CompatRoleService::new(Arc::new(repository));
+
+    let first = scope.seed_role("空筛选A", "空筛选权限A").await;
+    let second = scope.seed_role("空筛选B", "空筛选权限B").await;
+
+    let response = service
+        .list(RoleListRequest {
+            offset: 0,
+            size: 50,
+            name: None,
+            intro: None,
+            create_at: None,
+        })
+        .await
+        .expect("empty role filters must not generate dangling WHERE SQL");
+
+    assert!(response.list.iter().any(|role| role.id == first));
+    assert!(response.list.iter().any(|role| role.id == second));
+    assert!(
+        response.total_count >= response.list.len(),
+        "unfiltered role count should load alongside the list"
+    );
+
+    scope.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires RUN_DB_TESTS=true and ADMIN_DB_TEST_DATABASE_URL"]
 async fn mysql_menu_repository_builds_legacy_trees_and_creates_children() {
     let Some(pool) = test_pool().await else {
         return;

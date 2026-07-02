@@ -229,93 +229,114 @@ fn receipt_select_builder(input: &ReceiptListRequest) -> QueryBuilder<'_, MySql>
 }
 
 fn push_order_filters(query: &mut QueryBuilder<'_, MySql>, input: &OrderListRequest) {
-    let mut separated = query.separated(" AND ");
-    separated.push_unseparated(" WHERE ");
-    push_like(
-        &mut separated,
+    let mut has_filter = false;
+    push_like_filter(
+        query,
+        &mut has_filter,
         "`oddnumber`",
         input.oddnumber.as_deref(),
         LikeMode::Contains,
     );
-    push_like(
-        &mut separated,
+    push_like_filter(
+        query,
+        &mut has_filter,
         "`consignee`",
         input.consignee.as_deref(),
         LikeMode::Contains,
     );
-    push_like(
-        &mut separated,
+    push_like_filter(
+        query,
+        &mut has_filter,
         "`consigneephone`",
         input.consigneephone.as_deref(),
         LikeMode::Contains,
     );
-    push_like(
-        &mut separated,
+    push_like_filter(
+        query,
+        &mut has_filter,
         "`number`",
         input.number.as_deref(),
         LikeMode::Prefix,
     );
-    push_like(
-        &mut separated,
+    push_like_filter(
+        query,
+        &mut has_filter,
         "`consignor`",
         input.consignor.as_deref(),
         LikeMode::Contains,
     );
-    push_like(
-        &mut separated,
+    push_like_filter(
+        query,
+        &mut has_filter,
         "`consignorphone`",
         input.consignorphone.as_deref(),
         LikeMode::Contains,
     );
-    push_like(
-        &mut separated,
+    push_like_filter(
+        query,
+        &mut has_filter,
         "`company`",
         input.company.as_deref(),
         LikeMode::Contains,
     );
-    push_date_filter(&mut separated, "`billingAt`", input.create_at.as_deref());
+    push_date_filter(
+        query,
+        &mut has_filter,
+        "`billingAt`",
+        input.create_at.as_deref(),
+    );
 }
 
 fn push_receipt_filters(query: &mut QueryBuilder<'_, MySql>, input: &ReceiptListRequest) {
-    let mut separated = query.separated(" AND ");
-    separated.push_unseparated(" WHERE ");
-    push_like(
-        &mut separated,
+    let mut has_filter = false;
+    push_like_filter(
+        query,
+        &mut has_filter,
         "`oddnumber`",
         input.oddnumber.as_deref(),
         LikeMode::Contains,
     );
-    push_like(
-        &mut separated,
+    push_like_filter(
+        query,
+        &mut has_filter,
         "`consignee`",
         input.consignee.as_deref(),
         LikeMode::Contains,
     );
-    push_like(
-        &mut separated,
+    push_like_filter(
+        query,
+        &mut has_filter,
         "`consignor`",
         input.consignor.as_deref(),
         LikeMode::Contains,
     );
-    push_like(
-        &mut separated,
+    push_like_filter(
+        query,
+        &mut has_filter,
         "`recoverystate`",
         input.recoverystate.as_deref(),
         LikeMode::Contains,
     );
-    push_like(
-        &mut separated,
+    push_like_filter(
+        query,
+        &mut has_filter,
         "`issuestate`",
         input.issuestate.as_deref(),
         LikeMode::Contains,
     );
-    push_like(
-        &mut separated,
+    push_like_filter(
+        query,
+        &mut has_filter,
         "`poststate`",
         input.poststate.as_deref(),
         LikeMode::Contains,
     );
-    push_date_filter(&mut separated, "`billingAt`", input.create_at.as_deref());
+    push_date_filter(
+        query,
+        &mut has_filter,
+        "`billingAt`",
+        input.create_at.as_deref(),
+    );
 }
 
 enum LikeMode {
@@ -323,23 +344,38 @@ enum LikeMode {
     Prefix,
 }
 
-fn push_like<'a>(
-    separated: &mut sqlx::query_builder::Separated<'_, 'a, MySql, &'static str>,
-    column: &str,
+fn push_filter_separator(query: &mut QueryBuilder<'_, MySql>, has_filter: &mut bool) {
+    if *has_filter {
+        query.push(" AND ");
+    } else {
+        query.push(" WHERE ");
+        *has_filter = true;
+    }
+}
+
+fn push_like_filter(
+    query: &mut QueryBuilder<'_, MySql>,
+    has_filter: &mut bool,
+    column: &'static str,
     value: Option<&str>,
     mode: LikeMode,
 ) {
-    let value = value.unwrap_or_default();
-    separated.push(format!("{column} LIKE "));
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return;
+    };
+    push_filter_separator(query, has_filter);
+    query.push(column);
+    query.push(" LIKE ");
     match mode {
-        LikeMode::Contains => separated.push_bind(format!("%{value}%")),
-        LikeMode::Prefix => separated.push_bind(format!("{value}%")),
+        LikeMode::Contains => query.push_bind(format!("%{value}%")),
+        LikeMode::Prefix => query.push_bind(format!("{value}%")),
     };
 }
 
-fn push_date_filter<'a>(
-    separated: &mut sqlx::query_builder::Separated<'_, 'a, MySql, &'static str>,
-    column: &str,
+fn push_date_filter(
+    query: &mut QueryBuilder<'_, MySql>,
+    has_filter: &mut bool,
+    column: &'static str,
     dates: Option<&[admin_core::dto::LegacyDateInput]>,
 ) {
     let Some(dates) = dates else {
@@ -347,14 +383,18 @@ fn push_date_filter<'a>(
     };
     match dates {
         [start, end, ..] => {
-            separated.push(format!("{column} BETWEEN "));
-            separated.push_bind(start.as_legacy_millis());
-            separated.push(" AND ");
-            separated.push_bind(end.as_legacy_millis());
+            push_filter_separator(query, has_filter);
+            query.push(column);
+            query.push(" BETWEEN ");
+            query.push_bind(start.as_legacy_millis());
+            query.push(" AND ");
+            query.push_bind(end.as_legacy_millis());
         }
         [start] => {
-            separated.push(format!("{column} = "));
-            separated.push_bind(start.as_legacy_millis());
+            push_filter_separator(query, has_filter);
+            query.push(column);
+            query.push(" = ");
+            query.push_bind(start.as_legacy_millis());
         }
         [] => {}
     }

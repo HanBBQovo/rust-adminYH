@@ -178,28 +178,39 @@ fn role_select_builder(input: &RoleListRequest) -> QueryBuilder<'_, MySql> {
 }
 
 fn push_role_filters(query: &mut QueryBuilder<'_, MySql>, input: &RoleListRequest) {
-    let mut separated = query.separated(" AND ");
-    separated.push_unseparated(" WHERE ");
-    push_like(&mut separated, "`name`", input.name.as_deref());
-    push_like(&mut separated, "`intro`", input.intro.as_deref());
-    push_create_at_filter(&mut separated, input.create_at.as_deref());
+    let mut has_filter = false;
+    push_like_filter(query, &mut has_filter, "`name`", input.name.as_deref());
+    push_like_filter(query, &mut has_filter, "`intro`", input.intro.as_deref());
+    push_create_at_filter(query, &mut has_filter, input.create_at.as_deref());
 }
 
-fn push_like(
-    separated: &mut sqlx::query_builder::Separated<'_, '_, MySql, &'static str>,
+fn push_filter_separator(query: &mut QueryBuilder<'_, MySql>, has_filter: &mut bool) {
+    if *has_filter {
+        query.push(" AND ");
+    } else {
+        query.push(" WHERE ");
+        *has_filter = true;
+    }
+}
+
+fn push_like_filter(
+    query: &mut QueryBuilder<'_, MySql>,
+    has_filter: &mut bool,
     column: &'static str,
     value: Option<&str>,
 ) {
     let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
         return;
     };
-    separated.push(column);
-    separated.push(" LIKE ");
-    separated.push_bind(format!("%{value}%"));
+    push_filter_separator(query, has_filter);
+    query.push(column);
+    query.push(" LIKE ");
+    query.push_bind(format!("%{value}%"));
 }
 
 fn push_create_at_filter(
-    separated: &mut sqlx::query_builder::Separated<'_, '_, MySql, &'static str>,
+    query: &mut QueryBuilder<'_, MySql>,
+    has_filter: &mut bool,
     create_at: Option<&[String]>,
 ) {
     let Some(range) = create_at else {
@@ -207,14 +218,16 @@ fn push_create_at_filter(
     };
     match range {
         [date] if !date.trim().is_empty() => {
-            separated.push("DATE(`createAt`) = ");
-            separated.push_bind(date.trim().to_owned());
+            push_filter_separator(query, has_filter);
+            query.push("DATE(`createAt`) = ");
+            query.push_bind(date.trim().to_owned());
         }
         [start, end] if !start.trim().is_empty() && !end.trim().is_empty() => {
-            separated.push("DATE(`createAt`) BETWEEN ");
-            separated.push_bind(start.trim().to_owned());
-            separated.push(" AND ");
-            separated.push_bind(end.trim().to_owned());
+            push_filter_separator(query, has_filter);
+            query.push("DATE(`createAt`) BETWEEN ");
+            query.push_bind(start.trim().to_owned());
+            query.push(" AND ");
+            query.push_bind(end.trim().to_owned());
         }
         _ => {}
     }

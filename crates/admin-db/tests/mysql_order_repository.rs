@@ -254,6 +254,103 @@ async fn mysql_order_repository_treats_sql_injection_filters_as_plain_text() {
     scope.cleanup().await;
 }
 
+#[tokio::test]
+#[ignore = "requires RUN_DB_TESTS=true and ADMIN_DB_TEST_DATABASE_URL"]
+async fn mysql_order_repository_lists_orders_and_receipts_without_filters() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let scope = TestScope::new(&pool).await;
+    let repository = MySqlOrderRepository::new(pool.clone());
+
+    repository
+        .create_order(scope.order_input("040", "空筛选收货人A", "空筛选发货人A", 1))
+        .await
+        .expect("first order should be created");
+    repository
+        .create_order(scope.order_input("041", "空筛选收货人B", "空筛选发货人B", 1))
+        .await
+        .expect("second order should be created");
+
+    let orders = repository
+        .list(&OrderListRequest {
+            offset: 0,
+            size: 50,
+            oddnumber: None,
+            consignee: None,
+            consigneephone: None,
+            number: None,
+            consignor: None,
+            consignorphone: None,
+            company: None,
+            create_at: None,
+        })
+        .await
+        .expect("empty order filters must not generate broad LIKE or dangling WHERE SQL");
+    let order_count = repository
+        .count(&OrderListRequest {
+            offset: 0,
+            size: 50,
+            oddnumber: None,
+            consignee: None,
+            consigneephone: None,
+            number: None,
+            consignor: None,
+            consignorphone: None,
+            company: None,
+            create_at: None,
+        })
+        .await
+        .expect("empty order count filters must not generate invalid SQL");
+
+    assert!(orders
+        .iter()
+        .any(|order| order.oddnumber == scope.oddnumber("040")));
+    assert!(orders
+        .iter()
+        .any(|order| order.oddnumber == scope.oddnumber("041")));
+    assert!(order_count >= orders.len());
+
+    let receipts = repository
+        .list_receipts(&ReceiptListRequest {
+            offset: 0,
+            size: 50,
+            oddnumber: None,
+            consignee: None,
+            consignor: None,
+            recoverystate: None,
+            issuestate: None,
+            poststate: None,
+            create_at: None,
+        })
+        .await
+        .expect("empty receipt filters must not generate broad LIKE or dangling WHERE SQL");
+    let receipt_count = repository
+        .count_receipts(&ReceiptListRequest {
+            offset: 0,
+            size: 50,
+            oddnumber: None,
+            consignee: None,
+            consignor: None,
+            recoverystate: None,
+            issuestate: None,
+            poststate: None,
+            create_at: None,
+        })
+        .await
+        .expect("empty receipt count filters must not generate invalid SQL");
+
+    assert!(receipts
+        .iter()
+        .any(|receipt| receipt.oddnumber == scope.oddnumber("040")));
+    assert!(receipts
+        .iter()
+        .any(|receipt| receipt.oddnumber == scope.oddnumber("041")));
+    assert!(receipt_count >= receipts.len());
+
+    scope.cleanup().await;
+}
+
 async fn test_pool() -> Option<MySqlPool> {
     if env::var("RUN_DB_TESTS").ok().as_deref() != Some("true") {
         eprintln!("SKIP: RUN_DB_TESTS=true 未设置，跳过真实 MySQL 仓储测试。");
@@ -431,6 +528,12 @@ impl<'a> TestScope<'a> {
             .execute(self.pool)
             .await
             .expect("memory cleanup should run");
+        sqlx::query("DELETE FROM `memory` WHERE `name` LIKE ? OR `name` LIKE ?")
+            .bind("空筛选收货人%")
+            .bind("空筛选发货人%")
+            .execute(self.pool)
+            .await
+            .expect("empty filter memory cleanup should run");
     }
 }
 

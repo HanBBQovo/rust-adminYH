@@ -2,7 +2,7 @@ use std::env;
 
 use admin_core::{
     auth::legacy_md5_hex,
-    dto::AvatarUploadInput,
+    dto::{AvatarUploadInput, UserListRequest},
     services::{production_auth_service, AuthService, AuthUserStore, UserService, UserStore},
 };
 use admin_db::{migrations, repositories::MySqlUserRepository};
@@ -251,6 +251,50 @@ async fn mysql_user_store_updates_avatar_metadata_transactionally() {
             .try_get("total")
             .expect("orphan avatar count should exist");
     assert_eq!(orphan_count, 0);
+
+    scope.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires RUN_DB_TESTS=true and ADMIN_DB_TEST_DATABASE_URL"]
+async fn mysql_user_repository_lists_without_filters() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let scope = TestScope::new(&pool).await;
+    let repository = MySqlUserRepository::new(pool.clone());
+    let service =
+        admin_core::services::CompatUserService::new(std::sync::Arc::new(repository.clone()));
+
+    service
+        .create(admin_core::dto::UserCreateRequest {
+            name: scope.username.clone(),
+            password: "created-secret".to_owned(),
+            role_id: scope.role_id,
+        })
+        .await
+        .expect("user should create through SQLx repository");
+
+    let response = service
+        .list(UserListRequest {
+            offset: 0,
+            size: 50,
+            name: None,
+            enable: None,
+            role_id: None,
+            create_at: None,
+        })
+        .await
+        .expect("empty user filters must not generate dangling WHERE SQL");
+
+    assert!(
+        response.list.iter().any(|user| user.name == scope.username),
+        "unfiltered user list should include the seeded user"
+    );
+    assert!(
+        response.total_count >= response.list.len(),
+        "unfiltered user count should load alongside the list"
+    );
 
     scope.cleanup().await;
 }
