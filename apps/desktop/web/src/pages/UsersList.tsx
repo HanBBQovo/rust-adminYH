@@ -16,10 +16,10 @@ import {
   type UserListParams,
   type UserUpdatePayload,
 } from '@/api/users'
-import { InlineLoader } from '@/components/PageLoader'
+import { DataTableSurface, StickyActionCell, StickyActionHead } from '@/components/layout/DataTableSurface'
 import { FilterBar, FilterField } from '@/components/layout/FilterBar'
 import { FormField, FormSection } from '@/components/layout/FormScaffold'
-import { PageShell, PageSurface } from '@/components/layout/PageScaffold'
+import { PageShell } from '@/components/layout/PageScaffold'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -32,10 +32,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState } from '@/components/ui/error-state'
 import { Input } from '@/components/ui/input'
-import { Pagination } from '@/components/ui/pagination'
 import {
   Select,
   SelectContent,
@@ -500,77 +498,68 @@ export default function UsersList() {
 
       {roleError ? <ErrorState message={roleError} onRetry={refreshRoles} /> : null}
 
-      <PageSurface
+      <DataTableSurface
         title="用户列表"
         description="保留旧字段 name、roleId、avatarUrl、enable、createAt、updateAt；启用状态本阶段只展示和筛选，不提供假开关。"
-        footer={data ? <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} /> : null}
-        bodyClassName="p-0"
+        error={error}
+        loading={loading && !data}
+        isEmpty={!rows.length}
+        emptyTitle="暂无用户"
+        emptyDescription="调整筛选条件后重新查询，或新建用户补充账号。"
+        onRetry={refresh}
+        pagination={data ? { page, pageSize: PAGE_SIZE, total, onPageChange: setPage } : undefined}
       >
-        {error ? (
-          <div className="p-5">
-            <ErrorState message={error} onRetry={refresh} />
-          </div>
-        ) : loading && !data ? (
-          <div className="flex h-64 items-center justify-center">
-            <InlineLoader />
-          </div>
-        ) : rows.length ? (
-          <div className="ops-table-shell">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-14 text-right">序号</TableHead>
-                  <TableHead className="sticky left-0 z-10 min-w-[220px] bg-background">操作</TableHead>
-                  <TableHead className="min-w-[120px]">用户名</TableHead>
-                  <TableHead className="min-w-[120px]">权限身份</TableHead>
-                  <TableHead className="min-w-[120px]">头像</TableHead>
-                  <TableHead className="min-w-[100px]">状态</TableHead>
-                  <TableHead className="min-w-[220px]">创建时间</TableHead>
-                  <TableHead className="min-w-[220px]">更新时间</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row, index) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="text-right font-mono text-xs text-muted-foreground">{(page - 1) * PAGE_SIZE + index + 1}</TableCell>
-                    <TableCell className="sticky left-0 z-10 bg-background">
-                      <div className="flex items-center gap-1">
-                        <Button type="button" variant="ghost" size="icon" aria-label="查看用户" onClick={() => openUserDialog('view', row)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon" aria-label="编辑用户" onClick={() => openUserDialog('edit', row)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon" aria-label="重置密码" onClick={() => openPasswordDialog(row)}>
-                          <KeyRound className="h-4 w-4" />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon" aria-label="删除用户" onClick={() => removeUser(row)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium">{row.name}</TableCell>
-                    <TableCell>{roleName(row.roleId, roleOptions)}</TableCell>
-                    <TableCell>
-                      <Avatar className="h-11 w-11 rounded-md">
-                        <AvatarImage src={row.avatarUrl} alt={`${row.name} 头像`} />
-                        <AvatarFallback className="rounded-md">{row.name.slice(0, 1).toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={row.enable === 1 ? 'default' : 'secondary'}>{row.enable === 1 ? '启用' : '禁用'}</Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{row.createAt || '-'}</TableCell>
-                    <TableCell className="font-mono text-xs">{row.updateAt || '-'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        ) : (
-          <EmptyState title="暂无用户" description="调整筛选条件后重新查询，或新建用户补充账号。" />
-        )}
-      </PageSurface>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-14 text-right">序号</TableHead>
+              <StickyActionHead className="min-w-[220px]" />
+              <TableHead className="min-w-[120px]">用户名</TableHead>
+              <TableHead className="min-w-[120px]">权限身份</TableHead>
+              <TableHead className="min-w-[120px]">头像</TableHead>
+              <TableHead className="min-w-[100px]">状态</TableHead>
+              <TableHead className="min-w-[220px]">创建时间</TableHead>
+              <TableHead className="min-w-[220px]">更新时间</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row, index) => (
+              <TableRow key={row.id}>
+                <TableCell className="text-right font-mono text-xs text-muted-foreground">{(page - 1) * PAGE_SIZE + index + 1}</TableCell>
+                <StickyActionCell>
+                  <div className="flex items-center gap-1">
+                    <Button type="button" variant="ghost" size="icon" aria-label="查看用户" onClick={() => openUserDialog('view', row)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon" aria-label="编辑用户" onClick={() => openUserDialog('edit', row)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon" aria-label="重置密码" onClick={() => openPasswordDialog(row)}>
+                      <KeyRound className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon" aria-label="删除用户" onClick={() => removeUser(row)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </StickyActionCell>
+                <TableCell className="font-medium">{row.name}</TableCell>
+                <TableCell>{roleName(row.roleId, roleOptions)}</TableCell>
+                <TableCell>
+                  <Avatar className="h-11 w-11 rounded-md">
+                    <AvatarImage src={row.avatarUrl} alt={`${row.name} 头像`} />
+                    <AvatarFallback className="rounded-md">{row.name.slice(0, 1).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={row.enable === 1 ? 'default' : 'secondary'}>{row.enable === 1 ? '启用' : '禁用'}</Badge>
+                </TableCell>
+                <TableCell className="font-mono text-xs">{row.createAt || '-'}</TableCell>
+                <TableCell className="font-mono text-xs">{row.updateAt || '-'}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </DataTableSurface>
 
       <UserFormDialog
         mode={dialogMode}
