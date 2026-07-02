@@ -384,3 +384,106 @@ async fn avatar_upload_accepts_multipart_and_updates_public_image() {
         }
     }
 }
+
+#[tokio::test]
+async fn avatar_upload_rejects_missing_token_with_legacy_shape() {
+    let app = build_router(admin_state());
+    let boundary = "admin-yh-test-boundary";
+    let body = format!(
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"avatar.png\"\r\nContent-Type: image/png\r\n\r\nPNGDATA\r\n--{boundary}--\r\n"
+    );
+
+    let response = raw_request(
+        app,
+        "POST",
+        "/api/upload/avatar",
+        None,
+        Some(&format!("multipart/form-data; boundary={boundary}")),
+        Body::from(body),
+    )
+    .await;
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("body should be readable");
+    let json: serde_json::Value = serde_json::from_slice(&body).expect("body should be JSON");
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(json["code"], -200);
+    assert_eq!(json["message"], "未登录或登录已失效");
+}
+
+#[tokio::test]
+async fn avatar_upload_rejects_invalid_type_size_empty_and_missing_field() {
+    let app = build_router(admin_state());
+    let token = login_token(app.clone(), "admin").await;
+
+    for (boundary, filename, content_type, payload, expected_message) in [
+        (
+            "admin-yh-gif-boundary",
+            "avatar.gif",
+            "image/gif",
+            "GIFDATA".to_owned(),
+            "请求参数错误: 只能上传 jpg/png 文件！",
+        ),
+        (
+            "admin-yh-large-boundary",
+            "avatar.png",
+            "image/png",
+            "X".repeat(501 * 1024),
+            "请求参数错误: 头像不能超过 500kb！",
+        ),
+        (
+            "admin-yh-empty-boundary",
+            "avatar.png",
+            "image/png",
+            String::new(),
+            "请求参数错误: 头像文件不能为空",
+        ),
+    ] {
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"{filename}\"\r\nContent-Type: {content_type}\r\n\r\n{payload}\r\n--{boundary}--\r\n"
+        );
+        let response = raw_request(
+            app.clone(),
+            "POST",
+            "/api/upload/avatar",
+            Some(&token),
+            Some(&format!("multipart/form-data; boundary={boundary}")),
+            Body::from(body),
+        )
+        .await;
+        let status = response.status();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body should be readable");
+        let json: serde_json::Value = serde_json::from_slice(&body).expect("body should be JSON");
+
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{filename}");
+        assert_eq!(json["code"], -400, "{filename}");
+        assert_eq!(json["message"], expected_message, "{filename}");
+    }
+
+    let boundary = "admin-yh-missing-avatar-boundary";
+    let body = format!(
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"avatar.png\"\r\nContent-Type: image/png\r\n\r\nPNGDATA\r\n--{boundary}--\r\n"
+    );
+    let response = raw_request(
+        app,
+        "POST",
+        "/api/upload/avatar",
+        Some(&token),
+        Some(&format!("multipart/form-data; boundary={boundary}")),
+        Body::from(body),
+    )
+    .await;
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("body should be readable");
+    let json: serde_json::Value = serde_json::from_slice(&body).expect("body should be JSON");
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(json["code"], -400);
+    assert_eq!(json["message"], "请求参数错误: 缺少头像文件");
+}

@@ -23,6 +23,10 @@ use crate::{
     AppState,
 };
 
+const MAX_AVATAR_SIZE: usize = 500 * 1024;
+const ALLOWED_AVATAR_MIME_TYPES: &[&str] = &["image/jpeg", "image/png"];
+const ALLOWED_AVATAR_EXTENSIONS: &[&str] = &["jpg", "jpeg", "png"];
+
 pub async fn list(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -180,7 +184,7 @@ async fn read_avatar_upload(
             .content_type()
             .map(ToOwned::to_owned)
             .unwrap_or_else(|| "application/octet-stream".to_owned());
-        let extension = avatar_extension(field.file_name());
+        let extension = avatar_extension(field.file_name())?;
         let bytes = field
             .bytes()
             .await
@@ -189,8 +193,14 @@ async fn read_avatar_upload(
         if bytes.is_empty() {
             return Err(AppError::Validation("头像文件不能为空".to_owned()));
         }
+        if bytes.len() > MAX_AVATAR_SIZE {
+            return Err(AppError::Validation("头像不能超过 500kb！".to_owned()));
+        }
+        if !ALLOWED_AVATAR_MIME_TYPES.contains(&mimetype.as_str()) {
+            return Err(AppError::Validation("只能上传 jpg/png 文件！".to_owned()));
+        }
         return Ok(PendingAvatarUpload {
-            filename: format!("{}{}", epoch_millis(), extension),
+            filename: format!("{}.{}", epoch_millis(), extension),
             mimetype,
             bytes,
         });
@@ -198,13 +208,19 @@ async fn read_avatar_upload(
     Err(AppError::Validation("缺少头像文件".to_owned()))
 }
 
-fn avatar_extension(filename: Option<&str>) -> String {
-    filename
+fn avatar_extension(filename: Option<&str>) -> admin_core::AppResult<String> {
+    let extension = filename
         .and_then(|filename| FsPath::new(filename).extension())
         .and_then(|extension| extension.to_str())
         .filter(|extension| !extension.trim().is_empty())
-        .map(|extension| format!(".{extension}"))
-        .unwrap_or_default()
+        .map(|extension| extension.to_ascii_lowercase())
+        .ok_or_else(|| AppError::Validation("只能上传 jpg/png 文件！".to_owned()))?;
+
+    if !ALLOWED_AVATAR_EXTENSIONS.contains(&extension.as_str()) {
+        return Err(AppError::Validation("只能上传 jpg/png 文件！".to_owned()));
+    }
+
+    Ok(extension)
 }
 
 fn epoch_millis() -> u128 {
