@@ -13,7 +13,7 @@ use axum::{
     Json,
 };
 use std::{
-    path::{Path as FsPath, PathBuf},
+    path::{Component, Path as FsPath, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -252,15 +252,19 @@ async fn remove_previous_avatar(avatar_dir: &FsPath, avatar: Option<AvatarInfo>)
     if avatar.filename == "default.jpg" {
         return;
     }
+    if !is_safe_avatar_filename(&avatar.filename) {
+        return;
+    }
     let _ = tokio::fs::remove_file(avatar_dir.join(avatar.filename)).await;
 }
 
 async fn avatar_response(state: &AppState, avatar: AvatarInfo) -> axum::response::Response {
-    let path = PathBuf::from(&state.config.storage.avatar_dir).join(&avatar.filename);
+    let avatar_dir = PathBuf::from(&state.config.storage.avatar_dir);
+    let path = safe_avatar_path(&avatar_dir, &avatar.filename);
     let bytes = match tokio::fs::read(&path).await {
         Ok(bytes) => bytes,
         Err(_) if avatar.filename != "default.jpg" => {
-            let fallback = PathBuf::from(&state.config.storage.avatar_dir).join("default.jpg");
+            let fallback = avatar_dir.join("default.jpg");
             tokio::fs::read(fallback)
                 .await
                 .unwrap_or_else(|_| format!("avatar:{}", avatar.filename).into_bytes())
@@ -273,4 +277,20 @@ async fn avatar_response(state: &AppState, avatar: AvatarInfo) -> axum::response
         Body::from(bytes),
     )
         .into_response()
+}
+
+fn safe_avatar_path(avatar_dir: &FsPath, filename: &str) -> PathBuf {
+    if is_safe_avatar_filename(filename) {
+        avatar_dir.join(filename)
+    } else {
+        avatar_dir.join("default.jpg")
+    }
+}
+
+fn is_safe_avatar_filename(filename: &str) -> bool {
+    let path = FsPath::new(filename);
+    let mut components = path.components();
+    !filename.trim().is_empty()
+        && matches!(components.next(), Some(Component::Normal(_)))
+        && components.next().is_none()
 }

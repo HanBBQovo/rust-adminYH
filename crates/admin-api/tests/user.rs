@@ -1,21 +1,37 @@
-use std::sync::Arc;
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use admin_api::{build_router, AppConfig, AppServices, AppState};
 use admin_core::{
     domain::AuthUser,
+    dto::AvatarUploadInput,
     services::{
         development_auth_service, development_chart_service, development_company_service,
         development_menu_service, development_order_services, development_role_service,
-        development_user_service, InMemoryAuthUserStore, StaticHealthService,
+        development_user_service, CompatUserService, InMemoryAuthUserStore, InMemoryUserStore,
+        StaticHealthService, UserService, UserStore,
     },
 };
 use axum::body::Body;
 use http::{header::CONTENT_TYPE, Request, StatusCode};
-use std::path::Path;
 use tower::ServiceExt;
 
 fn test_state_with_user(user: AuthUser) -> AppState {
-    let config = AppConfig::from_env().expect("config should load");
+    test_state_with_user_service(user, Arc::new(development_user_service()), None)
+}
+
+fn test_state_with_user_service(
+    user: AuthUser,
+    user_service: Arc<dyn UserService>,
+    avatar_dir: Option<PathBuf>,
+) -> AppState {
+    let mut config = AppConfig::from_env().expect("config should load");
+    if let Some(avatar_dir) = avatar_dir {
+        config.storage.avatar_dir = avatar_dir.to_string_lossy().into_owned();
+    }
     let store = Arc::new(InMemoryAuthUserStore::new([user]));
     let (order_service, receipt_service, memory_service) = development_order_services();
     AppState::with_services(
@@ -29,7 +45,7 @@ fn test_state_with_user(user: AuthUser) -> AppState {
             menu_service: Arc::new(development_menu_service()),
             chart_service: Arc::new(development_chart_service()),
             company_service: Arc::new(development_company_service()),
-            user_service: Arc::new(development_user_service()),
+            user_service,
             role_service: Arc::new(development_role_service()),
             order_service: Arc::new(order_service),
             receipt_service: Arc::new(receipt_service),
@@ -48,6 +64,17 @@ fn operator_state() -> AppState {
     test_state_with_user(
         AuthUser::with_legacy_md5_password(59, "operator", "secret").with_role_ids([2]),
     )
+}
+
+fn temp_avatar_root(label: &str) -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    std::env::temp_dir().join(format!(
+        "rust-adminyh-{label}-{}-{nanos}",
+        std::process::id()
+    ))
 }
 
 async fn login_token(app: axum::Router, name: &str) -> String {
@@ -325,6 +352,64 @@ async fn user_avatar_route_is_public_and_sets_mimetype() {
 }
 
 #[tokio::test]
+async fn user_avatar_route_blocks_path_traversal_and_falls_back_to_default() {
+    let root = temp_avatar_root("avatar-traversal-read");
+    let avatar_dir = root.join("avatars");
+    let secret_path = root.join("secret.txt");
+    tokio::fs::create_dir_all(&avatar_dir)
+        .await
+        .expect("avatar fixture dir should be created");
+    tokio::fs::write(avatar_dir.join("default.jpg"), b"DEFAULT")
+        .await
+        .expect("default avatar should be written");
+    tokio::fs::write(&secret_path, b"SECRET")
+        .await
+        .expect("secret fixture should be written");
+
+    let user_store = Arc::new(InMemoryUserStore::with_seed_data());
+    user_store
+        .update_avatar(
+            58,
+            AvatarUploadInput {
+                filename: "../secret.txt".to_owned(),
+                mimetype: "image/png".to_owned(),
+                size: 6,
+            },
+        )
+        .await
+        .expect("unsafe avatar fixture should be stored");
+    let app = build_router(test_state_with_user_service(
+        AuthUser::with_legacy_md5_password(58, "admin", "secret").with_role_ids([1]),
+        Arc::new(CompatUserService::new(user_store)),
+        Some(avatar_dir),
+    ));
+
+    let response = raw_request(
+        app,
+        "GET",
+        "/api/users/58/avatar",
+        None,
+        None,
+        Body::empty(),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("body should be readable");
+    assert_eq!(&bytes[..], b"DEFAULT");
+    assert_eq!(
+        tokio::fs::read(&secret_path)
+            .await
+            .expect("secret fixture should remain readable"),
+        b"SECRET"
+    );
+
+    let _ = tokio::fs::remove_dir_all(root).await;
+}
+
+#[tokio::test]
 async fn avatar_upload_accepts_multipart_and_updates_public_image() {
     let app = build_router(admin_state());
     let token = login_token(app.clone(), "admin").await;
@@ -383,6 +468,71 @@ async fn avatar_upload_accepts_multipart_and_updates_public_image() {
             }
         }
     }
+}
+
+#[tokio::test]
+async fn avatar_upload_does_not_delete_path_traversal_previous_avatar() {
+    let root = temp_avatar_root("avatar-traversal-remove");
+    let avatar_dir = root.join("avatars");
+    let secret_path = root.join("secret.txt");
+    tokio::fs::create_dir_all(&avatar_dir)
+        .await
+        .expect("avatar fixture dir should be created");
+    tokio::fs::write(avatar_dir.join("default.jpg"), b"DEFAULT")
+        .await
+        .expect("default avatar should be written");
+    tokio::fs::write(&secret_path, b"SECRET")
+        .await
+        .expect("secret fixture should be written");
+
+    let user_store = Arc::new(InMemoryUserStore::with_seed_data());
+    user_store
+        .update_avatar(
+            58,
+            AvatarUploadInput {
+                filename: "../secret.txt".to_owned(),
+                mimetype: "image/png".to_owned(),
+                size: 6,
+            },
+        )
+        .await
+        .expect("unsafe avatar fixture should be stored");
+    let app = build_router(test_state_with_user_service(
+        AuthUser::with_legacy_md5_password(58, "admin", "secret").with_role_ids([1]),
+        Arc::new(CompatUserService::new(user_store)),
+        Some(avatar_dir),
+    ));
+    let token = login_token(app.clone(), "admin").await;
+    let boundary = "admin-yh-safe-delete-boundary";
+    let body = format!(
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"avatar.png\"\r\nContent-Type: image/png\r\n\r\nPNGDATA\r\n--{boundary}--\r\n"
+    );
+
+    let upload_response = raw_request(
+        app,
+        "POST",
+        "/api/upload/avatar",
+        Some(&token),
+        Some(&format!("multipart/form-data; boundary={boundary}")),
+        Body::from(body),
+    )
+    .await;
+    let status = upload_response.status();
+    let body = axum::body::to_bytes(upload_response.into_body(), usize::MAX)
+        .await
+        .expect("body should be readable");
+    let json: serde_json::Value = serde_json::from_slice(&body).expect("body should be JSON");
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["code"], 0);
+    assert_eq!(
+        tokio::fs::read(&secret_path)
+            .await
+            .expect("unsafe previous avatar target must not be deleted"),
+        b"SECRET"
+    );
+
+    let _ = tokio::fs::remove_dir_all(root).await;
 }
 
 #[tokio::test]
