@@ -966,6 +966,8 @@ Docker/容器门禁已作为发布级测试的一部分补齐：`Dockerfile.admi
 
 Docker 基础镜像允许通过环境变量覆盖：`RUST_IMAGE`、`RUNTIME_IMAGE`、`NODE_IMAGE`、`NGINX_IMAGE`、`MYSQL_IMAGE`。本机或 CI 如果 Docker Hub 直连不稳定，可以先预拉取内部镜像或镜像站版本，再用这些变量执行 `scripts/test-docker.sh`；脚本会在诊断中打印实际使用的基础镜像，便于定位是网络拉取失败、构建失败还是启动失败。
 
+Tauri 桌面壳已开始向自包含企业桌面包收敛：生产 `.app` 默认连接固定本机 API `http://127.0.0.1:16824/api`，Rust 主进程会从应用资源目录启动 `admin-api` sidecar，并把 `APP_HTTP__HOST` 固定为 `127.0.0.1`、`APP_HTTP__PORT` 固定为 `16824`。该实现不向 renderer 开放 `shell/process/fs/dialog` 权限，CSP 也收窄到固定 loopback 端口和显式远端 HTTPS。发布构建前必须先生成 `apps/desktop/src-tauri/target/release/admin-api`，再用 `TAURI_CONFIG='{"bundle":{"resources":{"../target/release/admin-api":"binaries/admin-api"}}}'` 注入 release-only 资源映射，避免普通 `cargo check` 因 release sidecar 不存在而失败；远端 API 包可通过 `ADMIN_YH_DESKTOP_DISABLE_SIDECAR=true` 禁用本机 sidecar，开发排障可通过 `ADMIN_YH_DESKTOP_ADMIN_API_BIN=/path/to/admin-api` 指定二进制。sidecar 失败时必须记录二进制路径、退出/启动错误、stdout/stderr、`APP_HTTP__PORT`、`API_BASE_URL` 和 `/api/health` 探测结果。
+
 ### 11.4 发布门禁
 
 任何一个发布候选版本必须满足：

@@ -22,14 +22,31 @@ APP_HTTP__PORT=16824 cargo run -p admin-api
 cd apps/desktop/web && npm run dev
 ```
 
-Tauri 生产包不会内置 Vite 代理。当前桌面壳默认连接 `http://127.0.0.1:16824/api`;
+Tauri 生产包不会内置 Vite 代理。当前桌面壳默认连接 `http://127.0.0.1:16824/api`,
+并由 Rust 主进程从应用资源目录启动 `admin-api` sidecar。sidecar 只绑定
+`127.0.0.1:16824`,不会向前端开放 shell/process/fs 权限。
+
 如果要连接内网或远端 API,打包时显式传入:
 
 ```bash
-VITE_API_BASE_URL=https://admin-api.example.com/api npm run tauri:build:app
+VITE_API_BASE_URL=https://admin-api.example.com/api ADMIN_YH_DESKTOP_DISABLE_SIDECAR=true npm run tauri:build:app
 ```
 
-在 sidecar 后端启动链路落地前,双击 `.app` 不会自动启动 `admin-api`,必须先运行本机或远端 Rust API。
+打包 `.app` 前必须先构建 release 版 API,并通过 `TAURI_CONFIG` 注入资源映射,
+把 `apps/desktop/src-tauri/target/release/admin-api` 打进
+`Contents/Resources/binaries/admin-api`:
+
+```bash
+cd apps/desktop/src-tauri
+cargo build --release -p admin-api
+TAURI_CONFIG='{"bundle":{"resources":{"../target/release/admin-api":"binaries/admin-api"}}}' npm run tauri:build:app --prefix ../web
+```
+
+诊断开关:
+
+- `ADMIN_YH_DESKTOP_DISABLE_SIDECAR=true`: 不启动本机 sidecar,用于远端 API 包。
+- `ADMIN_YH_DESKTOP_ADMIN_API_BIN=/path/to/admin-api`: 指定本机 sidecar 二进制,用于开发/排障。
+- sidecar 启动失败时,需要记录 `.app` 路径、sidecar 路径、`APP_HTTP__PORT`、`API_BASE_URL`、最近 stdout/stderr 和 `curl http://127.0.0.1:16824/api/health` 结果。
 
 ## 质量门禁
 
