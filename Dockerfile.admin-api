@@ -24,6 +24,7 @@ ENV APP_ENV=production \
     APP_NAME=rust-adminYH \
     APP_HTTP__HOST=0.0.0.0 \
     APP_HTTP__PORT=16824 \
+    APP_HTTP__CORS_ORIGINS=http://127.0.0.1:16824,http://localhost:16824 \
     APP_LOGGING__JSON_LOGS=true \
     APP_STORAGE__AVATAR_DIR=/app/uploads/avatar \
     DATABASE_MIGRATE_ON_START=false

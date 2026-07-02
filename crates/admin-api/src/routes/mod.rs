@@ -1,15 +1,16 @@
 use axum::{
-    http::HeaderName,
+    http::{HeaderName, HeaderValue},
     routing::{get, post},
     Router,
 };
 use tower_http::{
-    cors::{Any, CorsLayer},
+    cors::{AllowOrigin, Any, CorsLayer},
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
     trace::TraceLayer,
 };
 
 use crate::{
+    config::CorsOrigins,
     handlers::{auth, chart, company, health, memory, menu, order, receipt, resources, role, user},
     AppState,
 };
@@ -21,6 +22,7 @@ pub fn build_router(state: AppState) -> Router {
         .request_id_header
         .parse()
         .expect("request id header config must be a valid HTTP header name");
+    let cors = cors_layer(&state.config.http.cors_origins);
 
     Router::new()
         .route("/health", get(health::health_check))
@@ -157,10 +159,21 @@ pub fn build_router(state: AppState) -> Router {
         .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
         .layer(SetRequestIdLayer::new(request_id_header, MakeRequestUuid))
         .layer(TraceLayer::new_for_http())
-        .layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
-        )
+        .layer(cors)
+}
+
+fn cors_layer(origins: &CorsOrigins) -> CorsLayer {
+    let allow_origin = match origins {
+        CorsOrigins::Any => AllowOrigin::any(),
+        CorsOrigins::List(origins) => AllowOrigin::list(origins.iter().map(|origin| {
+            origin
+                .parse::<HeaderValue>()
+                .expect("validated CORS origin must parse as HeaderValue")
+        })),
+    };
+
+    CorsLayer::new()
+        .allow_origin(allow_origin)
+        .allow_methods(Any)
+        .allow_headers(Any)
 }
