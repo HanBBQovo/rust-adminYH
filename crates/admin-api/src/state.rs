@@ -1,10 +1,23 @@
 use std::sync::Arc;
 
-use admin_core::services::{
-    AuthService, ChartService, CompanyService, DisabledAuthService, DisabledChartService,
-    DisabledCompanyService, DisabledMenuService, DisabledOrderService, DisabledReceiptService,
-    DisabledRoleService, DisabledUserService, HealthService, MemoryService, MenuService,
-    OrderService, ReceiptService, RoleService, StaticHealthService, UserService,
+use admin_core::{
+    auth::LegacyMd5PasswordVerifier,
+    services::{
+        AuthService, ChartService, CompanyService, CompatAuthService, CompatChartService,
+        CompatCompanyService, CompatMemoryService, CompatMenuService, CompatOrderService,
+        CompatReceiptService, CompatRoleService, CompatUserService, DevelopmentTokenIssuer,
+        DisabledAuthService, DisabledChartService, DisabledCompanyService, DisabledMenuService,
+        DisabledOrderService, DisabledReceiptService, DisabledRoleService, DisabledUserService,
+        HealthService, MemoryService, MenuService, OrderService, ReceiptService, RoleService,
+        StaticHealthService, UserService,
+    },
+};
+use admin_db::{
+    repositories::{
+        MySqlChartRepository, MySqlCompanyRepository, MySqlMenuRepository, MySqlOrderRepository,
+        MySqlRoleRepository, MySqlUserRepository,
+    },
+    MySqlPool,
 };
 
 use crate::config::AppConfig;
@@ -24,6 +37,34 @@ pub struct AppServices {
 }
 
 impl AppServices {
+    pub fn database(pool: MySqlPool, health_service: StaticHealthService) -> Self {
+        let user_repository = Arc::new(MySqlUserRepository::new(pool.clone()));
+        let menu_repository = Arc::new(MySqlMenuRepository::new(pool.clone()));
+        let role_repository = Arc::new(MySqlRoleRepository::new(pool.clone()));
+        let order_repository = Arc::new(MySqlOrderRepository::new(pool.clone()));
+
+        Self {
+            health_service: Arc::new(health_service),
+            auth_service: Arc::new(CompatAuthService::new(
+                user_repository.clone(),
+                Arc::new(LegacyMd5PasswordVerifier),
+                Arc::new(DevelopmentTokenIssuer::default()),
+            )),
+            menu_service: Arc::new(CompatMenuService::new(menu_repository)),
+            chart_service: Arc::new(CompatChartService::new(Arc::new(
+                MySqlChartRepository::new(pool.clone()),
+            ))),
+            company_service: Arc::new(CompatCompanyService::new(Arc::new(
+                MySqlCompanyRepository::new(pool.clone()),
+            ))),
+            user_service: Arc::new(CompatUserService::new(user_repository)),
+            role_service: Arc::new(CompatRoleService::new(role_repository)),
+            order_service: Arc::new(CompatOrderService::new(order_repository.clone())),
+            receipt_service: Arc::new(CompatReceiptService::new(order_repository.clone())),
+            memory_service: Arc::new(CompatMemoryService::new(order_repository)),
+        }
+    }
+
     pub fn disabled(health_service: StaticHealthService) -> Self {
         Self {
             health_service: Arc::new(health_service),
