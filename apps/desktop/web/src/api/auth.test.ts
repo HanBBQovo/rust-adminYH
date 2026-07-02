@@ -33,6 +33,13 @@ describe('auth session API', () => {
     expect(session.user).toEqual({ id: 58, name: 'admin', avatarUrl: '/users/58/avatar', roles: [] })
     expect(session.token).toBe('token-123')
     expect(getAuthToken()).toBe('token-123')
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/role/1/menu',
+      expect.objectContaining({
+        headers: expect.objectContaining({ authorization: 'Bearer token-123' }),
+      }),
+    )
   })
 
   it('restores current user with the stored token', async () => {

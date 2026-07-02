@@ -1,4 +1,4 @@
-import { apiRequest } from '@/api/client'
+import { apiRequest, setAuthToken } from '@/api/client'
 import { clearSession, readStoredSession, readStoredToken, saveSession } from '@/session/session-store'
 import type { AdminSession, LegacyMenuItem, SessionUser } from '@/session/types'
 
@@ -52,6 +52,7 @@ export async function loginSession(input: LoginInput): Promise<AdminSession> {
     body: JSON.stringify(input),
   })
   const user = toSessionUser(result)
+  setAuthToken(result.token)
   const session: AdminSession = {
     token: result.token,
     user,

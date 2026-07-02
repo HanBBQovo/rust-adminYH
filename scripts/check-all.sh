@@ -18,12 +18,12 @@ section "Migration"
 "$ROOT_DIR/scripts/test-migration.sh"
 
 if [[ -f "$ROOT_DIR/apps/desktop/src-tauri/Cargo.toml" ]]; then
-  if command -v cargo-tauri >/dev/null 2>&1; then
+  if [[ "${RUN_TAURI:-false}" == "true" ]]; then
     section "Tauri build"
-    (cd "$ROOT_DIR/apps/desktop/src-tauri" && cargo tauri build)
+    (cd "$ROOT_DIR/apps/desktop/web" && npm run tauri:build)
   else
     echo
-    echo "SKIP: cargo-tauri CLI 未安装，暂不执行 Tauri build。可通过 apps/desktop/web 的 npm run tauri:build 验证。"
+    echo "SKIP: RUN_TAURI=true 未设置，跳过 Tauri build。发布前必须执行 RUN_TAURI=true scripts/check-all.sh。"
   fi
 else
   echo
