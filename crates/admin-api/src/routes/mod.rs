@@ -10,7 +10,7 @@ use tower_http::{
 };
 
 use crate::{
-    handlers::{auth, chart, company, health, memory, menu, order, receipt, role, user},
+    handlers::{auth, chart, company, health, memory, menu, order, receipt, resources, role, user},
     AppState,
 };
 
@@ -31,6 +31,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/code", get(auth::code))
         .route("/users/me", get(auth::me))
         .route("/api/users/me", get(auth::me))
+        .route("/admin/resources", get(resources::list))
+        .route("/api/admin/resources", get(resources::list))
         .route("/users", post(user::create))
         .route("/api/users", post(user::create))
         .route("/users/list", post(user::list))

@@ -6,5 +6,6 @@ pub mod memory;
 pub mod menu;
 pub mod order;
 pub mod receipt;
+pub mod resources;
 pub mod role;
 pub mod user;

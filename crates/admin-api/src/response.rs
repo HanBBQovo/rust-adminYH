@@ -17,6 +17,12 @@ where
 
 pub struct ErrorResponse(pub admin_core::AppError);
 
+impl From<admin_core::AppError> for ErrorResponse {
+    fn from(value: admin_core::AppError) -> Self {
+        Self(value)
+    }
+}
+
 impl IntoResponse for ErrorResponse {
     fn into_response(self) -> axum::response::Response {
         let status = self.0.status_code();

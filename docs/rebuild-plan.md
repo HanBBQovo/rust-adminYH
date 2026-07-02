@@ -483,6 +483,7 @@ crates/admin-db/src/
 
 - `auth`：登录、退出、token 校验、验证码可选。
 - `/code`：保留旧 data-only SVG 验证码响应，登录第一阶段不强制验证码校验，后续如启用必须新增服务端会话/过期时间/重放防护测试。
+- `/api/admin/resources`：资源注册表页生产入口，由 Rust API 聚合订单、回单、公司、用户、角色、菜单的实时数量，并保持 frontend-template 的字段命名和展示语义；前端只消费封装后的 API，不在生产包里依赖 mock。
 - `users`：用户 CRUD、密码修改、头像。
 - `roles`：角色 CRUD、分配菜单、菜单 ID 查询。
 - `menus`：菜单树、创建菜单。

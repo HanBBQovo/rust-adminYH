@@ -4,6 +4,7 @@ pub mod company;
 pub mod health;
 pub mod menu;
 pub mod order;
+pub mod resource;
 pub mod role;
 pub mod user;
 
@@ -21,6 +22,7 @@ pub use order::{
     OrderListResponse, OrderMutationRequest, ReceiptListRequest, ReceiptListResponse,
     ReceiptStatusRequest,
 };
+pub use resource::ResourceSummary;
 pub use role::{
     LegacyRoleRecord as RoleRecord, RoleAssignRequest, RoleListRequest, RoleListResponse,
     RoleMutationRequest,

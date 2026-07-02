@@ -256,6 +256,7 @@ POST /api/recovery/list
 - 登录服务通过 `AuthService` / `AuthUserStore` / `TokenIssuer` 抽象解耦；生产路径已装配 `MySqlUserRepository`，API 集成测试继续使用内存仓储做快速兼容回归，影子库回归需通过真实 `DATABASE_URL` 单独执行。
 - 生产认证不再使用开发态 `dev-{user_id}-{uuid}` token：`production_auth_service` 和 `admin-api` 数据库启动路径统一使用 `SecureTokenIssuer` 生成 32 字节随机 opaque token，并继续写回 `user.token` 保留旧单点登录语义；开发/测试内存服务仍保留 `DevelopmentTokenIssuer` 便于断言。
 - `/api/code` 与旧 `/code` 验证码接口已补齐兼容路由，响应保持旧系统 data-only 形状 `{ data: "<svg...>" }`，不额外包 `{ code, message }`，避免旧前端或迁移期页面因响应形状变化崩溃；登录接口继续兼容旧后端“验证码字段存在但未强制校验”的行为。
+- `/admin/resources` 与 `/api/admin/resources` 支撑生产环境资源注册表页，响应保持 frontend-template 的 `key/title/description/count/status/apiPath/legacyPath/owner` 字段形态，并由 Rust 服务聚合实时数量，避免生产包依赖前端 mock。
 - 菜单服务通过 `MenuService` / `MenuStore` 抽象解耦；生产路径已装配 `MySqlMenuRepository`，API 集成测试继续使用内存菜单仓储验证旧响应形状和权限边界。
 - 公司服务通过 `CompanyService` / `CompanyStore` 抽象解耦；生产路径已装配 `MySqlCompanyRepository`，测试保留内存仓储用于接口兼容回归。
 - 用户管理服务通过 `UserService` / `UserStore` 抽象解耦；生产路径已装配 `MySqlUserRepository`，真实头像文件目录仍由 `APP_STORAGE__AVATAR_DIR` 控制。
