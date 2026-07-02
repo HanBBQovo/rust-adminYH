@@ -55,6 +55,7 @@ npm run tauri:build:app -- --config '{"bundle":{"resources":{"../../../target/re
 - 前端交互改动：运行 `RUN_E2E=true scripts/test-frontend.sh`。
 - E2E 共享封装：新增主页面验收用例时，必须复用 `web/e2e/support/*` 中的登录、会话、菜单、模板壳和旧列表响应 helpers，不要在 spec 内重复散写 token、菜单 mock 或旧响应结构。
 - 桌面壳、图标、CSP、capability、打包配置改动：运行 `RUN_TAURI=true scripts/check-all.sh`。该门禁会先跑 Tauri sidecar runtime smoke 单测，覆盖禁用 sidecar、已有健康 API 跳过启动、缺失二进制诊断和 `/api/health` 等待成功，再构建 release `admin-api` sidecar，通过 Tauri `--config` 注入资源映射构建 `.app`，并校验 `Contents/Resources/binaries/admin-api` 存在且可执行。
+- Tauri 发布候选：运行 `RUN_TAURI=true RUN_TAURI_SIDECAR_SMOKE=true TAURI_SIDECAR_DATABASE_URL=mysql://... scripts/check-all.sh`，使用可重建测试库启动 `.app` 内打包后的 `admin-api`，并验证 `http://127.0.0.1:16824/api/health`。如果本机 16824 已被占用，先停止占用进程，避免误把外部 API 当作 bundled sidecar 通过。
 - macOS 安装包发布前：运行 `RUN_TAURI=true RUN_TAURI_DMG=true scripts/check-all.sh`。
 - 真实迁移演练：配置 `OLD_DATABASE_URL`、`NEW_DATABASE_URL`，在影子库上运行 `scripts/test-migration.sh`；真实 apply 只允许测试库/影子库加 `MIGRATION_APPLY=true`。
 

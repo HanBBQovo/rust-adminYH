@@ -53,6 +53,14 @@ if [[ "$RELEASE_GATE" == "true" ]]; then
     echo "FAIL: RELEASE_GATE=true 需要 RUN_TAURI_DMG=true，发布候选必须验证 macOS DMG 打包流程；若本机环境不支持，请单独记录失败原因和 .app 替代验证。"
     exit 1
   fi
+  if [[ "${RUN_TAURI_SIDECAR_SMOKE:-false}" != "true" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要 RUN_TAURI_SIDECAR_SMOKE=true，发布候选必须启动打包后的 admin-api sidecar 并验证 /api/health。"
+    exit 1
+  fi
+  if [[ -z "${TAURI_SIDECAR_DATABASE_URL:-${DATABASE_URL:-}}" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要 TAURI_SIDECAR_DATABASE_URL 或 DATABASE_URL 指向可重建的 Tauri sidecar smoke 测试库。"
+    exit 1
+  fi
 
   echo "Release gate preflight passed."
 fi

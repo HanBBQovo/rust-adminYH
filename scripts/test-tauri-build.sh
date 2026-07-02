@@ -6,9 +6,23 @@ WEB_DIR="$ROOT_DIR/apps/desktop/web"
 TAURI_DIR="$ROOT_DIR/apps/desktop/src-tauri"
 ADMIN_API_BIN="$ROOT_DIR/target/release/admin-api"
 TAURI_RESOURCE_CONFIG='{"bundle":{"resources":{"../../../target/release/admin-api":"binaries/admin-api"}}}'
+SIDECAR_SMOKE_PID=""
+SIDECAR_SMOKE_LOG_DIR=""
+SIDECAR_SMOKE_URL="${SIDECAR_SMOKE_URL:-http://127.0.0.1:16824/api/health}"
 
 section() {
   printf '\n==> %s\n' "$1"
+}
+
+redact_url() {
+  sed -E 's#(mysql://)[^:@/]+(:)[^@/]+@#\1***\2***@#g'
+}
+
+cleanup_sidecar_smoke() {
+  if [[ -n "$SIDECAR_SMOKE_PID" ]] && kill -0 "$SIDECAR_SMOKE_PID" 2>/dev/null; then
+    kill "$SIDECAR_SMOKE_PID" 2>/dev/null || true
+    wait "$SIDECAR_SMOKE_PID" 2>/dev/null || true
+  fi
 }
 
 diagnostics() {
@@ -23,6 +37,9 @@ diagnostics() {
   echo "admin_api_bin=$ADMIN_API_BIN"
   echo "tauri_config_resource=$TAURI_RESOURCE_CONFIG"
   echo "run_tauri_dmg=${RUN_TAURI_DMG:-false}"
+  echo "run_tauri_sidecar_smoke=${RUN_TAURI_SIDECAR_SMOKE:-false}"
+  echo "sidecar_smoke_url=${SIDECAR_SMOKE_URL}"
+  echo "sidecar_database_url=$(printf '%s' "${TAURI_SIDECAR_DATABASE_URL:-${DATABASE_URL:-}}" | redact_url)"
   echo
   if [[ -f "$ADMIN_API_BIN" ]]; then
     ls -lh "$ADMIN_API_BIN" || true
@@ -31,6 +48,16 @@ diagnostics() {
   fi
   echo
   find "$TAURI_DIR/target/release/bundle" -maxdepth 4 \( -type f -o -type d \) 2>/dev/null | sort | tail -80 || true
+  if [[ -n "$SIDECAR_SMOKE_LOG_DIR" ]]; then
+    echo
+    section "Tauri sidecar smoke logs"
+    for log in "$SIDECAR_SMOKE_LOG_DIR"/*; do
+      [[ -f "$log" ]] || continue
+      echo "--- $log ---"
+      tail -120 "$log" || true
+    done
+  fi
+  cleanup_sidecar_smoke
   exit "$exit_code"
 }
 
@@ -69,6 +96,57 @@ if [[ ! -x "$SIDECAR_RESOURCE" ]]; then
 fi
 ls -lh "$SIDECAR_RESOURCE"
 
+if [[ "${RUN_TAURI_SIDECAR_SMOKE:-false}" == "true" ]]; then
+  section "Bundled sidecar runtime smoke"
+  if [[ -z "${TAURI_SIDECAR_DATABASE_URL:-${DATABASE_URL:-}}" ]]; then
+    echo "ERROR: RUN_TAURI_SIDECAR_SMOKE=true 需要 TAURI_SIDECAR_DATABASE_URL 或 DATABASE_URL 指向可重建的 MySQL 测试库。"
+    exit 1
+  fi
+  if curl --fail --silent --show-error "$SIDECAR_SMOKE_URL" >/dev/null 2>&1; then
+    echo "ERROR: $SIDECAR_SMOKE_URL 已经可访问，无法证明打包后的 sidecar 自己启动成功；请停止占用 16824 的本机 API 后重跑。"
+    exit 1
+  fi
+  SIDECAR_SMOKE_LOG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/rust-adminyh-tauri-sidecar.XXXXXX")"
+  APP_STORAGE_DIR="$SIDECAR_SMOKE_LOG_DIR/uploads/avatar"
+  mkdir -p "$APP_STORAGE_DIR"
+
+  APP_ENV=desktop \
+  APP_NAME=rust-adminYH \
+  APP_HTTP__HOST=127.0.0.1 \
+  APP_HTTP__PORT=16824 \
+  APP_LOGGING__JSON_LOGS=true \
+  APP_STORAGE__AVATAR_DIR="$APP_STORAGE_DIR" \
+  DATABASE_URL="${TAURI_SIDECAR_DATABASE_URL:-${DATABASE_URL:-}}" \
+  DATABASE_MIGRATE_ON_START="${TAURI_SIDECAR_MIGRATE_ON_START:-true}" \
+  "$SIDECAR_RESOURCE" >"$SIDECAR_SMOKE_LOG_DIR/stdout.log" 2>"$SIDECAR_SMOKE_LOG_DIR/stderr.log" &
+  SIDECAR_SMOKE_PID=$!
+  echo "sidecar_pid=$SIDECAR_SMOKE_PID"
+
+  for _ in $(seq 1 60); do
+    if curl --fail --silent --show-error "$SIDECAR_SMOKE_URL" >"$SIDECAR_SMOKE_LOG_DIR/health.json"; then
+      cat "$SIDECAR_SMOKE_LOG_DIR/health.json"
+      echo
+      cleanup_sidecar_smoke
+      SIDECAR_SMOKE_PID=""
+      break
+    fi
+    if ! kill -0 "$SIDECAR_SMOKE_PID" 2>/dev/null; then
+      echo "ERROR: bundled admin-api sidecar exited before health check passed."
+      exit 1
+    fi
+    sleep 1
+  done
+
+  if [[ -n "$SIDECAR_SMOKE_PID" ]]; then
+    echo "ERROR: bundled admin-api sidecar did not pass health check: $SIDECAR_SMOKE_URL"
+    exit 1
+  fi
+else
+  echo
+  echo "SKIP: RUN_TAURI_SIDECAR_SMOKE=true 未设置，跳过打包后 sidecar 真实启动健康检查。发布候选必须使用测试库执行该门禁。"
+fi
+
 trap - ERR
+cleanup_sidecar_smoke
 echo
 echo "Tauri build gate passed."
