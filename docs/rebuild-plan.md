@@ -954,7 +954,7 @@ scripts/test-e2e.sh
 
 前端质量门禁必须包含 `lint`、`typecheck`、`test`、`build` 四段；Playwright E2E 通过 `RUN_E2E=true scripts/test-frontend.sh` 显式开启，避免本地缺少浏览器二进制时阻塞普通提交，但发布候选版本必须开启 E2E。
 
-当前业务列表 E2E 已从登录/工作台 happy path 扩展到订单列表和回单管理状态矩阵：`apps/desktop/web/e2e/business-list-states.spec.ts` 会在真实浏览器中断言登录后菜单进入、旧接口 `offset/size` payload、Bearer token、成功列表、空态、错误态，并确认错误态仍保留 `frontend-template` 的侧栏/顶栏页面壳、不回退登录页。后续每补一个系统管理主页面，也必须按同样矩阵补齐。
+当前 E2E 已从登录/工作台 happy path 扩展到列表状态矩阵：`apps/desktop/web/e2e/business-list-states.spec.ts` 覆盖订单列表和回单管理，`apps/desktop/web/e2e/system-list-states.spec.ts` 覆盖发货公司、用户管理、角色权限、菜单管理。两类 spec 都会在真实浏览器中断言登录后菜单进入、旧接口 `offset/size` 或树接口 payload/header、Bearer token、成功列表、空态、错误态，并确认错误态仍保留 `frontend-template` 的侧栏/顶栏页面壳、不回退登录页。后续每补一个主页面，也必须按同样矩阵补齐。
 
 当前生产 API 已接入 SQLx MySQL 仓储，普通 `scripts/check-all.sh` 覆盖编译、clippy、内存仓储 API 集成测试、前端组件测试和构建；连接真实数据库的 repository/迁移回归必须在影子库设置 `ADMIN_DB_TEST_DATABASE_URL`、`OLD_DATABASE_URL`、`NEW_DATABASE_URL`、`DATABASE_URL` 后单独执行，不允许用本地空库冒充迁移验收。默认门禁会明确打印 `RUN_DB_TESTS=true` 未设置时跳过真实 MySQL repository 集成测试，不能把该跳过视为发布级数据库验收。
 
