@@ -10,9 +10,9 @@ import {
   type CompanyMutationPayload,
   type LegacyCompany,
 } from '@/api/companies'
-import { InlineLoader } from '@/components/PageLoader'
+import { DataTableSurface, StickyActionCell, StickyActionHead } from '@/components/layout/DataTableSurface'
 import { FormField, FormSection } from '@/components/layout/FormScaffold'
-import { PageShell, PageSurface } from '@/components/layout/PageScaffold'
+import { PageShell } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,10 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import { Input } from '@/components/ui/input'
-import { Pagination } from '@/components/ui/pagination'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useConfirm } from '@/components/ui/use-confirm'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
@@ -209,65 +206,76 @@ export default function CompaniesList() {
         </>
       }
     >
-      <PageSurface
+      <DataTableSurface
         title="发货公司列表"
         description="保留旧字段 name、Countorder、createAt、updateAt；公司名称变更不在本阶段级联历史订单文本。"
-        footer={data ? <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} /> : null}
-        bodyClassName="p-0"
+        error={error}
+        loading={loading && !data}
+        isEmpty={!rows.length}
+        emptyTitle="暂无发货公司"
+        emptyDescription="点击新建发货公司补充基础资料。"
+        onRetry={refresh}
+        pagination={data ? { page, pageSize: PAGE_SIZE, total, onPageChange: setPage } : undefined}
       >
-        {error ? (
-          <div className="p-5">
-            <ErrorState message={error} onRetry={refresh} />
-          </div>
-        ) : loading && !data ? (
-          <div className="flex h-64 items-center justify-center">
-            <InlineLoader />
-          </div>
-        ) : rows.length ? (
-          <div className="ops-table-shell">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-14 text-right">序号</TableHead>
-                  <TableHead className="sticky left-0 z-10 min-w-[160px] bg-background">操作</TableHead>
-                  <TableHead className="min-w-[180px]">发货公司</TableHead>
-                  <TableHead className="min-w-[120px] text-right">订单数量</TableHead>
-                  <TableHead className="min-w-[220px]">创建时间</TableHead>
-                  <TableHead className="min-w-[220px]">更新时间</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row, index) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="text-right font-mono text-xs text-muted-foreground">{(page - 1) * PAGE_SIZE + index + 1}</TableCell>
-                    <TableCell className="sticky left-0 z-10 bg-background">
-                      <div className="flex items-center gap-1">
-                        <Button type="button" variant="ghost" size="icon" aria-label="查看发货公司" onClick={() => openCompanyDialog('view', row)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon" aria-label="编辑发货公司" onClick={() => openCompanyDialog('edit', row)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon" aria-label="删除发货公司" onClick={() => removeCompany(row)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium">{row.name}</TableCell>
-                    <TableCell className="text-right">
-                      <Badge variant="outline">{row.Countorder}</Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{row.createAt || '-'}</TableCell>
-                    <TableCell className="font-mono text-xs">{row.updateAt || '-'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        ) : (
-          <EmptyState title="暂无发货公司" description="点击新建发货公司补充基础资料。" />
-        )}
-      </PageSurface>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-14 text-right">序号</TableHead>
+              <StickyActionHead className="min-w-[160px]" />
+              <TableHead className="min-w-[180px]">发货公司</TableHead>
+              <TableHead className="min-w-[120px] text-right">订单数量</TableHead>
+              <TableHead className="min-w-[220px]">创建时间</TableHead>
+              <TableHead className="min-w-[220px]">更新时间</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row, index) => (
+              <TableRow key={row.id}>
+                <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                  {(page - 1) * PAGE_SIZE + index + 1}
+                </TableCell>
+                <StickyActionCell>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="查看发货公司"
+                      onClick={() => openCompanyDialog('view', row)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="编辑发货公司"
+                      onClick={() => openCompanyDialog('edit', row)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="删除发货公司"
+                      onClick={() => removeCompany(row)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </StickyActionCell>
+                <TableCell className="font-medium">{row.name}</TableCell>
+                <TableCell className="text-right">
+                  <Badge variant="outline">{row.Countorder}</Badge>
+                </TableCell>
+                <TableCell className="font-mono text-xs">{row.createAt || '-'}</TableCell>
+                <TableCell className="font-mono text-xs">{row.updateAt || '-'}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </DataTableSurface>
 
       <CompanyFormDialog
         mode={dialogMode}
