@@ -91,6 +91,10 @@ assert(
   !tauriCargo.includes('tauri-plugin-shell'),
   'admin-api sidecar must be launched by the Rust main process, not exposed through shell plugin permissions',
 )
+assert(
+  tauriCargo.includes('tauri-plugin-dialog = "2"') && tauriCargo.includes('tauri-plugin-opener = "2"'),
+  'desktop export must use first-party Tauri dialog/opener plugins through Rust commands',
+)
 
 const tauriLib = read('apps/desktop/src-tauri/src/lib.rs')
 assert(
@@ -126,6 +130,33 @@ assert(
     tauriLib.includes('missing_sidecar_binary_returns_diagnostic_error') &&
     tauriLib.includes('wait_for_admin_api_health_succeeds_when_endpoint_returns_200'),
   'Tauri sidecar runtime smoke tests must cover disable, already-running, missing binary, and health success paths',
+)
+assert(
+  tauriLib.includes('export_orders_csv') &&
+    tauriLib.includes('blocking_save_file()') &&
+    tauriLib.includes('normalize_export_filename') &&
+    tauriLib.includes('ensure_csv_extension') &&
+    tauriLib.includes('open_path(parent'),
+  'Tauri desktop export command must choose a save path, sanitize the CSV file name, write the file, and open the export directory',
+)
+assert(
+  tauriLib.includes('export_filename_is_sanitized_and_forced_to_csv') &&
+    tauriLib.includes('export_filename_rejects_non_regular_names') &&
+    tauriLib.includes('csv_extension_is_added_only_when_missing'),
+  'Tauri desktop export filename hardening must be covered by unit tests',
+)
+const desktopExport = read('apps/desktop/web/src/desktop/export.ts')
+assert(
+  desktopExport.includes("core.invoke<boolean>('export_orders_csv'") &&
+    desktopExport.includes('getTauriCore()'),
+  'frontend desktop export bridge must call the Tauri export_orders_csv command through a dedicated wrapper',
+)
+const orderExport = read('apps/desktop/web/src/pages/orders/order-export.ts')
+assert(
+  orderExport.includes('saveOrdersCsvWithDesktopDialog') &&
+    orderExport.includes('downloadOrdersCsv(rows, options)') &&
+    orderExport.includes("Promise<'desktop' | 'browser'>"),
+  'order CSV export must try the desktop save dialog first and fall back to browser download',
 )
 assert(
   read('scripts/test-tauri-build.sh').includes('Tauri sidecar runtime smoke') &&

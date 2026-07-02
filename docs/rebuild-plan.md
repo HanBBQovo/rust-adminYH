@@ -711,6 +711,7 @@ src/api/files.ts
 
 - 小数据前端生成 CSV/XLSX。
 - 大数据走 Rust API 流式导出或 Tauri command 保存。
+- 桌面端订单 CSV 导出第一阶段必须先走封装后的 Tauri Rust command 打开系统保存对话框、写入 `.csv` 文件并打开导出目录；非 Tauri/Vite 浏览器环境再退回普通浏览器下载。业务页面禁止直接调用 Tauri 全局 API、dialog/fs 插件或自写文件保存逻辑，必须走 `src/desktop/*` 封装。
 
 ## 8. Tauri 集成设计
 
@@ -748,6 +749,7 @@ src/api/files.ts
 - 打开导出目录。
 - 头像文件本地读取/缓存。
 - 后续自动更新。
+- 当前订单 CSV 导出由 Tauri Rust command 负责选择保存路径、写入文件、打开导出目录和清洗文件名；renderer 不直接获得 `dialog/fs/process/shell` capability，前端只调用 `src/desktop/export.ts` 封装。
 
 不放到 Tauri：
 
@@ -978,6 +980,8 @@ Docker 基础镜像允许通过环境变量覆盖：`RUST_IMAGE`、`RUNTIME_IMAG
 Tauri 桌面壳已开始向自包含企业桌面包收敛：生产 `.app` 默认连接固定本机 API `http://127.0.0.1:16824/api`，Rust 主进程会从应用资源目录启动 `admin-api` sidecar，并把 `APP_HTTP__HOST` 固定为 `127.0.0.1`、`APP_HTTP__PORT` 固定为 `16824`。该实现不向 renderer 开放 `shell/process/fs/dialog` 权限，CSP 也收窄到固定 loopback 端口和显式远端 HTTPS。发布构建前必须先从仓库根 workspace 生成 `target/release/admin-api`，再用 Tauri `--config '{"bundle":{"resources":{"../../../target/release/admin-api":"binaries/admin-api"}}}'` 注入 release-only 资源映射，避免普通 `cargo check` 因 release sidecar 不存在而失败；远端 API 包可通过 `ADMIN_YH_DESKTOP_DISABLE_SIDECAR=true` 禁用本机 sidecar，开发排障可通过 `ADMIN_YH_DESKTOP_ADMIN_API_BIN=/path/to/admin-api` 指定二进制。sidecar 失败时必须记录二进制路径、退出/启动错误、stdout/stderr、`APP_HTTP__PORT`、`API_BASE_URL` 和 `/api/health` 探测结果。
 
 Tauri 打包门禁已封装为 `scripts/test-tauri-build.sh`，并接入 `RUN_TAURI=true scripts/check-all.sh` 与 GitHub Actions 的 `tauri-app` job。该脚本会先运行 Tauri sidecar runtime smoke 单测，覆盖 `ADMIN_YH_DESKTOP_DISABLE_SIDECAR=true` 禁用路径、已有 `/api/health` 可达时跳过启动、缺失 sidecar 二进制的可诊断错误，以及 sidecar 启动后等待 `/api/health` 返回 200 的成功路径；然后构建 `admin-api` release sidecar，再用 release-only Tauri `--config` 构建 `.app`，最后检查 `.app/Contents/Resources/binaries/admin-api` 是否存在且可执行。发布候选还必须设置 `RUN_TAURI_SIDECAR_SMOKE=true` 和测试库连接，让脚本启动 `.app` 内打包后的 `admin-api` 二进制并通过 `http://127.0.0.1:16824/api/health` 验证真实运行态；如果 16824 已被其他 API 占用，脚本会失败，避免把外部进程误判成打包 sidecar 通过。若构建或 runtime smoke 失败，脚本必须输出 commit、Tauri 目录、Web 目录、sidecar 路径、资源注入 JSON、脱敏数据库 URL、sidecar stdout/stderr 和当前 bundle 目录内容，不能只返回笼统的 Tauri build failed。
+
+桌面文件能力已开始落地到订单导出链路：`export_orders_csv` Rust command 通过 Tauri dialog 插件选择保存路径，清洗文件名、强制 `.csv` 后缀、写入文件并通过 opener 打开导出目录；前端 `src/desktop/export.ts` 统一封装 Tauri 调用，`order-export.ts` 先尝试桌面保存，取消或非 Tauri 环境再退回浏览器下载。`scripts/test-tauri-contract.sh` 会静态锁定该封装边界、禁止 renderer 获得 `dialog/fs/process/shell` capability，并要求 Rust 文件名清洗单测存在。
 
 ### 11.4 发布门禁
 

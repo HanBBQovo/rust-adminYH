@@ -1,4 +1,5 @@
 import type { LegacyOrder } from '@/api/orders'
+import { saveOrdersCsvWithDesktopDialog } from '@/desktop/export'
 
 export interface OrderColumn {
   key: keyof LegacyOrder
@@ -65,4 +66,14 @@ export function downloadOrdersCsv(rows: LegacyOrder[], options?: { now?: Date })
   link.click()
   link.remove()
   URL.revokeObjectURL(url)
+}
+
+export async function exportOrdersCsv(rows: LegacyOrder[], options?: { now?: Date }): Promise<'desktop' | 'browser'> {
+  const filename = orderExportFilename(options?.now)
+  const contents = buildOrdersCsv(rows)
+  const savedWithDesktop = await saveOrdersCsvWithDesktopDialog({ filename, contents })
+  if (savedWithDesktop) return 'desktop'
+
+  downloadOrdersCsv(rows, options)
+  return 'browser'
 }

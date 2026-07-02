@@ -24,7 +24,7 @@ import { useConfirm } from '@/components/ui/use-confirm'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
 import { useResource } from '@/lib/use-resource'
 import { OrderFormDialog } from '@/pages/orders/OrderFormDialog'
-import { ORDER_COLUMNS, downloadOrdersCsv, type OrderColumn } from '@/pages/orders/order-export'
+import { ORDER_COLUMNS, exportOrdersCsv, type OrderColumn } from '@/pages/orders/order-export'
 import type { OrderFormMode } from '@/pages/orders/order-form-config'
 
 interface OrderFilterDraft {
@@ -87,6 +87,7 @@ export default function OrdersList() {
   const [dialogMode, setDialogMode] = useState<OrderFormMode>('create')
   const [selectedOrder, setSelectedOrder] = useState<LegacyOrder | undefined>()
   const [submitting, setSubmitting] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const query = useMemo<OrderListParams>(() => ({ page, pageSize: PAGE_SIZE, ...filters }), [filters, page])
   const { data, loading, error, refresh } = useResource(() => listOrders(query), [query])
@@ -163,6 +164,19 @@ export default function OrdersList() {
     }
   }
 
+  const exportCurrentPage = async () => {
+    if (!rows.length) return
+    setExporting(true)
+    try {
+      const mode = await exportOrdersCsv(rows)
+      showToast('success', mode === 'desktop' ? '订单 CSV 已保存到所选位置。' : '订单 CSV 已开始下载。', { translate: false })
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : '订单导出失败', { translate: false })
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <PageShell
       title="订单列表"
@@ -178,9 +192,9 @@ export default function OrdersList() {
             <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
             刷新
           </Button>
-          <Button type="button" className="gap-2" onClick={() => downloadOrdersCsv(rows)} disabled={!rows.length}>
+          <Button type="button" className="gap-2" onClick={exportCurrentPage} disabled={!rows.length || exporting}>
             <Download className="h-4 w-4" />
-            导出当前页
+            {exporting ? '导出中' : '导出当前页'}
           </Button>
         </>
       }

@@ -10,12 +10,14 @@ use std::{
 };
 
 use tauri::{Manager, RunEvent};
+use tauri_plugin_dialog::DialogExt;
 
 const ADMIN_API_BIN_NAME: &str = "admin-api";
 const ADMIN_API_HOST: &str = "127.0.0.1";
 const ADMIN_API_PORT: &str = "16824";
 const ADMIN_API_HEALTH_URL: &str = "http://127.0.0.1:16824/api/health";
 const ADMIN_API_HEALTH_PATH: &str = "/api/health";
+const EXPORT_FILE_EXTENSION: &str = "csv";
 const HEALTH_PROBE_TIMEOUT_MS: u64 = 250;
 const HEALTH_WAIT_TIMEOUT_MS: u64 = 10_000;
 const HEALTH_WAIT_INTERVAL_MS: u64 = 200;
@@ -74,6 +76,8 @@ pub fn run() {
     tauri::Builder::default()
         .manage(Arc::clone(&sidecar_state))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![export_orders_csv])
         .setup(|app| {
             let state = app.state::<Arc<SidecarState>>().inner().clone();
             match start_admin_api_sidecar(app, Arc::clone(&state)) {
@@ -100,6 +104,85 @@ pub fn run() {
                 state.stop();
             }
         });
+}
+
+#[tauri::command]
+fn export_orders_csv(
+    app: tauri::AppHandle,
+    filename: String,
+    contents: String,
+) -> Result<bool, String> {
+    let filename = normalize_export_filename(&filename)?;
+    let Some(path) = app
+        .dialog()
+        .file()
+        .set_title("导出订单 CSV")
+        .set_file_name(&filename)
+        .add_filter("CSV 文件", &[EXPORT_FILE_EXTENSION])
+        .blocking_save_file()
+    else {
+        return Ok(false);
+    };
+
+    let path = ensure_csv_extension(path.into_path().map_err(|error| error.to_string())?);
+    std::fs::write(&path, contents).map_err(|error| {
+        format!(
+            "write exported orders CSV {} failed: {error}",
+            path.display()
+        )
+    })?;
+    if let Some(parent) = path.parent() {
+        let _ = tauri_plugin_opener::open_path(parent, None::<&str>);
+    }
+
+    Ok(true)
+}
+
+fn normalize_export_filename(filename: &str) -> Result<String, String> {
+    let trimmed = filename.trim();
+    if trimmed.is_empty() {
+        return Err("export filename cannot be empty".to_owned());
+    }
+
+    let basename = Path::new(trimmed)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "export filename must be a regular UTF-8 file name".to_owned())?;
+
+    let sanitized = basename
+        .chars()
+        .map(|character| match character {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            character if character.is_control() => '_',
+            character => character,
+        })
+        .collect::<String>()
+        .trim()
+        .to_owned();
+
+    if sanitized.is_empty() || sanitized == "." || sanitized == ".." {
+        return Err("export filename must be a regular file name".to_owned());
+    }
+
+    Ok(ensure_csv_extension(PathBuf::from(sanitized))
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("sanitized export filename should be UTF-8")
+        .to_owned())
+}
+
+fn ensure_csv_extension(path: PathBuf) -> PathBuf {
+    if path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case(EXPORT_FILE_EXTENSION))
+    {
+        return path;
+    }
+
+    let mut path = path;
+    path.set_extension(EXPORT_FILE_EXTENSION);
+    path
 }
 
 fn start_admin_api_sidecar<R: tauri::Runtime>(
@@ -342,8 +425,9 @@ fn admin_api_socket_addr() -> SocketAddr {
 #[cfg(test)]
 mod tests {
     use super::{
-        probe_admin_api_health, resolve_admin_api_binary_from, sidecar_preflight,
-        wait_for_admin_api_health_at, SidecarPreflight, ADMIN_API_HEALTH_PATH,
+        ensure_csv_extension, normalize_export_filename, probe_admin_api_health,
+        resolve_admin_api_binary_from, sidecar_preflight, wait_for_admin_api_health_at,
+        SidecarPreflight, ADMIN_API_HEALTH_PATH,
     };
     use std::{
         fs,
@@ -450,6 +534,37 @@ mod tests {
             Duration::from_millis(10),
         )
         .expect("health wait should pass once the sidecar answers /api/health");
+    }
+
+    #[test]
+    fn export_filename_is_sanitized_and_forced_to_csv() {
+        assert_eq!(
+            normalize_export_filename("../orders:2026").expect("filename should sanitize"),
+            "orders_2026.csv"
+        );
+        assert_eq!(
+            normalize_export_filename("orders-2026.CSV").expect("filename should keep extension"),
+            "orders-2026.CSV"
+        );
+    }
+
+    #[test]
+    fn export_filename_rejects_non_regular_names() {
+        assert!(normalize_export_filename("").is_err());
+        assert!(normalize_export_filename("..").is_err());
+        assert!(normalize_export_filename("/").is_err());
+    }
+
+    #[test]
+    fn csv_extension_is_added_only_when_missing() {
+        assert_eq!(
+            ensure_csv_extension(PathBuf::from("/tmp/orders")),
+            PathBuf::from("/tmp/orders.csv")
+        );
+        assert_eq!(
+            ensure_csv_extension(PathBuf::from("/tmp/orders.csv")),
+            PathBuf::from("/tmp/orders.csv")
+        );
     }
 
     fn spawn_one_shot_health_server(status_line: &'static str) -> SocketAddr {
