@@ -58,6 +58,7 @@ impl AppConfig {
                 max_connections: parse_env("DATABASE_MAX_CONNECTIONS", "10")?,
                 min_connections: parse_env("DATABASE_MIN_CONNECTIONS", "1")?,
                 connect_timeout_seconds: parse_env("DATABASE_CONNECT_TIMEOUT_SECONDS", "5")?,
+                migrate_on_start: parse_env("DATABASE_MIGRATE_ON_START", "false")?,
             },
             storage: StorageConfig {
                 avatar_dir: env_or(

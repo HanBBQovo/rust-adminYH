@@ -10,6 +10,7 @@ pub struct DatabaseConfig {
     pub max_connections: u32,
     pub min_connections: u32,
     pub connect_timeout_seconds: u64,
+    pub migrate_on_start: bool,
 }
 
 impl DatabaseConfig {
@@ -59,6 +60,7 @@ mod tests {
             max_connections: 10,
             min_connections: 1,
             connect_timeout_seconds: 5,
+            migrate_on_start: false,
         };
 
         assert!(config.validate().is_err());

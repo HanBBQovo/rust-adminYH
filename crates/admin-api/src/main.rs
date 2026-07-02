@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use admin_api::{build_router, logging, AppConfig, AppServices, AppState};
 use admin_core::services::StaticHealthService;
-use admin_db::build_mysql_pool;
+use admin_db::{build_mysql_pool, migrations};
 use anyhow::Context;
 use tokio::net::TcpListener;
 use tracing::info;
@@ -17,6 +17,9 @@ async fn main() -> anyhow::Result<()> {
     let pool = build_mysql_pool(&config.database)
         .await
         .context("连接 MySQL 数据库失败")?;
+    if config.database.migrate_on_start {
+        migrations::run(&pool).await.context("执行数据库迁移失败")?;
+    }
     let state =
         AppState::with_services(config.clone(), AppServices::database(pool, health_service));
     let app = build_router(state);

@@ -39,5 +39,13 @@ else
   echo "SKIP: Tauri workspace 尚未初始化，暂不执行 cargo tauri build。"
 fi
 
+if [[ "${RUN_DOCKER:-false}" == "true" ]]; then
+  section "Docker"
+  "$ROOT_DIR/scripts/test-docker.sh"
+else
+  echo
+  echo "SKIP: RUN_DOCKER=true 未设置，跳过 Docker 镜像构建和 compose 健康检查。发布前必须执行 RUN_DOCKER=true scripts/check-all.sh。"
+fi
+
 echo
 echo "All available quality gates completed."

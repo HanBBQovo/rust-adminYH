@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1.7
+
+ARG RUST_IMAGE=rust:1.88-bookworm
+ARG RUNTIME_IMAGE=debian:bookworm-slim
+
+FROM ${RUST_IMAGE} AS builder
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+
+RUN cargo build --release -p admin-api
+
+FROM ${RUNTIME_IMAGE} AS runtime
+WORKDIR /app
+
+RUN mkdir -p /app/uploads/avatar \
+    && chown -R 10001:10001 /app
+
+COPY --from=builder /app/target/release/admin-api /usr/local/bin/admin-api
+
+USER 10001:10001
+ENV APP_ENV=production \
+    APP_NAME=rust-adminYH \
+    APP_HTTP__HOST=0.0.0.0 \
+    APP_HTTP__PORT=16824 \
+    APP_LOGGING__JSON_LOGS=true \
+    APP_STORAGE__AVATAR_DIR=/app/uploads/avatar \
+    DATABASE_MIGRATE_ON_START=false
+EXPOSE 16824
+
+ENTRYPOINT ["/usr/local/bin/admin-api"]
