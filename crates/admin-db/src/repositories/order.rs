@@ -97,15 +97,47 @@ impl OrderStore for MySqlOrderRepository {
 
     fn remove_order<'a>(&'a self, order_id: i64) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let result = sqlx::query("DELETE FROM `order_list` WHERE `id` = ?")
+            let mut tx = self.pool.begin().await.map_err(db_error)?;
+            let oddnumber = sqlx::query("SELECT `oddnumber` FROM `order_list` WHERE `id` = ?")
                 .bind(order_id)
-                .execute(&self.pool)
+                .fetch_optional(tx.as_mut())
+                .await
+                .map_err(db_error)?
+                .map(|row| get_string(&row, "oddnumber"))
+                .ok_or_else(|| AppError::NotFound(format!("order {order_id}")))?;
+
+            sqlx::query("DELETE FROM `company_order` WHERE `order_id` = ?")
+                .bind(order_id)
+                .execute(tx.as_mut())
                 .await
                 .map_err(db_error)?;
-            if result.rows_affected() == 0 {
-                return Err(AppError::NotFound(format!("order {order_id}")));
+
+            let same_oddnumber_count = sqlx::query(
+                "SELECT COUNT(*) AS total FROM `order_list` WHERE `oddnumber` = ? AND `id` <> ?",
+            )
+            .bind(&oddnumber)
+            .bind(order_id)
+            .fetch_one(tx.as_mut())
+            .await
+            .map_err(db_error)?
+            .try_get::<i64, _>("total")
+            .map_err(db_error)?;
+
+            if same_oddnumber_count == 0 {
+                sqlx::query("DELETE FROM `receipt` WHERE `oddnumber` = ?")
+                    .bind(&oddnumber)
+                    .execute(tx.as_mut())
+                    .await
+                    .map_err(db_error)?;
             }
-            Ok(())
+
+            sqlx::query("DELETE FROM `order_list` WHERE `id` = ?")
+                .bind(order_id)
+                .execute(tx.as_mut())
+                .await
+                .map_err(db_error)?;
+
+            tx.commit().await.map_err(db_error)
         })
     }
 

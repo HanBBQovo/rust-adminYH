@@ -610,10 +610,27 @@ impl OrderStore for InMemoryOrderStore {
     fn remove_order<'a>(&'a self, order_id: i64) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
             let mut orders = self.orders.lock().map_err(|_| AppError::Internal)?;
-            let original_len = orders.len();
+            let removed_order = orders
+                .iter()
+                .find(|order| order.id == order_id)
+                .cloned()
+                .ok_or_else(|| AppError::NotFound(format!("order {order_id}")))?;
             orders.retain(|order| order.id != order_id);
-            if orders.len() == original_len {
-                return Err(AppError::NotFound(format!("order {order_id}")));
+            let same_oddnumber_still_exists = orders
+                .iter()
+                .any(|order| order.oddnumber == removed_order.oddnumber);
+            drop(orders);
+
+            self.company_orders
+                .lock()
+                .map_err(|_| AppError::Internal)?
+                .retain(|(_, existing_order_id)| *existing_order_id != order_id);
+
+            if !same_oddnumber_still_exists {
+                self.receipts
+                    .lock()
+                    .map_err(|_| AppError::Internal)?
+                    .retain(|receipt| receipt.oddnumber != removed_order.oddnumber);
             }
             Ok(())
         })
@@ -1024,6 +1041,40 @@ mod tests {
             .expect("memories should list")
             .iter()
             .any(|record| record.value == "新收货人"));
+    }
+
+    #[tokio::test]
+    async fn order_remove_cleans_company_order_and_receipt_links() {
+        let store =
+            std::sync::Arc::new(crate::services::order::InMemoryOrderStore::with_seed_data());
+        let orders = crate::services::order::CompatOrderService::new(store.clone());
+        let receipts = crate::services::order::CompatReceiptService::new(store.clone());
+
+        orders.remove(1).await.expect("order should delete");
+
+        let snapshot = store.snapshot();
+        assert_eq!(snapshot.order_count, 1);
+        assert_eq!(snapshot.receipt_count, 1);
+        assert!(!snapshot
+            .company_orders
+            .iter()
+            .any(|(_, order_id)| *order_id == 1));
+
+        let receipt_list = receipts
+            .list(ReceiptListRequest {
+                offset: 0,
+                size: 10,
+                oddnumber: Some("YD20260101001".to_owned()),
+                consignee: None,
+                consignor: None,
+                recoverystate: None,
+                issuestate: None,
+                poststate: None,
+                create_at: None,
+            })
+            .await
+            .expect("receipt should list");
+        assert_eq!(receipt_list.total_count, 0);
     }
 
     #[tokio::test]

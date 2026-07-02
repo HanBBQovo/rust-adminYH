@@ -160,6 +160,42 @@ async fn admin_can_create_order_and_receipt_side_effect() {
 }
 
 #[tokio::test]
+async fn admin_delete_order_cleans_receipt_side_effect() {
+    let app = build_router(admin_state());
+    let token = login_token(app.clone(), "admin").await;
+
+    let (status, deleted) =
+        json_request(app.clone(), "DELETE", "/api/order/1", Some(&token), "").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(deleted["code"], 0);
+    assert_eq!(deleted["message"], "删除订单成功！");
+
+    let (status, detail) = json_request(app.clone(), "GET", "/api/order/1", Some(&token), "").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(detail["data"].is_null());
+
+    let (_, order_list) = json_request(
+        app.clone(),
+        "POST",
+        "/api/order/list",
+        Some(&token),
+        r#"{"offset":0,"size":10,"oddnumber":"YD20260101001"}"#,
+    )
+    .await;
+    assert_eq!(order_list["data"]["totalCount"], 0);
+
+    let (_, receipt_list) = json_request(
+        app,
+        "POST",
+        "/api/receipt/list",
+        Some(&token),
+        r#"{"offset":0,"size":10,"oddnumber":"YD20260101001"}"#,
+    )
+    .await;
+    assert_eq!(receipt_list["data"]["totalCount"], 0);
+}
+
+#[tokio::test]
 async fn memory_list_keeps_old_data_only_shape_and_order_side_effect() {
     let app = build_router(admin_state());
     let token = login_token(app.clone(), "admin").await;
@@ -210,6 +246,30 @@ async fn order_writes_require_admin_role() {
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert_eq!(json["code"], -403);
     assert_eq!(json["message"], "没有权限执行该操作");
+}
+
+#[tokio::test]
+async fn operator_cannot_delete_order() {
+    let app = build_router(operator_state());
+    let token = login_token(app.clone(), "operator").await;
+
+    let (status, json) = json_request(app, "DELETE", "/api/order/1", Some(&token), "").await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(json["code"], -403);
+    assert_eq!(json["message"], "没有权限执行该操作");
+}
+
+#[tokio::test]
+async fn deleting_missing_order_returns_not_found() {
+    let app = build_router(admin_state());
+    let token = login_token(app.clone(), "admin").await;
+
+    let (status, json) = json_request(app, "DELETE", "/api/order/999", Some(&token), "").await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(json["code"], -404);
+    assert_eq!(json["message"], "资源不存在: order 999");
 }
 
 #[tokio::test]

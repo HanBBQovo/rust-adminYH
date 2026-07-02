@@ -239,6 +239,9 @@ cargo run -p admin-migration -- verify-files --old-avatar-dir "$OLD_AVATAR_DIR" 
 ## 6. 未决策项
 
 - 是否保留旧 `user.token` 单点登录语义，或迁到 session 表。
-- 订单删除是否继续兼容“只删 `order_list`”，或改为事务级联清理 `receipt/company_order`。
 - 重复 `role_permission` 是否迁移时去重，还是保留并在清洗报告中阻断。
 - `receipt.oddnumber` 无订单时是允许历史脏数据保留，还是迁移前修复。
+
+## 7. 已决策行为
+
+- 订单删除不再兼容旧系统“只删 `order_list`”的危险行为；新仓储必须在事务内先定位订单原始 `oddnumber`，清理 `company_order.order_id`，当没有其它订单继续使用同一 `oddnumber` 时清理对应 `receipt.oddnumber`，最后删除 `order_list`。旧库迁移前仍需审计已存在孤儿关系和重复 `oddnumber`，避免误删历史凭证。

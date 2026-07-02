@@ -125,7 +125,7 @@
 - 登录密码是无 salt MD5；验证码接口存在，但登录验证码校验已被注释，不能按“已有强验证码登录”设计新系统。
 - 管理权限硬编码为 `user_role.role_id == 1`，不是完整 RBAC policy。
 - RBAC 分配角色菜单时只插入 `role_permission`，没有先删除旧关系，可能重复或残留。
-- 删除订单只删 `order_list`，是否同步清理 `receipt/company_order` 依赖旧库约束，不可靠。
+- 旧系统删除订单只删 `order_list`，新系统已明确改为事务级联清理 `company_order` 和安全匹配的 `receipt`，防止新数据继续产生孤儿关系。
 - 文件上传直接 `fs.unlinkSync` 删除旧头像，缺少文件存在判断。
 - 用户 ID `58` 被硬编码为不可删除管理员。
 - token 写入 `user.token`，多人登录会使旧 token 失效；这是业务语义，需要明确是否保留。
