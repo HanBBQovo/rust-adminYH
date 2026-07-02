@@ -19,7 +19,7 @@ export const RESOURCE_REGISTRY: ResourceSummary[] = [
     title: '运单管理',
     description: '承接旧 order_list、company_order，并保留订单导出字段。',
     count: 1268,
-    status: 'building',
+    status: 'ready',
     apiPath: '/order/list',
     legacyPath: 'src/views/main/order/order',
     owner: '运营',
