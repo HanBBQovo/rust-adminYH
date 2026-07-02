@@ -51,6 +51,7 @@ npm run tauri:build:app -- --config '{"bundle":{"resources":{"../../../target/re
 ## 质量门禁
 
 - 默认提交前：在仓库根目录运行 `scripts/check-all.sh`。
+- 前端架构约束：`scripts/test-frontend.sh` 会自动运行 `scripts/test-frontend-architecture.mjs`，阻断页面直接请求、绕过 API 封装、业务层直接使用 Radix 原语和业务页散写 inline style。
 - 前端交互改动：运行 `RUN_E2E=true scripts/test-frontend.sh`。
 - 桌面壳、图标、CSP、capability、打包配置改动：运行 `RUN_TAURI=true scripts/check-all.sh`。该门禁会先构建 release `admin-api` sidecar，再通过 Tauri `--config` 注入资源映射构建 `.app`，并校验 `Contents/Resources/binaries/admin-api` 存在且可执行。
 - macOS 安装包发布前：运行 `RUN_TAURI=true RUN_TAURI_DMG=true scripts/check-all.sh`。

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ElementType, ReactNode } from 'react'
 
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
@@ -16,6 +16,15 @@ export interface FormFieldProps {
   description?: string
   error?: string
   required?: boolean
+  children: ReactNode
+  className?: string
+}
+
+export interface TreeIndentProps {
+  depth: number
+  base?: number
+  step?: number
+  as?: ElementType
   children: ReactNode
   className?: string
 }
@@ -47,5 +56,23 @@ export function FormField({ label, htmlFor, description, error, required, childr
       {children}
       {error ? <p className="text-xs leading-5 text-destructive">{error}</p> : null}
     </div>
+  )
+}
+
+export function TreeIndent({ depth, base = 0, step = 20, as: Component = 'div', children, className }: TreeIndentProps) {
+  return (
+    <Component
+      className={cn(className, 'pl-[calc(var(--tree-indent-base)+var(--tree-depth)*var(--tree-indent-step))]')}
+      data-tree-depth={depth}
+      style={
+        {
+          '--tree-depth': depth,
+          '--tree-indent-base': `${base}px`,
+          '--tree-indent-step': `${step}px`,
+        } as CSSProperties
+      }
+    >
+      {children}
+    </Component>
   )
 }

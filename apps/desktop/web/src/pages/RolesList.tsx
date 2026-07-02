@@ -18,7 +18,7 @@ import { normalizeMenuTree, type MenuTreeItem } from '@/api/menus'
 import { InlineLoader } from '@/components/PageLoader'
 import { DataTableSurface, StickyActionCell, StickyActionHead } from '@/components/layout/DataTableSurface'
 import { FilterBar, FilterField } from '@/components/layout/FilterBar'
-import { FormField, FormSection } from '@/components/layout/FormScaffold'
+import { FormField, FormSection, TreeIndent } from '@/components/layout/FormScaffold'
 import { PageShell } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -200,9 +200,11 @@ function AssignMenusDialog({ open, role, submitting = false, onOpenChange, onSub
 
     return (
       <div key={node.id} className="space-y-1">
-        <label
+        <TreeIndent
+          as="label"
+          depth={depth}
+          base={8}
           className="flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition hover:bg-muted/70"
-          style={{ paddingLeft: `${8 + depth * 20}px` }}
         >
           <Checkbox
             checked={checked || partial ? true : false}
@@ -211,7 +213,7 @@ function AssignMenusDialog({ open, role, submitting = false, onOpenChange, onSub
           />
           <span className="min-w-0 flex-1 truncate">{node.name}</span>
           {node.url ? <span className="hidden font-mono text-xs text-muted-foreground sm:inline">{node.url}</span> : null}
-        </label>
+        </TreeIndent>
         {node.children.length ? <div className="space-y-1">{node.children.map((child) => renderMenuNode(child, depth + 1))}</div> : null}
       </div>
     )

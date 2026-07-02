@@ -12,7 +12,7 @@ import {
   type MenuTreeItem,
 } from '@/api/menus'
 import { DataTableSurface } from '@/components/layout/DataTableSurface'
-import { FormField, FormSection } from '@/components/layout/FormScaffold'
+import { FormField, FormSection, TreeIndent } from '@/components/layout/FormScaffold'
 import { PageShell, PageStat, PageStatStrip } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -276,10 +276,10 @@ export default function MenusList() {
               <TableRow key={row.id}>
                 <TableCell className="text-right font-mono text-xs text-muted-foreground">{row.id}</TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-2" style={{ paddingLeft: `${row.depth * 20}px` }}>
+                  <TreeIndent depth={row.depth} className="flex items-center gap-2">
                     <FolderTree className="h-4 w-4 text-primary" />
                     <span className="font-medium">{row.name}</span>
-                  </div>
+                  </TreeIndent>
                 </TableCell>
                 <TableCell>
                   <Badge variant="outline">{menuTypeLabel(row.type)}</Badge>

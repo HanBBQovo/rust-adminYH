@@ -48,6 +48,8 @@ run_required_script() {
 }
 
 run_required_script "lint" "Frontend lint"
+section "Frontend architecture gate"
+node "$ROOT_DIR/scripts/test-frontend-architecture.mjs"
 run_required_script "typecheck" "Frontend typecheck"
 run_required_script "test" "Frontend unit/component tests"
 run_required_script "build" "Frontend production build"
