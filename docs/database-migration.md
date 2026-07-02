@@ -93,6 +93,13 @@ dry-run 只读旧库和新库，输出：
 - `migrate --dry-run --old <OLD_DATABASE_URL> --new <NEW_DATABASE_URL> --old-avatar-dir <OLD_AVATAR_DIR> --format json` 复用同一套旧库审计，并明确标记 `dry-run only`，禁止真实写入。
 - `verify-files --old-avatar-dir <OLD_AVATAR_DIR> --new-avatar-dir <NEW_AVATAR_DIR> --format json` 对比头像文件相对路径和 SHA256，用于迁移后的文件完整性检查。
 
+当前已落地 SQLx 兼容数据库层第一阶段：
+
+- `admin-db` 已从占位连接池切换为真实 `sqlx::MySqlPool`，连接配置继续通过 `DATABASE_URL`、连接数和超时环境变量控制。
+- `202607010001_init_compat_schema.sql` 已建立 11 张核心旧表的兼容 schema：`role`、`permission`、`user`、`company`、`memory`、`avatar`、`user_role`、`role_permission`、`order_list`、`company_order`、`receipt`。
+- 第一版 schema 保留旧表名、旧字段名、`billingAt` 毫秒字段、中文回单状态、`company_order.com_name` 和 `receipt.oddnumber` 弱关联；暂不加硬外键或唯一约束，避免未审计旧脏数据被 schema 阻断。
+- `MySqlOrderRepository` 已实现订单、回单、memory 的 SQLx 参数化仓储：订单创建在事务内写入 `order_list`、`company_order`、可选 `receipt`，并对收/发货人 memory 做存在性检查后再插入。
+
 ### Phase 3：apply 迁移
 
 建议顺序：

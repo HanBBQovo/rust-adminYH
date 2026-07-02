@@ -41,7 +41,9 @@ version = "0.1.0"
 dependencies = [
  "admin-core",
  "serde",
+ "sqlx",
  "thiserror",
+ "tokio",
  "tracing",
 ]
 

@@ -9,5 +9,7 @@ rust-version.workspace = true
 [dependencies]
 admin-core.workspace = true
 serde.workspace = true
+sqlx.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
 tracing.workspace = true

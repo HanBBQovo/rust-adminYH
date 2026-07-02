@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use admin_core::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
+use sqlx::mysql::MySqlPoolOptions;
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct DatabaseConfig {
@@ -33,29 +34,18 @@ impl DatabaseConfig {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct MySqlPool {
-    config: DatabaseConfig,
-}
-
-impl MySqlPool {
-    pub fn config(&self) -> &DatabaseConfig {
-        &self.config
-    }
-
-    pub fn is_configured(&self) -> bool {
-        !self.config.url.trim().is_empty()
-    }
-}
+pub type MySqlPool = sqlx::MySqlPool;
 
 pub async fn build_mysql_pool(config: &DatabaseConfig) -> AppResult<MySqlPool> {
     config.validate()?;
 
-    let _timeout = Duration::from_secs(config.connect_timeout_seconds);
-
-    Ok(MySqlPool {
-        config: config.clone(),
-    })
+    MySqlPoolOptions::new()
+        .max_connections(config.max_connections)
+        .min_connections(config.min_connections)
+        .acquire_timeout(Duration::from_secs(config.connect_timeout_seconds))
+        .connect(&config.url)
+        .await
+        .map_err(|error| AppError::Database(format!("数据库连接失败: {error}")))
 }
 
 #[cfg(test)]

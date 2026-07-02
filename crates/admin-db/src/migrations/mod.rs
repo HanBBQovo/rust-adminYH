@@ -1,13 +1,11 @@
-use admin_core::{AppError, AppResult};
+use admin_core::AppResult;
 
 use crate::pool::MySqlPool;
 
 pub async fn run(pool: &MySqlPool) -> AppResult<()> {
-    if !pool.is_configured() {
-        return Err(AppError::Database(
-            "数据库连接池尚未初始化，等待旧库 schema 导出后启用迁移".to_owned(),
-        ));
-    }
-
+    sqlx::migrate!("./src/migrations")
+        .run(pool)
+        .await
+        .map_err(|error| admin_core::AppError::Database(format!("数据库迁移失败: {error}")))?;
     Ok(())
 }
