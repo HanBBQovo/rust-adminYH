@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
 
 const invalidTokenEnvelope = {
   code: -200,
@@ -192,6 +193,19 @@ test.describe('business list E2E state matrix', () => {
     await expect(page.getByText('订单数据')).toBeVisible()
     await expect(page.getByText(orderFixture.oddnumber).first()).toBeVisible()
     await expect(page.getByText(orderFixture.company)).toBeVisible()
+
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: '导出当前页' }).click()
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toMatch(/^orders-\d{4}-\d{2}-\d{2}\.csv$/)
+    const path = await download.path()
+    expect(path).toBeTruthy()
+    const csv = await readFile(path!, 'utf8')
+    expect(csv.charCodeAt(0)).toBe(0xfeff)
+    expect(csv).toContain('运单号,开单时间,收货人')
+    expect(csv).toContain(orderFixture.oddnumber)
+    expect(csv).toContain(orderFixture.company)
+    expect(csv).toContain(orderFixture.remarks)
 
     orderState = 'empty'
     await page.getByRole('button', { name: '刷新' }).click()
