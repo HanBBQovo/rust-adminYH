@@ -63,10 +63,9 @@ async fn login_endpoint_returns_legacy_success_shape() {
     assert_eq!(json["message"], "success");
     assert_eq!(json["data"]["id"], 58);
     assert_eq!(json["data"]["name"], "admin");
-    assert!(json["data"]["token"]
-        .as_str()
-        .unwrap()
-        .starts_with("dev-58-"));
+    let token = json["data"]["token"].as_str().unwrap();
+    assert!(token.starts_with("dev-58-"));
+    assert!(!token.starts_with("yh-"));
 }
 
 #[tokio::test]

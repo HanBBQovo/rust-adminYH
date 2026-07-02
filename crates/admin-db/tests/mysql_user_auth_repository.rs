@@ -37,7 +37,8 @@ async fn mysql_user_auth_repository_upgrades_legacy_md5_on_login() {
         .expect("legacy md5 user should authenticate");
 
     assert_eq!(login.name, scope.username);
-    assert!(login.token.starts_with(&format!("dev-{}-", scope.user_id)));
+    assert!(login.token.starts_with("yh-"));
+    assert!(!login.token.starts_with(&format!("dev-{}-", scope.user_id)));
 
     let upgraded_password = scope.user_password().await;
     assert!(upgraded_password.starts_with("$argon2"));

@@ -533,7 +533,7 @@ crates/admin-db/src/
   - 验证成功后立即重写为 Argon2。
 - token 不再只依赖前端 localStorage。
 - 保留“单用户单 token”语义需明确：
-  - 方案 A：继续在 `user.token_version` 或 session 表控制单点登录。
+  - 方案 A：继续写回 `user.token` 保留单点登录，新登录使用 32 字节随机 opaque token。
   - 方案 B：允许多端登录，用 session 表管理。
 - 后端实现角色/菜单权限校验，前端只负责展示。
 - 文件上传限制 MIME、大小、扩展名，文件名由服务端生成。

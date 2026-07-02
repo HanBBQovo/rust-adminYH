@@ -254,6 +254,7 @@ POST /api/recovery/list
 - `/api/upload/avatar` 后端已补齐安全校验：缺失 token 返回旧未登录 envelope，非 `avatar` 字段、空文件、非 jpg/png MIME/扩展名和超过 500kb 均返回旧 `{ code: -400 }` 业务错误；前端校验不再是唯一防线。
 - `admin-migration verify-files` 已补齐头像文件完整性阻断门禁：对比旧/新头像目录的相对文件名和 SHA256，缺失、多余或内容变化都会输出 `status=failed` 并以非 0 退出，避免数据库迁移通过但磁盘头像漏迁。
 - 登录服务通过 `AuthService` / `AuthUserStore` / `TokenIssuer` 抽象解耦；生产路径已装配 `MySqlUserRepository`，API 集成测试继续使用内存仓储做快速兼容回归，影子库回归需通过真实 `DATABASE_URL` 单独执行。
+- 生产认证不再使用开发态 `dev-{user_id}-{uuid}` token：`production_auth_service` 和 `admin-api` 数据库启动路径统一使用 `SecureTokenIssuer` 生成 32 字节随机 opaque token，并继续写回 `user.token` 保留旧单点登录语义；开发/测试内存服务仍保留 `DevelopmentTokenIssuer` 便于断言。
 - 菜单服务通过 `MenuService` / `MenuStore` 抽象解耦；生产路径已装配 `MySqlMenuRepository`，API 集成测试继续使用内存菜单仓储验证旧响应形状和权限边界。
 - 公司服务通过 `CompanyService` / `CompanyStore` 抽象解耦；生产路径已装配 `MySqlCompanyRepository`，测试保留内存仓储用于接口兼容回归。
 - 用户管理服务通过 `UserService` / `UserStore` 抽象解耦；生产路径已装配 `MySqlUserRepository`，真实头像文件目录仍由 `APP_STORAGE__AVATAR_DIR` 控制。

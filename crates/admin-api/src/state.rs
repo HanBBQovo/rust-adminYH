@@ -5,10 +5,10 @@ use admin_core::{
     services::{
         AuthService, ChartService, CompanyService, CompatAuthService, CompatChartService,
         CompatCompanyService, CompatMemoryService, CompatMenuService, CompatOrderService,
-        CompatReceiptService, CompatRoleService, CompatUserService, DevelopmentTokenIssuer,
-        DisabledAuthService, DisabledChartService, DisabledCompanyService, DisabledMenuService,
-        DisabledOrderService, DisabledReceiptService, DisabledRoleService, DisabledUserService,
-        HealthService, MemoryService, MenuService, OrderService, ReceiptService, RoleService,
+        CompatReceiptService, CompatRoleService, CompatUserService, DisabledAuthService,
+        DisabledChartService, DisabledCompanyService, DisabledMenuService, DisabledOrderService,
+        DisabledReceiptService, DisabledRoleService, DisabledUserService, HealthService,
+        MemoryService, MenuService, OrderService, ReceiptService, RoleService, SecureTokenIssuer,
         StaticHealthService, UserService,
     },
 };
@@ -49,7 +49,7 @@ impl AppServices {
                 user_repository.clone(),
                 Arc::new(CompatPasswordVerifier),
                 Arc::new(Argon2PasswordHasher),
-                Arc::new(DevelopmentTokenIssuer::default()),
+                Arc::new(SecureTokenIssuer::default()),
             )),
             menu_service: Arc::new(CompatMenuService::new(menu_repository)),
             chart_service: Arc::new(CompatChartService::new(Arc::new(

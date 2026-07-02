@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use rand_core::{OsRng, RngCore};
 use uuid::Uuid;
 
 use crate::{
@@ -186,6 +187,45 @@ impl TokenIssuer for DevelopmentTokenIssuer {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct SecureTokenIssuer {
+    prefix: String,
+    token_bytes: usize,
+}
+
+impl SecureTokenIssuer {
+    pub fn new(prefix: impl Into<String>, token_bytes: usize) -> Self {
+        Self {
+            prefix: prefix.into(),
+            token_bytes,
+        }
+    }
+}
+
+impl Default for SecureTokenIssuer {
+    fn default() -> Self {
+        Self::new("yh", 32)
+    }
+}
+
+impl TokenIssuer for SecureTokenIssuer {
+    fn issue(&self, _user: &AuthUser) -> AppResult<String> {
+        let mut bytes = vec![0_u8; self.token_bytes.max(32)];
+        OsRng.fill_bytes(&mut bytes);
+        Ok(format!("{}-{}", self.prefix, encode_hex(&bytes)))
+    }
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(HEX[(byte >> 4) as usize] as char);
+        out.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    out
+}
+
 #[derive(Debug, Default)]
 pub struct InMemoryAuthUserStore {
     users_by_name: Mutex<HashMap<String, AuthUser>>,
@@ -298,7 +338,7 @@ pub fn production_auth_service(users: Arc<dyn AuthUserStore>) -> CompatAuthServi
         users,
         Arc::new(CompatPasswordVerifier),
         Arc::new(Argon2PasswordHasher),
-        Arc::new(DevelopmentTokenIssuer::default()),
+        Arc::new(SecureTokenIssuer::default()),
     )
 }
 
@@ -311,7 +351,7 @@ mod tests {
         dto::LoginRequest,
         services::{
             development_auth_service, production_auth_service, AuthService, AuthUserStore,
-            InMemoryAuthUserStore,
+            InMemoryAuthUserStore, SecureTokenIssuer, TokenIssuer,
         },
     };
 
@@ -366,6 +406,21 @@ mod tests {
             .unwrap()
             .expect("user should exist");
         assert_eq!(after_login.password_hash, hash);
+    }
+
+    #[test]
+    fn production_token_issuer_generates_opaque_random_tokens() {
+        let issuer = SecureTokenIssuer::default();
+        let user = crate::domain::AuthUser::with_legacy_md5_password(58, "admin", "secret");
+
+        let first = issuer.issue(&user).expect("token should issue");
+        let second = issuer.issue(&user).expect("second token should issue");
+
+        assert_ne!(first, second);
+        assert!(first.starts_with("yh-"));
+        assert!(!first.starts_with("dev-58-"));
+        assert_eq!(first.len(), 3 + 64);
+        assert!(first[3..].chars().all(|ch| ch.is_ascii_hexdigit()));
     }
 
     #[tokio::test]
