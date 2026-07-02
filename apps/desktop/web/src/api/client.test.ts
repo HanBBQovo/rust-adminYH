@@ -44,6 +44,23 @@ describe('apiRequest', () => {
     )
   })
 
+  it('does not force JSON content-type for multipart form uploads', async () => {
+    const form = new FormData()
+    form.append('avatar', new Blob(['PNGDATA'], { type: 'image/png' }), 'avatar.png')
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ code: 0, data: null, message: '上传头像成功！' }),
+    })
+
+    await apiRequest('/upload/avatar', { method: 'POST', body: form })
+
+    const [, request] = fetchMock.mock.calls[0]
+    expect(request.body).toBe(form)
+    expect(request.headers['content-type']).toBeUndefined()
+    expect(request.headers['x-request-id']).toBeTruthy()
+  })
+
   it('throws ApiError for legacy business errors', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,

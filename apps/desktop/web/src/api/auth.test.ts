@@ -30,7 +30,7 @@ describe('auth session API', () => {
 
     const session = await loginSession({ name: 'admin', password: 'secret' })
 
-    expect(session.user).toEqual({ id: 58, name: 'admin', roles: [] })
+    expect(session.user).toEqual({ id: 58, name: 'admin', avatarUrl: '/users/58/avatar', roles: [] })
     expect(session.token).toBe('token-123')
     expect(getAuthToken()).toBe('token-123')
   })
@@ -62,6 +62,7 @@ describe('auth session API', () => {
     const restored = await restoreSession()
 
     expect(restored?.user.name).toBe('admin')
+    expect(restored?.user.avatarUrl).toBe('/users/58/avatar')
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/users/me', expect.any(Object))
   })
 

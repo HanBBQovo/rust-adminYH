@@ -25,11 +25,6 @@ export function clearAuthToken(): void {
   window.localStorage.removeItem(AUTH_TOKEN_KEY)
 }
 
-function authHeaders(): HeadersInit {
-  const token = getAuthToken()
-  return token ? { authorization: `Bearer ${token}` } : {}
-}
-
 /** 后端返回非 2xx 时抛出;`status` 让调用方能区分 401 / 404 等。 */
 export class ApiError extends Error {
   readonly status: number
@@ -58,6 +53,29 @@ function resolveApiUrl(path: string): string {
   return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
 }
 
+export function resolveAssetUrl(path: string): string {
+  return resolveApiUrl(path)
+}
+
+function isFormDataBody(body: BodyInit | null | undefined): body is FormData {
+  return typeof FormData !== 'undefined' && body instanceof FormData
+}
+
+function requestHeaders(init: RequestInit | undefined, requestId: string): HeadersInit {
+  const headers: Record<string, string> = {
+    'x-request-id': requestId,
+  }
+  const token = getAuthToken()
+  if (token) headers.authorization = `Bearer ${token}`
+  if (!isFormDataBody(init?.body)) {
+    headers['content-type'] = 'application/json'
+  }
+  return {
+    ...headers,
+    ...init?.headers,
+  }
+}
+
 function unwrapPayload<T>(payload: ApiEnvelope<T> | T): T {
   if (
     payload &&
@@ -83,12 +101,7 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   try {
     const response = await fetch(resolveApiUrl(path), {
       ...init,
-      headers: {
-        'content-type': 'application/json',
-        'x-request-id': requestId,
-        ...authHeaders(),
-        ...init?.headers,
-      },
+      headers: requestHeaders(init, requestId),
     })
     status = response.status
     const payload = await response.json().catch(() => ({}))

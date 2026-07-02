@@ -3,11 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildUserListPayload,
   createUser,
+  currentUserAvatarUrl,
   deleteUser,
   getUser,
   listUsers,
   updateUser,
   updateUserPassword,
+  uploadCurrentUserAvatar,
 } from '@/api/users'
 
 const fetchMock = vi.fn()
@@ -135,5 +137,19 @@ describe('users api', () => {
     fetchMock.mockImplementationOnce(() => jsonResponse(null, -200, '删除用户失败！'))
 
     await expect(deleteUser(58)).rejects.toThrow('删除用户失败！')
+  })
+
+  it('uploads current user avatar with multipart form data and resolves avatar URLs', async () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1700000000000)
+    fetchMock.mockImplementationOnce(() => jsonResponse(null))
+    const file = new File(['PNGDATA'], 'avatar.png', { type: 'image/png' })
+
+    await expect(uploadCurrentUserAvatar(file)).resolves.toEqual({ uploadedAt: 1700000000000 })
+    expect(currentUserAvatarUrl(58, 1700000000000)).toBe('/api/users/58/avatar?ts=1700000000000')
+    const [, request] = fetchMock.mock.calls[0]
+    expect(fetchMock).toHaveBeenCalledWith('/api/upload/avatar', expect.objectContaining({ method: 'POST' }))
+    expect(request.body).toBeInstanceOf(FormData)
+    expect((request.body as FormData).get('avatar')).toBe(file)
+    nowSpy.mockRestore()
   })
 })

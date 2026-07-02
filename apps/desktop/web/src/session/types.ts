@@ -3,6 +3,7 @@ import type { ElementType } from 'react'
 export interface SessionUser {
   id: number
   name: string
+  avatarUrl?: string
   roles: string[]
 }
 

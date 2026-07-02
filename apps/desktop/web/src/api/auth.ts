@@ -18,12 +18,14 @@ export interface LoginInput {
 export interface CurrentUser {
   id: number
   name: string
+  avatarUrl?: string
   roles: string[]
 }
 
 interface LoginPayload {
   id: number
   name: string
+  avatarUrl?: string
   token: string
 }
 
@@ -31,6 +33,7 @@ function toSessionUser(user: CurrentUser | LoginPayload): SessionUser {
   return {
     id: user.id,
     name: user.name,
+    avatarUrl: 'avatarUrl' in user && typeof user.avatarUrl === 'string' ? user.avatarUrl : `/users/${user.id}/avatar`,
     roles: 'roles' in user && Array.isArray(user.roles) ? user.roles : [],
   }
 }

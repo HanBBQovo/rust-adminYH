@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { RotateCcw, Save } from 'lucide-react'
 
+import { AccountPreferences } from '@/components/account/AccountPreferences'
 import { FormField, FormSection } from '@/components/layout/FormScaffold'
 import { PageSurface } from '@/components/layout/PageScaffold'
 import { TabbedSettingsPage } from '@/components/layout/TabbedSettingsPage'
@@ -10,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { MultiSelect } from '@/components/ui/multi-select'
 import { Switch } from '@/components/ui/switch'
 import { useConfirm } from '@/components/ui/use-confirm'
+import type { SessionUser } from '@/session/types'
 
 /**
  * 参考页 —— 「带选项卡的设置页」范本。
@@ -17,9 +19,10 @@ import { useConfirm } from '@/components/ui/use-confirm'
  * 保存成功通过 message 回传,组件内部统一弹全局 toast(见 GlobalToastProvider)。
  */
 
-type Tab = 'general' | 'appearance'
+type Tab = 'account' | 'general' | 'appearance'
 
 const TABS: Array<{ key: Tab; label: string }> = [
+  { key: 'account', label: '账号' },
   { key: 'general', label: '通用' },
   { key: 'appearance', label: '外观' },
 ]
@@ -37,8 +40,13 @@ const FEATURE_OPTIONS = [
   { value: 'beta-panel', label: '灰度面板', description: '控制实验功能开关' },
 ]
 
-export default function Settings() {
-  const [activeTab, setActiveTab] = useState<Tab>('general')
+interface SettingsProps {
+  user: SessionUser
+  onAvatarUploaded?: (cacheBust: number) => void
+}
+
+export default function Settings({ user, onAvatarUploaded }: SettingsProps) {
+  const [activeTab, setActiveTab] = useState<Tab>('account')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const confirm = useConfirm()
 
@@ -76,7 +84,7 @@ export default function Settings() {
   return (
     <TabbedSettingsPage
       title="设置"
-      description="带选项卡的配置页范本。"
+      description="账号安全、头像与系统偏好的集中配置。"
       tabs={TABS}
       activeTab={activeTab}
       onTabChange={setActiveTab}
@@ -89,6 +97,12 @@ export default function Settings() {
         </Button>
       }
     >
+      {activeTab === 'account' ? (
+        <PageSurface title="账号安全" description="沿用旧顶栏的修改密码和修改头像能力，统一走用户 API 封装。">
+          <AccountPreferences user={user} onAvatarUploaded={onAvatarUploaded} />
+        </PageSurface>
+      ) : null}
+
       {activeTab === 'general' ? (
         <PageSurface title="基本信息" description="展示名称与联系方式。">
           <FormSection className="sm:max-w-lg">
@@ -106,7 +120,9 @@ export default function Settings() {
             </FormField>
           </FormSection>
         </PageSurface>
-      ) : (
+      ) : null}
+
+      {activeTab === 'appearance' ? (
         <PageSurface
           title="界面偏好"
           description="影响布局密度与动效。"
@@ -134,7 +150,7 @@ export default function Settings() {
             </label>
           </div>
         </PageSurface>
-      )}
+      ) : null}
     </TabbedSettingsPage>
   )
 }

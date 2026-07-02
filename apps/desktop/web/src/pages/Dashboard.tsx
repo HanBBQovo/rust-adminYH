@@ -48,10 +48,11 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ session, onLogout }: DashboardProps) {
+  const [activeSession, setActiveSession] = useState(session)
   const navItems = useMemo(() => {
-    const adapted = adaptLegacyMenus(session.menus)
+    const adapted = adaptLegacyMenus(activeSession.menus)
     return adapted.length ? adapted : fallbackNavItems()
-  }, [session.menus])
+  }, [activeSession.menus])
   const [currentPage, setCurrentPage] = useState<AppPage>(() => readStoredPage(navItems))
   const [collapsed, setCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
@@ -248,7 +249,20 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
                     {currentPage === 'users' ? <UsersList /> : null}
                     {currentPage === 'roles' ? <RolesList /> : null}
                     {currentPage === 'registry' ? <ResourceRegistry /> : null}
-                    {currentPage === 'settings' ? <SettingsPage /> : null}
+                    {currentPage === 'settings' ? (
+                      <SettingsPage
+                        user={activeSession.user}
+                        onAvatarUploaded={(cacheBust) => {
+                          setActiveSession((current) => ({
+                            ...current,
+                            user: {
+                              ...current.user,
+                              avatarUrl: `/users/${current.user.id}/avatar?ts=${cacheBust}`,
+                            },
+                          }))
+                        }}
+                      />
+                    ) : null}
                   </motion.div>
                 </Suspense>
               </ChunkLoadBoundary>

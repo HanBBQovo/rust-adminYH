@@ -1,4 +1,4 @@
-import { apiRequest } from '@/api/client'
+import { apiRequest, resolveAssetUrl } from '@/api/client'
 
 export interface LegacyUserListItem {
   id: number
@@ -63,6 +63,10 @@ export interface UserUpdatePayload {
 
 export interface UserPasswordPayload {
   password: string
+}
+
+export interface AvatarUploadResult {
+  uploadedAt: number
 }
 
 function cleanFilters(filters: UserListFilters): UserListFilters {
@@ -133,4 +137,19 @@ export async function deleteUser(userId: number): Promise<void> {
   await apiRequest<unknown>(`/users/${userId}`, {
     method: 'DELETE',
   })
+}
+
+export async function uploadCurrentUserAvatar(file: File): Promise<AvatarUploadResult> {
+  const form = new FormData()
+  form.append('avatar', file)
+  await apiRequest<unknown>('/upload/avatar', {
+    method: 'POST',
+    body: form,
+  })
+  return { uploadedAt: Date.now() }
+}
+
+export function currentUserAvatarUrl(userId: number, cacheBust?: number): string {
+  const url = resolveAssetUrl(`/users/${userId}/avatar`)
+  return cacheBust ? `${url}${url.includes('?') ? '&' : '?'}ts=${cacheBust}` : url
 }
