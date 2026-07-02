@@ -10,11 +10,11 @@ import {
   listMenuTree,
   listRoles,
   updateRole,
-  type LegacyMenuNode,
   type LegacyRole,
   type RoleListParams,
   type RoleMutationPayload,
 } from '@/api/roles'
+import { normalizeMenuTree, type MenuTreeItem } from '@/api/menus'
 import { InlineLoader } from '@/components/PageLoader'
 import { FilterBar, FilterField } from '@/components/layout/FilterBar'
 import { FormField, FormSection } from '@/components/layout/FormScaffold'
@@ -65,16 +65,6 @@ interface AssignMenusDialogProps {
   onSubmit: (menuIds: number[]) => Promise<void>
 }
 
-interface MenuTreeItem {
-  id: number
-  name: string
-  type: number
-  sort: number
-  url?: string | null
-  parentId?: number | null
-  children: MenuTreeItem[]
-}
-
 const PAGE_SIZE = 10
 
 const TITLE_BY_MODE: Record<RoleFormMode, string> = {
@@ -97,24 +87,6 @@ function toAppliedFilters(draft: RoleFilterDraft): Pick<RoleListParams, 'name' |
     intro: draft.intro.trim(),
     createAt: draft.createAt.from && draft.createAt.to ? [draft.createAt.from, draft.createAt.to] : undefined,
   }
-}
-
-function normalizeChildren(node: LegacyMenuNode): LegacyMenuNode[] {
-  return [...(node.children ?? []), ...(node.chilren ?? [])]
-}
-
-function normalizeMenuTree(nodes: LegacyMenuNode[]): MenuTreeItem[] {
-  return nodes
-    .map((node) => ({
-      id: node.id,
-      name: node.name,
-      type: node.type,
-      sort: node.sort,
-      url: node.url,
-      parentId: node.parentId ?? node.partentId ?? null,
-      children: normalizeMenuTree(normalizeChildren(node)),
-    }))
-    .sort((left, right) => left.sort - right.sort || left.id - right.id)
 }
 
 function collectMenuIds(nodes: MenuTreeItem[]): number[] {

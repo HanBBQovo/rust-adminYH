@@ -4,7 +4,7 @@ import { adaptLegacyMenus } from '@/session/menu-adapter'
 
 describe('adaptLegacyMenus', () => {
   it('falls back to template nav when old menus are empty', () => {
-    expect(adaptLegacyMenus([]).map((item) => item.key)).toEqual(['workspace', 'orders', 'receipts', 'companies', 'users', 'roles', 'registry', 'settings'])
+    expect(adaptLegacyMenus([]).map((item) => item.key)).toEqual(['workspace', 'orders', 'receipts', 'companies', 'users', 'roles', 'menus', 'registry', 'settings'])
   })
 
   it('maps old menu labels and urls into template pages', () => {
@@ -18,7 +18,7 @@ describe('adaptLegacyMenus', () => {
     expect(items[1].label).toBe('订单管理')
   })
 
-  it('deduplicates repeated role permission menu matches', () => {
+  it('maps role and menu permission entries as separate template pages', () => {
     const items = adaptLegacyMenus([
       {
         name: '系统管理',
@@ -29,7 +29,7 @@ describe('adaptLegacyMenus', () => {
       },
     ])
 
-    expect(items.map((item) => item.key)).toEqual(['roles'])
+    expect(items.map((item) => item.key)).toEqual(['roles', 'menus'])
   })
 
   it('maps old company menus into the company page', () => {
@@ -51,5 +51,17 @@ describe('adaptLegacyMenus', () => {
 
     expect(items.map((item) => item.key)).toEqual(['roles'])
     expect(items[0].label).toBe('角色管理')
+  })
+
+  it('maps old typo chilren menu trees into the menu page', () => {
+    const items = adaptLegacyMenus([
+      {
+        name: '系统管理',
+        chilren: [{ name: '菜单管理', url: '/main/system/menu' }],
+      },
+    ])
+
+    expect(items.map((item) => item.key)).toEqual(['menus'])
+    expect(items[0].label).toBe('菜单管理')
   })
 })

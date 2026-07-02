@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
     domain::MenuNode,
-    dto::{LegacyMenuNode, RoleMenuIdsResponse},
+    dto::{LegacyMenuNode, MenuMutationRequest, RoleMenuIdsResponse},
     AppError, AppResult,
 };
 
@@ -20,6 +20,8 @@ pub trait MenuService: Send + Sync {
     ) -> ServiceFuture<'a, AppResult<Vec<LegacyMenuNode>>>;
 
     fn menu_tree<'a>(&'a self) -> ServiceFuture<'a, AppResult<Vec<LegacyMenuNode>>>;
+
+    fn create<'a>(&'a self, input: MenuMutationRequest) -> ServiceFuture<'a, AppResult<()>>;
 
     fn role_menu_ids<'a>(
         &'a self,
@@ -42,7 +44,19 @@ pub trait MenuStore: Send + Sync {
 
     fn menu_tree<'a>(&'a self) -> ServiceFuture<'a, AppResult<Vec<MenuNode>>>;
 
+    fn create<'a>(&'a self, input: MenuCreateRecord) -> ServiceFuture<'a, AppResult<()>>;
+
     fn menu_ids_for_role<'a>(&'a self, role_id: i64) -> ServiceFuture<'a, AppResult<Vec<i64>>>;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MenuCreateRecord {
+    pub name: String,
+    pub menu_type: i32,
+    pub url: Option<String>,
+    pub icon: Option<String>,
+    pub sort: i32,
+    pub parent_id: Option<i64>,
 }
 
 pub struct CompatMenuService {
@@ -81,6 +95,14 @@ impl MenuService for CompatMenuService {
                 .into_iter()
                 .map(LegacyMenuNode::from_menu_tree)
                 .collect())
+        })
+    }
+
+    fn create<'a>(&'a self, input: MenuMutationRequest) -> ServiceFuture<'a, AppResult<()>> {
+        let store = Arc::clone(&self.store);
+        Box::pin(async move {
+            let input = normalize_menu(input)?;
+            store.create(input).await
         })
     }
 
@@ -125,6 +147,12 @@ impl MenuService for DisabledMenuService {
         })
     }
 
+    fn create<'a>(&'a self, _input: MenuMutationRequest) -> ServiceFuture<'a, AppResult<()>> {
+        Box::pin(async {
+            Err(AppError::Database("菜单服务尚未连接数据库仓储".to_owned()))
+        })
+    }
+
     fn role_menu_ids<'a>(
         &'a self,
         _role_id: i64,
@@ -140,6 +168,7 @@ pub struct InMemoryMenuStore {
     roles: Mutex<HashMap<i64, RoleSummary>>,
     roots: Mutex<Vec<MenuNode>>,
     role_permissions: Mutex<HashMap<i64, Vec<i64>>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryMenuStore {
@@ -163,6 +192,7 @@ impl InMemoryMenuStore {
             )])),
             roots: Mutex::new(vec![workspace, order, settings]),
             role_permissions: Mutex::new(HashMap::from([(1, vec![1, 11, 2, 21, 3, 31])])),
+            next_id: Mutex::new(32),
         }
     }
 }
@@ -187,6 +217,37 @@ impl MenuStore for InMemoryMenuStore {
             let mut roots = self.roots.lock().map_err(|_| AppError::Internal)?.clone();
             sort_menu_tree(&mut roots);
             Ok(roots)
+        })
+    }
+
+    fn create<'a>(&'a self, input: MenuCreateRecord) -> ServiceFuture<'a, AppResult<()>> {
+        Box::pin(async move {
+            let mut roots = self.roots.lock().map_err(|_| AppError::Internal)?;
+            let mut next_id = self.next_id.lock().map_err(|_| AppError::Internal)?;
+            if *next_id <= 0 {
+                *next_id = max_menu_id(&roots) + 1;
+            }
+
+            let node = MenuNode {
+                id: *next_id,
+                name: input.name,
+                menu_type: input.menu_type,
+                url: input.url,
+                icon: input.icon,
+                sort: input.sort,
+                parent_id: input.parent_id,
+                children: Vec::new(),
+            };
+            *next_id += 1;
+
+            if let Some(parent_id) = node.parent_id {
+                let parent = find_menu_mut(&mut roots, parent_id)
+                    .ok_or_else(|| AppError::NotFound(format!("menu {parent_id}")))?;
+                parent.children.push(node);
+            } else {
+                roots.push(node);
+            }
+            Ok(())
         })
     }
 
@@ -217,6 +278,63 @@ fn filter_menu_tree(roots: Vec<MenuNode>, allowed: &HashSet<i64>) -> Vec<MenuNod
         .collect()
 }
 
+fn normalize_menu(input: MenuMutationRequest) -> AppResult<MenuCreateRecord> {
+    let name = input.name.trim();
+    if name.is_empty() {
+        return Err(AppError::Validation("菜单名称不能为空".to_owned()));
+    }
+
+    let parent_id = input
+        .parent_id
+        .or(input.legacy_parent_id)
+        .filter(|parent_id| *parent_id > 0);
+    let menu_type = input
+        .menu_type
+        .unwrap_or_else(|| if parent_id.is_some() { 2 } else { 1 });
+    if !matches!(menu_type, 1 | 2) {
+        return Err(AppError::Validation("菜单类型必须是1或2".to_owned()));
+    }
+    if menu_type == 2 && parent_id.is_none() {
+        return Err(AppError::Validation("子菜单父级不能为空".to_owned()));
+    }
+
+    Ok(MenuCreateRecord {
+        name: name.to_owned(),
+        menu_type,
+        url: normalize_optional_text(input.url),
+        icon: normalize_optional_text(input.icon),
+        sort: input.sort.unwrap_or(0),
+        parent_id: if menu_type == 1 { None } else { parent_id },
+    })
+}
+
+fn normalize_optional_text(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let value = value.trim();
+        (!value.is_empty()).then(|| value.to_owned())
+    })
+}
+
+fn find_menu_mut(nodes: &mut [MenuNode], menu_id: i64) -> Option<&mut MenuNode> {
+    for node in nodes {
+        if node.id == menu_id {
+            return Some(node);
+        }
+        if let Some(found) = find_menu_mut(&mut node.children, menu_id) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn max_menu_id(nodes: &[MenuNode]) -> i64 {
+    nodes
+        .iter()
+        .map(|node| node.id.max(max_menu_id(&node.children)))
+        .max()
+        .unwrap_or(0)
+}
+
 fn sort_menu_tree(nodes: &mut [MenuNode]) {
     nodes.sort_by_key(|node| (node.sort, node.id));
     for node in nodes {
@@ -226,7 +344,10 @@ fn sort_menu_tree(nodes: &mut [MenuNode]) {
 
 #[cfg(test)]
 mod tests {
-    use crate::services::{development_menu_service, MenuService};
+    use crate::{
+        dto::MenuMutationRequest,
+        services::{development_menu_service, MenuService},
+    };
 
     #[tokio::test]
     async fn role_menu_tree_returns_legacy_children_shape() {
@@ -265,5 +386,40 @@ mod tests {
         assert_eq!(response.id, 1);
         assert_eq!(response.name, "超级管理员");
         assert!(response.menu_ids.contains(&21));
+    }
+
+    #[tokio::test]
+    async fn menu_create_accepts_legacy_parent_field_and_updates_tree() {
+        let service = development_menu_service();
+
+        service
+            .create(MenuMutationRequest {
+                name: " 菜单管理 ".to_owned(),
+                menu_type: None,
+                url: Some(" /main/system/menu ".to_owned()),
+                icon: Some(" settings ".to_owned()),
+                sort: Some(2),
+                parent_id: None,
+                legacy_parent_id: Some(3),
+                children: Vec::new(),
+                legacy_children: Vec::new(),
+            })
+            .await
+            .expect("menu should create");
+
+        let menus = service.menu_tree().await.expect("menu tree should load");
+        let settings = menus
+            .iter()
+            .find(|menu| menu.name == "系统设置")
+            .expect("settings root should exist");
+        let created = settings
+            .legacy_children
+            .iter()
+            .find(|menu| menu.name == "菜单管理")
+            .expect("created child should appear");
+
+        assert_eq!(created.parent_id, Some(3));
+        assert_eq!(created.url.as_deref(), Some("/main/system/menu"));
+        assert_eq!(created.icon.as_deref(), Some("settings"));
     }
 }

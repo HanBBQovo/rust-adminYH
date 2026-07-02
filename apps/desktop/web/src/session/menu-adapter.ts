@@ -1,4 +1,4 @@
-import { Building2, ClipboardList, FileCheck2, KeyRound, LayoutDashboard, PackageCheck, Settings, Users } from 'lucide-react'
+import { Building2, ClipboardList, FileCheck2, KeyRound, LayoutDashboard, ListTree, PackageCheck, Settings, Users } from 'lucide-react'
 
 import type { AppPage, LegacyMenuItem, SessionNavItem } from '@/session/types'
 
@@ -9,6 +9,7 @@ const FALLBACK_NAV_ITEMS: SessionNavItem[] = [
   { key: 'companies', label: '发货公司', icon: Building2 },
   { key: 'users', label: '用户管理', icon: Users },
   { key: 'roles', label: '角色权限', icon: KeyRound },
+  { key: 'menus', label: '菜单管理', icon: ListTree },
   { key: 'registry', label: '页面注册表', icon: ClipboardList },
   { key: 'settings', label: '系统设置', icon: Settings },
 ]
@@ -19,13 +20,14 @@ const PAGE_MATCHERS: Array<{ key: AppPage; icon: SessionNavItem['icon']; pattern
   { key: 'receipts', icon: FileCheck2, patterns: [/receipt|notrecovery|recovery|回单|未回收|已回收/i] },
   { key: 'companies', icon: Building2, patterns: [/order\/company|company|发货公司/i] },
   { key: 'users', icon: Users, patterns: [/system\/user|\/users?\b|用户管理/i] },
-  { key: 'roles', icon: KeyRound, patterns: [/system\/role|system\/menu|\/role\b|\/menu\b|角色管理|权限|菜单管理/i] },
+  { key: 'roles', icon: KeyRound, patterns: [/system\/role|\/role\b|角色管理|权限/i] },
+  { key: 'menus', icon: ListTree, patterns: [/system\/menu|\/menu\b|菜单管理|菜单列表/i] },
   { key: 'registry', icon: ClipboardList, patterns: [/registry|system$|页面/i] },
   { key: 'settings', icon: Settings, patterns: [/setting|settings|profile|系统设置|设置/i] },
 ]
 
 function flattenMenus(menus: LegacyMenuItem[]): LegacyMenuItem[] {
-  return menus.flatMap((menu) => [menu, ...flattenMenus(menu.children || [])])
+  return menus.flatMap((menu) => [menu, ...flattenMenus([...(menu.children || []), ...(menu.chilren || [])])])
 }
 
 function menuText(menu: LegacyMenuItem): string {

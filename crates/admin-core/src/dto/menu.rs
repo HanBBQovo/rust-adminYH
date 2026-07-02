@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::domain::MenuNode;
 
@@ -19,6 +19,27 @@ pub struct LegacyMenuNode {
     pub children: Vec<LegacyMenuNode>,
     #[serde(rename = "chilren", default, skip_serializing_if = "Vec::is_empty")]
     pub legacy_children: Vec<LegacyMenuNode>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct MenuMutationRequest {
+    pub name: String,
+    #[serde(rename = "type", default)]
+    pub menu_type: Option<i32>,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub sort: Option<i32>,
+    #[serde(rename = "parentId", default)]
+    pub parent_id: Option<i64>,
+    #[serde(rename = "partentId", default)]
+    pub legacy_parent_id: Option<i64>,
+    #[serde(default)]
+    pub children: Vec<MenuMutationRequest>,
+    #[serde(rename = "chilren", default)]
+    pub legacy_children: Vec<MenuMutationRequest>,
 }
 
 impl LegacyMenuNode {

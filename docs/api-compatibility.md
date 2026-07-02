@@ -218,7 +218,7 @@ POST /api/recovery/list
 
 - `/api/login` 已先落地兼容入口和集成测试，返回旧 `{ code, data, message }` 结构。
 - `/api/users/me` 已先落地会话校验入口和集成测试，支持 Bearer token 解析、当前用户返回、角色 ID 返回、缺失 token 失败、二次登录挤掉旧 token。
-- `/api/role/:roleId/menu`、`/api/role/:roleId/menuIds`、`/api/menu/tree` 已先落地内存菜单仓储和集成测试，兼容旧 `children` / `chilren` / `partentId` 字段。
+- `/api/role/:roleId/menu`、`/api/role/:roleId/menuIds`、`GET /api/menu/tree`、`POST /api/menu` 已先落地内存菜单仓储和集成测试，兼容旧 `children` / `chilren` / `parentId` / `partentId` 字段、新增菜单旧字段 `name/type/url/icon/sort/parentId`、管理员权限边界和旧路径 `/menu`。
 - `/api/company/list`、`/api/company/:companyId`、`POST/PATCH/DELETE /api/company` 已先落地内存公司仓储和集成测试，兼容旧 `Countorder`、`totalCount`、详情数组和中文成功文案。
 - `/api/users/list`、`/api/users/:userId`、`POST/PATCH/DELETE /api/users`、`/api/users/:userId/password`、`/api/users/:userId/avatar` 已先落地内存用户仓储和集成测试，兼容旧 `avatarUrl`、`roleId`、角色对象、用户 58 删除保护、对象/裸字符串改密和公开头像读取。
 - `/api/role/list`、`/api/role/:roleId`、`POST/PATCH/DELETE /api/role`、`/api/role/assign` 已先落地内存角色仓储和集成测试，兼容旧 `totalCount`、角色详情、中文成功文案和菜单分配幂等替换。
@@ -232,6 +232,7 @@ POST /api/recovery/list
 - 前端用户模块已在 `src/api/users.ts`、`src/api/roles.ts` 和 `UsersList` 页面补齐用户管理第一阶段：通过封装层请求 `/api/users/list`、`GET /api/users/:id`、`POST /api/users`、`PATCH /api/users/:id`、`PATCH /api/users/:id/password`、`DELETE /api/users/:id`，并以只读 `/api/role/list` 提供角色下拉；保留旧 `avatarUrl`、`roleId`、`enable`、`totalCount`、新建密码必填、编辑隐藏密码、独立改密、用户 58 删除保护和启用状态只展示/筛选语义；配套 API/页面测试覆盖旧 payload、请求路径、角色下拉过滤、字段渲染、筛选、分页、必填校验、toast、confirm、空态和刷新行为。
 - 前端账号设置模块已在 `AccountPreferences` 和 `Settings` 页面补齐当前用户改密 + 头像上传入口：通过封装层请求 `/api/users/:id/password` 和 multipart `/api/upload/avatar`，保留旧顶栏“修改密码/修改头像”能力、旧头像字段名 `avatar`、jpg/png 与 500kb 前端校验、头像 URL cache bust；配套 API/组件测试覆盖 FormData 请求头、上传字段、URL 解析、改密校验、非法头像拦截和上传成功刷新。
 - 前端角色权限模块已在 `src/api/roles.ts` 和 `RolesList` 页面补齐角色管理第一阶段：通过封装层请求 `/api/role/list`、`GET /api/role/:id`、`POST /api/role`、`PATCH /api/role/:id`、`DELETE /api/role/:id`、`GET /api/menu/tree`、`GET /api/role/:id/menuIds`、`POST /api/role/assign`，保留旧 `name`、`intro`、`createAt`、`updateAt`、`children/chilren`、`parentId/partentId`、`roleId/menuList`、菜单授权幂等替换语义；配套 API/页面测试覆盖旧 payload、请求路径、字段渲染、筛选、分页、必填校验、查看只读、编辑保存、删除确认、菜单树兼容和授权保存。
+- 前端菜单管理模块已在 `src/api/menus.ts` 和 `MenusList` 页面补齐菜单树展示 + 新增菜单第一阶段：通过封装层请求 `GET /api/menu/tree` 和 `POST /api/menu`，保留旧 `children/chilren`、`parentId/partentId`、`name/type/url/icon/sort/permission/createAt/updateAt` 字段，Dashboard 独立增加“菜单管理”入口；配套 API/页面测试覆盖旧字段归一、树扁平展示、创建一级菜单、创建子菜单、父级必填校验、空态和刷新行为。
 - `/api/upload/avatar` 已先落地 multipart 头像上传兼容入口和集成测试，兼容旧字段名 `avatar`、上传成功文案、头像读取 bytes + `Content-Type` 直出。
 - 第一阶段登录服务通过 `AuthService` / `AuthUserStore` / `TokenIssuer` 抽象解耦；当前测试使用内存用户仓储，不声称已经连接旧 MySQL。
 - 第一阶段菜单服务通过 `MenuService` / `MenuStore` 抽象解耦；当前测试使用内存菜单仓储，不声称已经连接旧 MySQL。

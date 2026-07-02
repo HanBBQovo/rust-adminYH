@@ -15,7 +15,7 @@ pub use company::{
     CompanyListRequest, CompanyListResponse, CompanyMutationRequest, LegacyCompanyRecord,
 };
 pub use health::HealthResponse;
-pub use menu::{LegacyMenuNode, RoleMenuIdsResponse};
+pub use menu::{LegacyMenuNode, MenuMutationRequest, RoleMenuIdsResponse};
 pub use order::{
     LegacyDateInput, LegacyOrderRecord, LegacyReceiptRecord, MemoryRecord, OrderListRequest,
     OrderListResponse, OrderMutationRequest, ReceiptListRequest, ReceiptListResponse,

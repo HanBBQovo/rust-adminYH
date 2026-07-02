@@ -36,18 +36,7 @@ export interface RoleAssignPayload {
   menuList: number[]
 }
 
-export interface LegacyMenuNode {
-  id: number
-  name: string
-  type: number
-  url?: string | null
-  icon?: string | null
-  sort: number
-  parentId?: number | null
-  partentId?: number | null
-  children?: LegacyMenuNode[] | null
-  chilren?: LegacyMenuNode[] | null
-}
+export { listMenuTree, type LegacyMenuNode } from '@/api/menus'
 
 export interface RoleMenuIdsResponse {
   id: number
@@ -119,10 +108,6 @@ export async function deleteRole(roleId: number): Promise<void> {
   await apiRequest(`/role/${roleId}`, {
     method: 'DELETE',
   })
-}
-
-export async function listMenuTree(): Promise<LegacyMenuNode[]> {
-  return apiRequest<LegacyMenuNode[]>('/menu/tree')
 }
 
 export async function getRoleMenuIds(roleId: number): Promise<RoleMenuIdsResponse> {

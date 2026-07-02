@@ -19,6 +19,7 @@ const ReceiptsList = lazy(() => import('@/pages/ReceiptsList'))
 const CompaniesList = lazy(() => import('@/pages/CompaniesList'))
 const UsersList = lazy(() => import('@/pages/UsersList'))
 const RolesList = lazy(() => import('@/pages/RolesList'))
+const MenusList = lazy(() => import('@/pages/MenusList'))
 const ResourceRegistry = lazy(() => import('@/pages/ResourceRegistry'))
 const SettingsPage = lazy(() => import('@/pages/Settings'))
 
@@ -248,6 +249,7 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
                     {currentPage === 'companies' ? <CompaniesList /> : null}
                     {currentPage === 'users' ? <UsersList /> : null}
                     {currentPage === 'roles' ? <RolesList /> : null}
+                    {currentPage === 'menus' ? <MenusList /> : null}
                     {currentPage === 'registry' ? <ResourceRegistry /> : null}
                     {currentPage === 'settings' ? (
                       <SettingsPage

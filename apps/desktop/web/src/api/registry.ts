@@ -1,6 +1,6 @@
 import { apiRequest } from '@/api/client'
 
-export type ResourceKey = 'orders' | 'receipts' | 'companies' | 'users' | 'roles'
+export type ResourceKey = 'orders' | 'receipts' | 'companies' | 'users' | 'roles' | 'menus'
 
 export interface ResourceSummary {
   key: ResourceKey
@@ -62,6 +62,16 @@ export const RESOURCE_REGISTRY: ResourceSummary[] = [
     status: 'ready',
     apiPath: '/role/list',
     legacyPath: 'src/views/main/system/role',
+    owner: '管理员',
+  },
+  {
+    key: 'menus',
+    title: '菜单管理',
+    description: '展示旧 permission 菜单树，并提供第一阶段新增菜单兼容入口。',
+    count: 9,
+    status: 'ready',
+    apiPath: '/menu/tree',
+    legacyPath: 'src/views/main/system/menu',
     owner: '管理员',
   },
 ]
