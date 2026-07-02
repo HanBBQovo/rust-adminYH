@@ -129,7 +129,7 @@
 - 旧系统删除订单只删 `order_list`，新系统已明确改为事务级联清理 `company_order` 和安全匹配的 `receipt`，防止新数据继续产生孤儿关系。
 - 文件上传直接 `fs.unlinkSync` 删除旧头像，缺少文件存在判断。
 - 用户 ID `58` 被硬编码为不可删除管理员。
-- token 写入 `user.token`，多人登录会使旧 token 失效；这是业务语义，需要明确是否保留。
+- token 写入 `user.token`，多人登录会使旧 token 失效；新系统第一阶段已决策保留该单用户单 token 语义，但新登录 token 已改为生产级随机 opaque token。
 - `memory.controller` 返回不带 `code`，与其它接口不一致。
 - 仓库内没有 `.sql`、migration、schema、Dockerfile、docker-compose、pm2 或 README；真实表结构必须从线上/旧库 `information_schema` 导出，代码反推只能作为辅助。
 - 头像文件在本地 `uploads/avatar`，文件名由 `Date.now() + 原扩展名` 生成；迁移必须同时迁数据库和磁盘文件。

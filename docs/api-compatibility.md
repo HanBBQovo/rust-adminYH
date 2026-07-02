@@ -50,12 +50,12 @@
 | Chart | GET | `/chart/company/order/sumfreight` | `/api/chart/company/order/sumfreight` | 登录 | 公司运费汇总 |
 | Chart | GET | `/chart/company/receipt/sumreceipt` | `/api/chart/company/receipt/sumreceipt` | 登录 | 公司回单数量 |
 | User | POST | `/users` | `/api/users` | 管理员 | 创建用户并写用户角色 |
-| User | DELETE | `/users/:userId` | `/api/users/:userId` | 管理员 | 旧系统硬编码用户 58 不可删，需确认是否保留 |
+| User | DELETE | `/users/:userId` | `/api/users/:userId` | 管理员 | 已保留旧系统用户 58 删除保护 |
 | User | PATCH | `/users/:userId` | `/api/users/:userId` | 管理员 | 修改用户名/角色 |
 | User | PATCH | `/users/:userId/password` | `/api/users/:userId/password` | 本人或管理员 | 旧 `verifyPower` 语义需测试覆盖 |
 | User | GET | `/users/:userId` | `/api/users/:userId` | 登录 | 用户详情含角色 JSON |
 | User | POST | `/users/list` | `/api/users/list` | 登录 | 分页筛选 |
-| User | GET | `/users/:userId/avatar` | `/api/users/:userId/avatar` | 公开/登录待定 | 头像文件 |
+| User | GET | `/users/:userId/avatar` | `/api/users/:userId/avatar` | 公开 | 头像文件直出，限制路径穿越和 MIME |
 | Role | POST | `/role` | `/api/role` | 管理员 | 创建角色 |
 | Role | DELETE | `/role/:roleId` | `/api/role/:roleId` | 管理员 | 删除角色 |
 | Role | PATCH | `/role/:roleId` | `/api/role/:roleId` | 管理员 | 修改角色 |

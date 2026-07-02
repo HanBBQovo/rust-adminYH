@@ -249,10 +249,12 @@ cargo run -p admin-migration -- verify-files --old-avatar-dir "$OLD_AVATAR_DIR" 
 
 ## 6. 未决策项
 
-- 是否保留旧 `user.token` 单点登录语义，或迁到 session 表。
 - 重复 `role_permission` 是否迁移时去重，还是保留并在清洗报告中阻断。
 - `receipt.oddnumber` 无订单时是允许历史脏数据保留，还是迁移前修复。
 
 ## 7. 已决策行为
 
 - 订单删除不再兼容旧系统“只删 `order_list`”的危险行为；新仓储必须在事务内先定位订单原始 `oddnumber`，清理 `company_order.order_id`，当没有其它订单继续使用同一 `oddnumber` 时清理对应 `receipt.oddnumber`，最后删除 `order_list`。旧库迁移前仍需审计已存在孤儿关系和重复 `oddnumber`，避免误删历史凭证。
+- 第一阶段保留旧 `user.token` 单用户单 token 语义：登录成功继续覆盖写回 `user.token`，旧 token 会失效；新系统新登录生成 32 字节随机 opaque token，不再使用开发态 `dev-{user_id}-{uuid}` token。
+- 用户 `58` 删除保护保留，兼容旧系统内置管理员保护语义。
+- `/users/:userId/avatar` 保持公开读取，兼容旧前端直接加载头像；新实现必须限制路径穿越、只按数据库头像元数据和受控头像目录读取文件。
