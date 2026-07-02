@@ -16,7 +16,7 @@ export interface LegacyMenuItem {
   children?: LegacyMenuItem[]
 }
 
-export type AppPage = 'workspace' | 'orders' | 'receipts' | 'companies' | 'registry' | 'settings'
+export type AppPage = 'workspace' | 'orders' | 'receipts' | 'companies' | 'users' | 'registry' | 'settings'
 
 export interface SessionNavItem {
   key: AppPage

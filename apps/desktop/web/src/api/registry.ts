@@ -47,9 +47,9 @@ export const RESOURCE_REGISTRY: ResourceSummary[] = [
   {
     key: 'users',
     title: '用户管理',
-    description: '用户 CRUD、头像和密码修改，兼容旧 MD5 登录升级。',
+    description: '用户列表、筛选、头像展示、用户维护和独立改密，兼容旧 MD5 登录升级。',
     count: 16,
-    status: 'building',
+    status: 'ready',
     apiPath: '/users/list',
     legacyPath: 'src/views/main/system/user',
     owner: '管理员',
