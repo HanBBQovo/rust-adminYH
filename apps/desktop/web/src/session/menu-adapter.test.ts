@@ -4,7 +4,7 @@ import { adaptLegacyMenus } from '@/session/menu-adapter'
 
 describe('adaptLegacyMenus', () => {
   it('falls back to template nav when old menus are empty', () => {
-    expect(adaptLegacyMenus([]).map((item) => item.key)).toEqual(['workspace', 'orders', 'receipts', 'registry', 'settings'])
+    expect(adaptLegacyMenus([]).map((item) => item.key)).toEqual(['workspace', 'orders', 'receipts', 'companies', 'registry', 'settings'])
   })
 
   it('maps old menu labels and urls into template pages', () => {
@@ -30,5 +30,12 @@ describe('adaptLegacyMenus', () => {
     ])
 
     expect(items.map((item) => item.key)).toEqual(['registry'])
+  })
+
+  it('maps old company menus into the company page', () => {
+    const items = adaptLegacyMenus([{ name: '发货公司', url: '/main/order/company' }])
+
+    expect(items.map((item) => item.key)).toEqual(['companies'])
+    expect(items[0].label).toBe('发货公司')
   })
 })

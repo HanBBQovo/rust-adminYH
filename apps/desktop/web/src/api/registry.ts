@@ -37,7 +37,7 @@ export const RESOURCE_REGISTRY: ResourceSummary[] = [
   {
     key: 'companies',
     title: '发货公司',
-    description: '维护发货公司字典，并支持公司维度统计。',
+    description: '维护发货公司字典，并支持列表、查看、新建、编辑和删除。',
     count: 58,
     status: 'ready',
     apiPath: '/company/list',
