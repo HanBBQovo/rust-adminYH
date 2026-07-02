@@ -38,3 +38,16 @@ fn compat_schema_keeps_weak_legacy_relations_without_foreign_keys() {
         "first compat schema must not add hard foreign keys before old data is audited"
     );
 }
+
+#[test]
+fn compat_schema_documents_company_and_chart_repository_contracts() {
+    let schema = fs::read_to_string(SCHEMA_PATH).expect("schema should be readable");
+
+    assert!(schema.contains("INDEX `idx_company_order_com_name` (`com_name`)"));
+    assert!(schema.contains("INDEX `idx_order_company` (`company`)"));
+    assert!(schema.contains("`sumfreight` VARCHAR(255) NOT NULL DEFAULT ''"));
+    assert!(schema.contains("`receiptnum` BIGINT NOT NULL DEFAULT 0"));
+    assert!(schema.contains("`recoverystate` VARCHAR(255) NOT NULL DEFAULT '未回收'"));
+    assert!(schema.contains("`issuestate` VARCHAR(255) NOT NULL DEFAULT '未发放'"));
+    assert!(schema.contains("`poststate` VARCHAR(255) NOT NULL DEFAULT '未寄出'"));
+}

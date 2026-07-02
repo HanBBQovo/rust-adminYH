@@ -99,6 +99,8 @@ dry-run 只读旧库和新库，输出：
 - `202607010001_init_compat_schema.sql` 已建立 11 张核心旧表的兼容 schema：`role`、`permission`、`user`、`company`、`memory`、`avatar`、`user_role`、`role_permission`、`order_list`、`company_order`、`receipt`。
 - 第一版 schema 保留旧表名、旧字段名、`billingAt` 毫秒字段、中文回单状态、`company_order.com_name` 和 `receipt.oddnumber` 弱关联；暂不加硬外键或唯一约束，避免未审计旧脏数据被 schema 阻断。
 - `MySqlOrderRepository` 已实现订单、回单、memory 的 SQLx 参数化仓储：订单创建在事务内写入 `order_list`、`company_order`、可选 `receipt`，并对收/发货人 memory 做存在性检查后再插入。
+- `MySqlCompanyRepository` 已实现公司分页、详情、新增、修改、删除；`Countorder` 按旧口径从 `company_order.com_name` 统计，未命中详情保持空数组语义，公司改名不级联历史订单或公司订单文本。
+- `MySqlChartRepository` 已实现旧图表 snapshot 查询，继续保留旧口径差异：公司订单数来自 `company_order.com_name`，运费和回单数来自 `order_list.company/sumfreight/receiptnum`，回单总数来自 `receipt`。
 
 ### Phase 3：apply 迁移
 

@@ -235,6 +235,7 @@ POST /api/recovery/list
 - 前端菜单管理模块已在 `src/api/menus.ts` 和 `MenusList` 页面补齐菜单树展示 + 新增菜单第一阶段：通过封装层请求 `GET /api/menu/tree` 和 `POST /api/menu`，保留旧 `children/chilren`、`parentId/partentId`、`name/type/url/icon/sort/permission/createAt/updateAt` 字段，Dashboard 独立增加“菜单管理”入口；配套 API/页面测试覆盖旧字段归一、树扁平展示、创建一级菜单、创建子菜单、父级必填校验、空态和刷新行为。
 - 迁移审计工具已在 `admin-migration` 落地 `inspect-old`、`migrate --dry-run`、`verify-files` 第一阶段：通过 SQLx MySQL 只读旧库，输出表行数/ID 边界、重复数据、孤儿关系、回单状态分布、日期边界、头像 SHA256 与 DB/磁盘差异；`scripts/test-migration.sh` 已纳入单元测试和 JSON 审计命令。
 - `admin-db` 已落地 SQLx MySQL 连接池、兼容 schema baseline 和 `MySqlOrderRepository` 第一阶段：保留 11 张旧表和旧字段名，不加硬外键/唯一约束，订单写入通过事务联动 `order_list/company_order/receipt/memory`，查询条件全部走参数化 SQL。
+- `admin-db` 已补齐 `MySqlCompanyRepository` 和 `MySqlChartRepository` 第一阶段：公司 `Countorder` 按 `company_order.com_name` 统计，详情保留旧数组语义；图表保留旧 SQL 口径，订单数/运费/回单维度分别沿用 `company_order`、`order_list`、`receipt` 的弱关联统计。
 - `/api/upload/avatar` 已先落地 multipart 头像上传兼容入口和集成测试，兼容旧字段名 `avatar`、上传成功文案、头像读取 bytes + `Content-Type` 直出。
 - 第一阶段登录服务通过 `AuthService` / `AuthUserStore` / `TokenIssuer` 抽象解耦；当前测试使用内存用户仓储，不声称已经连接旧 MySQL。
 - 第一阶段菜单服务通过 `MenuService` / `MenuStore` 抽象解耦；当前测试使用内存菜单仓储，不声称已经连接旧 MySQL。
