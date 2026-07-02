@@ -86,6 +86,13 @@ dry-run 只读旧库和新库，输出：
 - 日期边界：`billingAt`、`createAt`、`updateAt` 的最小/最大值。
 - 头像文件缺失、DB 多余记录、磁盘孤儿文件。
 
+当前已落地 `admin-migration inspect-old` 和 `migrate --dry-run` 的审计报告 v1：
+
+- 数据库连接使用 SQLx MySQL 动态查询，报告只读旧库，不写入生产旧库或新库。
+- `inspect-old --old <OLD_DATABASE_URL> --old-avatar-dir <OLD_AVATAR_DIR> --format json` 输出每表行数、ID 边界、重复数据、孤儿关系、回单状态枚举、日期边界、头像文件 SHA256 和 DB/磁盘差异。
+- `migrate --dry-run --old <OLD_DATABASE_URL> --new <NEW_DATABASE_URL> --old-avatar-dir <OLD_AVATAR_DIR> --format json` 复用同一套旧库审计，并明确标记 `dry-run only`，禁止真实写入。
+- `verify-files --old-avatar-dir <OLD_AVATAR_DIR> --new-avatar-dir <NEW_AVATAR_DIR> --format json` 对比头像文件相对路径和 SHA256，用于迁移后的文件完整性检查。
+
 ### Phase 3：apply 迁移
 
 建议顺序：
@@ -190,9 +197,15 @@ scripts/test-migration.sh
 
 ```bash
 cargo test -p admin-migration
-cargo run -p admin-migration -- inspect-old --old "$OLD_DATABASE_URL"
-cargo run -p admin-migration -- migrate --dry-run --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL"
-cargo run -p admin-migration -- verify --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL"
+cargo run -p admin-migration -- inspect-old --old "$OLD_DATABASE_URL" --old-avatar-dir "$OLD_AVATAR_DIR" --format json
+cargo run -p admin-migration -- migrate --dry-run --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL" --old-avatar-dir "$OLD_AVATAR_DIR" --format json
+cargo run -p admin-migration -- verify --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL" --format json
+```
+
+如果设置 `NEW_AVATAR_DIR`，脚本还会执行：
+
+```bash
+cargo run -p admin-migration -- verify-files --old-avatar-dir "$OLD_AVATAR_DIR" --new-avatar-dir "$NEW_AVATAR_DIR" --format json
 ```
 
 ## 6. 未决策项

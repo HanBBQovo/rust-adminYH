@@ -1,25 +1,15 @@
-use std::{env, process::ExitCode};
+use std::process::ExitCode;
+
+use admin_migration::{run_cli, Cli};
+use clap::Parser;
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let command = env::args().nth(1).unwrap_or_else(|| "help".to_owned());
-
-    match command.as_str() {
-        "inspect-old" | "migrate" | "verify" | "verify-files" | "rollback-plan" => {
-            eprintln!(
-                "admin-migration {command}: migration command scaffold is ready; database audit implementation is pending old schema export"
-            );
-            ExitCode::SUCCESS
-        }
-        "help" | "--help" | "-h" => {
-            println!(
-                "Usage: admin-migration <inspect-old|migrate|verify|verify-files|rollback-plan>"
-            );
-            ExitCode::SUCCESS
-        }
-        unknown => {
-            eprintln!("unknown migration command: {unknown}");
-            ExitCode::from(2)
+    match run_cli(Cli::parse()).await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("{error:#}");
+            ExitCode::from(1)
         }
     }
 }

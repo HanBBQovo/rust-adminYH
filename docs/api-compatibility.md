@@ -233,6 +233,7 @@ POST /api/recovery/list
 - 前端账号设置模块已在 `AccountPreferences` 和 `Settings` 页面补齐当前用户改密 + 头像上传入口：通过封装层请求 `/api/users/:id/password` 和 multipart `/api/upload/avatar`，保留旧顶栏“修改密码/修改头像”能力、旧头像字段名 `avatar`、jpg/png 与 500kb 前端校验、头像 URL cache bust；配套 API/组件测试覆盖 FormData 请求头、上传字段、URL 解析、改密校验、非法头像拦截和上传成功刷新。
 - 前端角色权限模块已在 `src/api/roles.ts` 和 `RolesList` 页面补齐角色管理第一阶段：通过封装层请求 `/api/role/list`、`GET /api/role/:id`、`POST /api/role`、`PATCH /api/role/:id`、`DELETE /api/role/:id`、`GET /api/menu/tree`、`GET /api/role/:id/menuIds`、`POST /api/role/assign`，保留旧 `name`、`intro`、`createAt`、`updateAt`、`children/chilren`、`parentId/partentId`、`roleId/menuList`、菜单授权幂等替换语义；配套 API/页面测试覆盖旧 payload、请求路径、字段渲染、筛选、分页、必填校验、查看只读、编辑保存、删除确认、菜单树兼容和授权保存。
 - 前端菜单管理模块已在 `src/api/menus.ts` 和 `MenusList` 页面补齐菜单树展示 + 新增菜单第一阶段：通过封装层请求 `GET /api/menu/tree` 和 `POST /api/menu`，保留旧 `children/chilren`、`parentId/partentId`、`name/type/url/icon/sort/permission/createAt/updateAt` 字段，Dashboard 独立增加“菜单管理”入口；配套 API/页面测试覆盖旧字段归一、树扁平展示、创建一级菜单、创建子菜单、父级必填校验、空态和刷新行为。
+- 迁移审计工具已在 `admin-migration` 落地 `inspect-old`、`migrate --dry-run`、`verify-files` 第一阶段：通过 SQLx MySQL 只读旧库，输出表行数/ID 边界、重复数据、孤儿关系、回单状态分布、日期边界、头像 SHA256 与 DB/磁盘差异；`scripts/test-migration.sh` 已纳入单元测试和 JSON 审计命令。
 - `/api/upload/avatar` 已先落地 multipart 头像上传兼容入口和集成测试，兼容旧字段名 `avatar`、上传成功文案、头像读取 bytes + `Content-Type` 直出。
 - 第一阶段登录服务通过 `AuthService` / `AuthUserStore` / `TokenIssuer` 抽象解耦；当前测试使用内存用户仓储，不声称已经连接旧 MySQL。
 - 第一阶段菜单服务通过 `MenuService` / `MenuStore` 抽象解耦；当前测试使用内存菜单仓储，不声称已经连接旧 MySQL。
