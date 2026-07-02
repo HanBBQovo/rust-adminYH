@@ -958,6 +958,8 @@ scripts/test-e2e.sh
 
 当前生产 API 已接入 SQLx MySQL 仓储，普通 `scripts/check-all.sh` 覆盖编译、clippy、内存仓储 API 集成测试、前端组件测试和构建；连接真实数据库的 repository/迁移回归必须在影子库设置 `ADMIN_DB_TEST_DATABASE_URL`、`OLD_DATABASE_URL`、`NEW_DATABASE_URL`、`DATABASE_URL` 后单独执行，不允许用本地空库冒充迁移验收。默认门禁会明确打印 `RUN_DB_TESTS=true` 未设置时跳过真实 MySQL repository 集成测试，不能把该跳过视为发布级数据库验收。
 
+真实 MySQL 仓储回归已继续扩展到公司模块：`crates/admin-db/tests/mysql_company_repository.rs` 覆盖 `MySqlCompanyRepository` 的列表分页、旧 `Countorder` 文本弱关联统计、详情数组/空数组语义、创建/改名/删除，以及公司改名不级联历史 `company_order.com_name` 的迁移边界；该测试已纳入 `RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL=... scripts/check-all.sh`。
+
 每次接入一个真实 SQLx 仓储后，必须至少完成四层验证：`cargo test --offline -p admin-db` 验证仓储编译和 schema 契约、`cargo test --offline -p admin-api -p admin-db` 验证 API 装配编译、`scripts/check-all.sh` 验证全仓库回归、`RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL=mysql://... scripts/check-all.sh` 验证真实 MySQL repository 事务路径。当前订单仓储已提供 `crates/admin-db/tests/mysql_order_repository.rs`，覆盖真实 MySQL 下订单创建、回单同步更新和弱关联删除清理；用户认证仓储已提供 `crates/admin-db/tests/mysql_user_auth_repository.rs`，覆盖旧 MD5 登录升级 Argon2、错误密码不污染旧 hash/token、`user.token` 单点写回、新建/改密 Argon2 写入。
 
 Docker/容器门禁已作为发布级测试的一部分补齐：`Dockerfile.admin-api` 构建 Rust Axum API 镜像，`Dockerfile.desktop-web` 构建模板前端静态镜像，`docker-compose.ci.yml` 组合 MySQL、API 和 Web，并通过 `DATABASE_MIGRATE_ON_START=true` 在 CI 数据库启动时应用兼容 schema，用于验证镜像能启动并通过 `/api/health` 与首页检查。默认 `scripts/check-all.sh` 只打印 `RUN_DOCKER=true` 跳过提示；发布候选版本必须执行 `RUN_DOCKER=true scripts/check-all.sh`。如果 Docker 构建或 compose 启动失败，`scripts/test-docker.sh` 必须输出 `docker version`、`docker compose version`、commit、镜像 tag、脱敏后的数据库连接、compose ps 和三类服务最近 200 行日志，不能只给出笼统的 “Docker build failed”。
