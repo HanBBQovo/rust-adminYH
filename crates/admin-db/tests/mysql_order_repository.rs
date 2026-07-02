@@ -159,6 +159,101 @@ async fn mysql_order_repository_remove_order_cleans_weak_relations_transactional
     scope.cleanup().await;
 }
 
+#[tokio::test]
+#[ignore = "requires RUN_DB_TESTS=true and ADMIN_DB_TEST_DATABASE_URL"]
+async fn mysql_order_repository_treats_sql_injection_filters_as_plain_text() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let scope = TestScope::new(&pool).await;
+    let repository = MySqlOrderRepository::new(pool.clone());
+
+    repository
+        .create_order(scope.order_input("030", "注入收货人", "注入发货人", 1))
+        .await
+        .expect("order should be created");
+    repository
+        .create_order(scope.order_input("031", "普通收货人", "普通发货人", 1))
+        .await
+        .expect("second order should be created");
+
+    let payload = format!("{}%' OR 1=1 --", scope.prefix);
+    let orders = repository
+        .list(&OrderListRequest {
+            offset: 0,
+            size: 10,
+            oddnumber: Some(payload.clone()),
+            consignee: Some(payload.clone()),
+            consigneephone: None,
+            number: None,
+            consignor: None,
+            consignorphone: None,
+            company: Some(payload.clone()),
+            create_at: None,
+        })
+        .await
+        .expect("injection-like order filter should stay parameterized");
+    let order_count = repository
+        .count(&OrderListRequest {
+            offset: 0,
+            size: 10,
+            oddnumber: Some(payload.clone()),
+            consignee: Some(payload.clone()),
+            consigneephone: None,
+            number: None,
+            consignor: None,
+            consignorphone: None,
+            company: Some(payload.clone()),
+            create_at: None,
+        })
+        .await
+        .expect("injection-like count filter should stay parameterized");
+    assert!(orders.is_empty());
+    assert_eq!(order_count, 0);
+
+    let receipts = repository
+        .list_receipts(&ReceiptListRequest {
+            offset: 0,
+            size: 10,
+            oddnumber: Some(payload.clone()),
+            consignee: Some(payload.clone()),
+            consignor: Some(payload.clone()),
+            recoverystate: Some("未回收%' OR 1=1 --".to_owned()),
+            issuestate: None,
+            poststate: None,
+            create_at: None,
+        })
+        .await
+        .expect("injection-like receipt filter should stay parameterized");
+    let receipt_count = repository
+        .count_receipts(&ReceiptListRequest {
+            offset: 0,
+            size: 10,
+            oddnumber: Some(payload),
+            consignee: None,
+            consignor: None,
+            recoverystate: Some("未回收%' OR 1=1 --".to_owned()),
+            issuestate: None,
+            poststate: None,
+            create_at: None,
+        })
+        .await
+        .expect("injection-like receipt count filter should stay parameterized");
+    assert!(receipts.is_empty());
+    assert_eq!(receipt_count, 0);
+
+    assert!(scope.find_order("030").await.is_some());
+    assert!(scope.find_order("031").await.is_some());
+    assert_eq!(
+        scope
+            .count_by_text("receipt", "oddnumber", &scope.oddnumber("030"))
+            .await,
+        1
+    );
+
+    scope.cleanup().await;
+}
+
 async fn test_pool() -> Option<MySqlPool> {
     if env::var("RUN_DB_TESTS").ok().as_deref() != Some("true") {
         eprintln!("SKIP: RUN_DB_TESTS=true 未设置，跳过真实 MySQL 仓储测试。");

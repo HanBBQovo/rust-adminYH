@@ -165,7 +165,7 @@
 - 普通用户调用管理写接口返回 403。
 - 旧管理员登录后可获取用户信息和菜单。
 - `/users/list`、`/role/list`、`/order/list`、`/receipt/list` 的分页总数与旧库同条件一致。
-- SQL 注入 payload 只能作为普通筛选文本，不得影响结果集或 SQL 结构。
+- SQL 注入 payload 只能作为普通筛选文本，不得影响结果集或 SQL 结构；`mysql_order_repository_treats_sql_injection_filters_as_plain_text` 已覆盖订单/回单真实 MySQL 筛选参数化。
 - 创建订单时 `receiptnum > 0` 自动创建回单，`receiptnum = 0` 不创建回单。
 - 创建订单后 `company_order` 写入 `company` 文本和订单 ID。
 - 角色分配菜单会先删除旧关系再写入新关系，重复提交结果幂等。
@@ -239,6 +239,7 @@ POST /api/recovery/list
 - `admin-db` 已落地 SQLx MySQL 连接池、兼容 schema baseline 和 `MySqlOrderRepository` 第一阶段：保留 11 张旧表和旧字段名，不加硬外键/唯一约束，订单写入通过事务联动 `order_list/company_order/receipt/memory`，查询条件全部走参数化 SQL。
 - `admin-db` 已补齐 `MySqlCompanyRepository` 和 `MySqlChartRepository` 第一阶段：公司 `Countorder` 按 `company_order.com_name` 统计，详情保留旧数组语义；图表保留旧 SQL 口径，订单数/运费/回单维度分别沿用 `company_order`、`order_list`、`receipt` 的弱关联统计。
 - `crates/admin-db/tests/mysql_company_repository.rs` 已补充真实 MySQL 公司仓储回归：覆盖列表分页、旧 `Countorder` 由 `company_order.com_name` 文本统计、详情空数组语义、创建/改名/删除，以及公司改名不静默改写历史 `company_order.com_name` 的弱关联边界；`RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL=... scripts/check-all.sh` 已纳入该门禁。
+- `crates/admin-db/tests/mysql_order_repository.rs` 已补充真实 MySQL SQL 注入回归：订单和回单筛选中的 `%' OR 1=1 --` 只作为普通 LIKE 文本处理，不扩大结果集、不破坏既有订单/回单记录；该门禁随 `RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL=... scripts/check-all.sh` 执行。
 - `crates/admin-db/tests/mysql_chart_repository.rs` 已补充真实 MySQL 图表仓储回归：覆盖首页 header 订单数/运费/公司数/回单数增量、公司订单数继续来自 `company_order.com_name`、公司运费继续来自 `order_list.company/sumfreight`，公司回单汇总继续来自 `order_list.receiptnum`；`RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL=... scripts/check-all.sh` 已纳入该门禁。
 - `crates/admin-db/tests/mysql_role_menu_repository.rs` 已补充真实 MySQL 角色/菜单仓储回归：覆盖角色列表筛选、创建/改名/删除、全量菜单树旧 `chilren` 响应、角色菜单树旧 `children` 响应、`role_menu_ids` 汇总、菜单创建兼容 `partentId`，以及角色菜单分配去重替换和失败前置校验不清空既有权限；`RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL=... scripts/check-all.sh` 已纳入该门禁。
 - `admin-db` 已补齐 `MySqlUserRepository` 第一阶段：同一个 SQLx 仓储同时实现 `AuthUserStore` 和 `UserStore`，覆盖旧 MD5 登录查用户、登录 token 写回 `user.token`、按 token 查询当前用户、用户列表/详情/创建/修改/改密/删除、默认头像和头像元数据更新；用户创建、用户角色、默认头像写入放在同一事务中。
