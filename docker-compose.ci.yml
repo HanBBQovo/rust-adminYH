@@ -54,5 +54,10 @@ services:
     image: rust-adminyh/desktop-web:ci
     depends_on:
       - admin-api
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     ports:
-      - "18080:80"
+      - "${WEB_PORT:-18080}:80"

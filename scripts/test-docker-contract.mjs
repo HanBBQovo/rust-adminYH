@@ -61,8 +61,9 @@ assertIncludes(compose, 'APP_HTTP__PORT: 16824', 'compose admin-api must use the
 assertIncludes(compose, 'DATABASE_URL: mysql://admin_yh:admin_yh@mysql:3306/admin_yh', 'compose admin-api must connect to the compose MySQL service')
 assertIncludes(compose, 'DATABASE_MIGRATE_ON_START: "true"', 'compose CI must run database migrations on startup')
 assertIncludes(compose, 'VITE_API_BASE_URL: /api', 'compose web build must use nginx /api proxy')
+assertIncludes(compose, 'wget -qO- http://127.0.0.1/', 'compose desktop-web must define an nginx healthcheck')
 assertIncludes(compose, '- "16824:16824"', 'compose must expose the API health port for CI checks')
-assertIncludes(compose, '- "18080:80"', 'compose must expose the web health port for CI checks')
+assertIncludes(compose, '- "${WEB_PORT:-18080}:80"', 'compose must expose a configurable web health port for CI checks')
 
 assertIncludes(dockerGate, 'docker version', 'Docker gate diagnostics must print docker version')
 assertIncludes(dockerGate, 'docker compose version', 'Docker gate diagnostics must print compose version')
@@ -71,6 +72,10 @@ assertIncludes(dockerGate, 'logs --tail=200 mysql admin-api desktop-web', 'Docke
 assertIncludes(dockerGate, 'docker build \\', 'Docker gate must build images before compose smoke')
 assertIncludes(dockerGate, 'curl --fail --silent --show-error "$API_URL"', 'Docker gate must check API health')
 assertIncludes(dockerGate, 'curl --fail --silent --show-error "$WEB_URL"', 'Docker gate must check web health')
+assertIncludes(dockerGate, 'WEB_PORT="${WEB_PORT:-18080}"', 'Docker gate must define a configurable web host port')
+assertIncludes(dockerGate, 'web_port=${WEB_PORT}', 'Docker gate diagnostics must print the selected web host port')
+assertIncludes(dockerGate, 'curl --fail --silent --show-error "${WEB_URL%/}${ASSET_PATH}"', 'Docker gate must check a built frontend asset')
+assertIncludes(dockerGate, 'curl --fail --silent --show-error "$WEB_API_URL"', 'Docker gate must check nginx /api proxy health')
 assertIncludes(dockerGate, 'down --volumes --remove-orphans', 'Docker gate must clean compose volumes and orphans')
 
 assertIncludes(checkAll, 'scripts/test-docker-contract.mjs', 'check-all must always run the lightweight Docker contract before optional Docker build')

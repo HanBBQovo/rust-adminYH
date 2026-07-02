@@ -14,6 +14,8 @@ NGINX_IMAGE="${NGINX_IMAGE:-nginx:1.27-alpine}"
 MYSQL_IMAGE="${MYSQL_IMAGE:-mysql:8.0}"
 API_URL="${API_URL:-http://127.0.0.1:16824/api/health}"
 WEB_URL="${WEB_URL:-http://127.0.0.1:18080/}"
+WEB_API_URL="${WEB_API_URL:-http://127.0.0.1:18080/api/health}"
+WEB_PORT="${WEB_PORT:-18080}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-rust-adminyh-ci}"
 
 section() {
@@ -51,6 +53,8 @@ diagnostics() {
   echo "mysql_base=${MYSQL_IMAGE}"
   echo "api_url=${API_URL}"
   echo "web_url=${WEB_URL}"
+  echo "web_api_url=${WEB_API_URL}"
+  echo "web_port=${WEB_PORT}"
   echo "database_url=$(printf '%s' "${DATABASE_URL:-mysql://admin_yh:admin_yh@mysql:3306/admin_yh}" | redact_url)"
   echo
   docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" ps || true
@@ -99,6 +103,7 @@ RUNTIME_IMAGE="$RUNTIME_IMAGE" \
 NODE_IMAGE="$NODE_IMAGE" \
 NGINX_IMAGE="$NGINX_IMAGE" \
 MYSQL_IMAGE="$MYSQL_IMAGE" \
+WEB_PORT="$WEB_PORT" \
 docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" up -d mysql admin-api desktop-web
 
 section "Health checks"
@@ -115,6 +120,17 @@ cat /tmp/rust-adminyh-api-health.json
 echo
 curl --fail --silent --show-error "$WEB_URL" >/tmp/rust-adminyh-web-health.html
 head -n 5 /tmp/rust-adminyh-web-health.html
+echo
+ASSET_PATH="$(grep -Eo '(/assets/[^"]+\.(js|css))' /tmp/rust-adminyh-web-health.html | head -n 1)"
+if [[ -z "$ASSET_PATH" ]]; then
+  echo "ERROR: 未能从 Web 首页发现生产静态资源路径。"
+  exit 1
+fi
+curl --fail --silent --show-error "${WEB_URL%/}${ASSET_PATH}" >/tmp/rust-adminyh-web-asset
+echo "asset_ok=${ASSET_PATH}"
+curl --fail --silent --show-error "$WEB_API_URL" >/tmp/rust-adminyh-web-api-health.json
+cat /tmp/rust-adminyh-web-api-health.json
+echo
 
 section "Docker compose status"
 docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" ps
