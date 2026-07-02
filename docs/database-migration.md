@@ -135,6 +135,17 @@ dry-run 只读旧库和新库，输出：
 
 每个阶段必须在事务中批量写入。核心业务表迁移后立即执行行数、最大 ID、抽样 hash 校验。
 
+### Phase 3.5：rollback manifest
+
+发布候选必须把 `admin-migration rollback-plan --format json` 作为可审计回滚清单保存到发布记录中，不能只写一段人工说明。该清单至少包含：
+
+- freeze controls：冻结旧后台写入、阻断新桌面/Web 切流、保留失败的新库用于事后 diff。
+- required artifacts：旧库完整 dump、schema-only dump、头像压缩包、头像 SHA256 inventory、发布门禁日志。
+- restore steps：只恢复到干净的新目标库和干净头像目录，不允许覆盖失败现场。
+- verification steps：恢复后重跑 `inspect-old`、`migrate --dry-run`、`verify`、`verify-files`、API 兼容、Docker、Tauri、Playwright 和覆盖率门禁。
+- cutover criteria：所有阻断检查通过、旧兼容路由可用、测试订单/回单/头像人工验收完成后才允许重新切流。
+- failure record：记录 commit、命令、脱敏数据库 URL、头像目录、失败阶段、JSON 报告和服务日志，并先归类失败原因再重试。
+
 ### Phase 4：verify 对账
 
 阻断级校验必须全部通过：
