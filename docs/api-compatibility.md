@@ -249,4 +249,4 @@ POST /api/recovery/list
 - 订单/回单服务通过 `OrderService` / `ReceiptService` / `OrderStore` 抽象解耦；生产路径已装配 `MySqlOrderRepository`，测试保留内存订单仓储做快速接口回归。
 - 第一阶段记忆词条通过 `MemoryService` 复用订单聚合仓储，保持与订单创建副作用在同一事务边界内演进。
 - 图表统计服务通过 `ChartService` / `ChartStore` 抽象解耦；生产路径已装配 `MySqlChartRepository`，继续复刻旧 `order_list/company/company_order/receipt` 聚合口径。
-- 旧 MD5 密码算法已在兼容层实现并测试；生产认证装配现在通过 `CompatPasswordVerifier` 同时识别旧 32 位 MD5 与 Argon2 PHC。旧用户首次成功登录后会把 `user.password` 升级为 Argon2，新建用户和改密也统一写入 Argon2；失败登录不会污染密码。真实 `user` 表仓储已接入，下一步需要补充影子库登录回归和 legacy JWT 兼容策略确认。
+- 旧 MD5 密码算法已在兼容层实现并测试；生产认证装配现在通过 `CompatPasswordVerifier` 同时识别旧 32 位 MD5 与 Argon2 PHC。旧用户首次成功登录后会把 `user.password` 升级为 Argon2，新建用户和改密也统一写入 Argon2；失败登录不会污染密码。真实 `user` 表仓储已接入，`crates/admin-db/tests/mysql_user_auth_repository.rs` 已补充真实 MySQL 影子库回归：覆盖旧 MD5 首登升级、错误密码不改 hash/token、`user.token` 单点写回语义、新建和改密写 Argon2。发布级数据库门禁需执行 `RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL=... scripts/check-all.sh`。

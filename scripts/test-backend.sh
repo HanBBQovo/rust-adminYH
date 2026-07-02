@@ -50,6 +50,9 @@ if cargo metadata --format-version=1 --no-deps | grep -q '"name":"admin-db"'; th
     run_if "admin-db MySQL repository integration tests" \
       env ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
       cargo test "${CARGO_FLAGS[@]}" -p admin-db --test mysql_order_repository -- --ignored
+    run_if "admin-db MySQL user auth integration tests" \
+      env ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
+      cargo test "${CARGO_FLAGS[@]}" -p admin-db --test mysql_user_auth_repository -- --ignored
   else
     echo
     echo "SKIP: RUN_DB_TESTS=true 未设置，跳过真实 MySQL repository 集成测试。发布前必须执行 RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL=... scripts/check-all.sh。"

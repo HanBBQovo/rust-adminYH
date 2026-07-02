@@ -105,7 +105,7 @@ dry-run 只读旧库和新库，输出：
 - `MySqlCompanyRepository` 已实现公司分页、详情、新增、修改、删除；`Countorder` 按旧口径从 `company_order.com_name` 统计，未命中详情保持空数组语义，公司改名不级联历史订单或公司订单文本。
 - `MySqlChartRepository` 已实现旧图表 snapshot 查询，继续保留旧口径差异：公司订单数来自 `company_order.com_name`，运费和回单数来自 `order_list.company/sumfreight/receiptnum`，回单总数来自 `receipt`。
 - `MySqlUserRepository` 已实现旧用户和认证 SQLx 仓储，登录 token 继续写回 `user.token`，用户创建在事务内写入 `user`、`user_role`、默认 `avatar`，头像更新在事务内同步 `avatar` 和 `user.avatar_url`。
-- 密码安全升级已接入：`CompatPasswordVerifier` 支持旧 MD5 与 Argon2；认证成功且原密码为 MD5 时会回写 Argon2，用户创建和改密也会写入 Argon2。生产切换前必须确认旧 Node 服务不会继续并行读取同一写库，否则升级后的用户无法再由旧服务登录。
+- 密码安全升级已接入：`CompatPasswordVerifier` 支持旧 MD5 与 Argon2；认证成功且原密码为 MD5 时会回写 Argon2，用户创建和改密也会写入 Argon2。真实 MySQL 回归已纳入 `mysql_user_auth_repository` 发布级 gate，验证旧 MD5 首登升级、错误密码不污染旧 hash/token、`user.token` 单点登录写回、新建/改密 Argon2 写入。生产切换前必须确认旧 Node 服务不会继续并行读取同一写库，否则升级后的用户无法再由旧服务登录。
 - `MySqlMenuRepository`、`MySqlRoleRepository` 已实现旧 RBAC SQLx 仓储，菜单从 `permission` 拉平后在 Rust 构树，角色授权通过事务替换 `role_permission`，并对重复 `menuList` 做幂等去重。
 - `admin-api` 生产启动路径已通过 `build_mysql_pool` 装配全部 SQLx 仓储；未设置可连接 `DATABASE_URL` 时生产 API 会启动失败，测试路径仍通过 `AppState::with_services` 注入内存仓储。
 - Docker/CI 可通过 `DATABASE_MIGRATE_ON_START=true` 在 API 启动时执行兼容 schema migration；生产环境是否启用必须由发布流程明确控制，避免未备份生产库时自动变更结构。
