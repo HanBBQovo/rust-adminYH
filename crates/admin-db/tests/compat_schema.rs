@@ -51,3 +51,17 @@ fn compat_schema_documents_company_and_chart_repository_contracts() {
     assert!(schema.contains("`issuestate` VARCHAR(255) NOT NULL DEFAULT '未发放'"));
     assert!(schema.contains("`poststate` VARCHAR(255) NOT NULL DEFAULT '未寄出'"));
 }
+
+#[test]
+fn compat_schema_supports_user_auth_and_avatar_repositories() {
+    let schema = fs::read_to_string(SCHEMA_PATH).expect("schema should be readable");
+
+    assert!(schema.contains("`password` VARCHAR(255) NOT NULL"));
+    assert!(schema.contains("`avatar_url` VARCHAR(500) NULL"));
+    assert!(schema.contains("`token` TEXT NULL"));
+    assert!(schema.contains("`enable` TINYINT NOT NULL DEFAULT 1"));
+    assert!(schema.contains("INDEX `idx_user_name` (`name`)"));
+    assert!(schema.contains("INDEX `idx_avatar_user_id` (`user_id`)"));
+    assert!(schema.contains("INDEX `idx_user_role_user_id` (`user_id`)"));
+    assert!(schema.contains("INDEX `idx_user_role_role_id` (`role_id`)"));
+}
