@@ -2,6 +2,7 @@ use std::env;
 
 use admin_core::{
     auth::legacy_md5_hex,
+    dto::AvatarUploadInput,
     services::{production_auth_service, AuthService, AuthUserStore, UserService, UserStore},
 };
 use admin_db::{migrations, repositories::MySqlUserRepository};
@@ -130,6 +131,126 @@ async fn mysql_user_store_create_and_update_password_write_argon2_hashes() {
         .expect("updated user should exist");
     assert!(updated.password_hash.starts_with("$argon2"));
     assert_ne!(updated.password_hash, created.password_hash);
+
+    scope.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires RUN_DB_TESTS=true and ADMIN_DB_TEST_DATABASE_URL"]
+async fn mysql_user_store_updates_avatar_metadata_transactionally() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let scope = TestScope::new(&pool).await;
+    let repository = MySqlUserRepository::new(pool.clone());
+    let service =
+        admin_core::services::CompatUserService::new(std::sync::Arc::new(repository.clone()));
+
+    service
+        .create(admin_core::dto::UserCreateRequest {
+            name: scope.username.clone(),
+            password: "created-secret".to_owned(),
+            role_id: scope.role_id,
+        })
+        .await
+        .expect("user should create with default avatar metadata");
+
+    let created = UserStore::find_by_name(&repository, &scope.username)
+        .await
+        .expect("created user should load")
+        .expect("created user should exist");
+    let default_avatar = UserStore::avatar(&repository, created.id)
+        .await
+        .expect("default avatar should load")
+        .expect("default avatar should exist");
+    assert_eq!(default_avatar.filename, "default.jpg");
+    assert_eq!(default_avatar.mimetype, "image/jpeg");
+    assert_eq!(default_avatar.user_id, created.id);
+
+    let updated_avatar = service
+        .update_avatar(
+            created.id,
+            AvatarUploadInput {
+                filename: "custom-avatar.png".to_owned(),
+                mimetype: "image/png".to_owned(),
+                size: 12_345,
+            },
+        )
+        .await
+        .expect("avatar metadata should update through SQLx repository");
+
+    assert_eq!(updated_avatar.filename, "custom-avatar.png");
+    assert_eq!(updated_avatar.mimetype, "image/png");
+    assert_eq!(updated_avatar.size, 12_345);
+    assert_eq!(updated_avatar.user_id, created.id);
+
+    let row = sqlx::query(
+        r#"
+        SELECT
+            u.`avatar_url`,
+            COUNT(a.`id`) AS avatar_count,
+            MAX(a.`filename`) AS filename,
+            MAX(a.`mimetype`) AS mimetype,
+            MAX(a.`size`) AS size
+        FROM `user` u
+        LEFT JOIN `avatar` a ON a.`user_id` = u.`id`
+        WHERE u.`id` = ?
+        GROUP BY u.`id`, u.`avatar_url`
+        "#,
+    )
+    .bind(created.id)
+    .fetch_one(&pool)
+    .await
+    .expect("avatar metadata should load from MySQL");
+
+    assert_eq!(
+        row.try_get::<String, _>("avatar_url")
+            .expect("avatar_url should exist"),
+        format!("/users/{}/avatar", created.id)
+    );
+    assert_eq!(
+        row.try_get::<i64, _>("avatar_count")
+            .expect("avatar count should exist"),
+        1,
+        "avatar update must replace metadata in place instead of leaking duplicate rows"
+    );
+    assert_eq!(
+        row.try_get::<String, _>("filename")
+            .expect("filename should exist"),
+        "custom-avatar.png"
+    );
+    assert_eq!(
+        row.try_get::<String, _>("mimetype")
+            .expect("mimetype should exist"),
+        "image/png"
+    );
+    assert_eq!(
+        row.try_get::<i64, _>("size").expect("size should exist"),
+        12_345
+    );
+
+    let missing_user_id = next_id(&pool, "user").await + 9_000;
+    let error = service
+        .update_avatar(
+            missing_user_id,
+            AvatarUploadInput {
+                filename: "orphan.png".to_owned(),
+                mimetype: "image/png".to_owned(),
+                size: 99,
+            },
+        )
+        .await
+        .expect_err("avatar update must reject missing users before inserting metadata");
+    assert_eq!(error.legacy_code(), -404);
+    let orphan_count: i64 =
+        sqlx::query("SELECT COUNT(*) AS total FROM `avatar` WHERE `user_id` = ?")
+            .bind(missing_user_id)
+            .fetch_one(&pool)
+            .await
+            .expect("orphan avatar count should load")
+            .try_get("total")
+            .expect("orphan avatar count should exist");
+    assert_eq!(orphan_count, 0);
 
     scope.cleanup().await;
 }
