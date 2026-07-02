@@ -6,6 +6,17 @@ const root = process.cwd()
 const sourceRoot = `${root}/src`
 
 const allowedFetchFiles = new Set(['src/api/client.ts'])
+const allowedStorageFiles = new Set([
+  'src/api/client.ts',
+  'src/api/settings.ts',
+  'src/components/theme.tsx',
+  'src/lib/font-loading.ts',
+  'src/lib/logger.ts',
+  'src/main.tsx',
+  'src/pages/Dashboard.tsx',
+  'src/session/session-store.ts',
+  'src/session/storage.ts',
+])
 const allowedStyleFiles = new Set([
   'src/components/layout/FormScaffold.tsx',
   'src/components/ui/chart.tsx',
@@ -52,6 +63,7 @@ for (const absolutePath of listSourceFiles(sourceRoot)) {
   const content = readFileSync(absolutePath, 'utf8')
   const isUiModule = file.startsWith('src/components/ui/')
   const isApiModule = file.startsWith('src/api/')
+  const isStorageWrapper = allowedStorageFiles.has(file)
 
   for (const match of content.matchAll(/\bfetch\s*\(/g)) {
     if (!allowedFetchFiles.has(file)) {
@@ -72,6 +84,18 @@ for (const absolutePath of listSourceFiles(sourceRoot)) {
   for (const match of content.matchAll(/style=\{\{/g)) {
     if (!allowedStyleFiles.has(file)) {
       addViolation(file, lineNumber(content, match.index), '禁止页面/业务组件散写 inline style；抽成模板组件或 token 化 class')
+    }
+  }
+
+  for (const match of content.matchAll(/\b(?:window\.)?(?:localStorage|sessionStorage)\s*\./g)) {
+    if (!isTestFile(file) && !isStorageWrapper) {
+      addViolation(file, lineNumber(content, match.index), '禁止业务代码直接读写 Web Storage；必须通过统一封装')
+    }
+  }
+
+  for (const match of content.matchAll(/真实项目|模板只演示|参考页|mock only|demo only/gi)) {
+    if (!isTestFile(file)) {
+      addViolation(file, lineNumber(content, match.index), '禁止生产页面保留模板演示/假实现文案')
     }
   }
 

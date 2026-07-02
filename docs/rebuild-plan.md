@@ -953,9 +953,9 @@ scripts/test-e2e.sh
 
 当前仓库已提供 `scripts/check-all.sh`、`scripts/test-backend.sh`、`scripts/test-frontend.sh`、`scripts/test-migration.sh` 作为统一质量门禁入口。默认情况下，Rust 脚本使用 `CARGO_OFFLINE=true`，保证在依赖已缓存但网络不稳定时仍可稳定运行；需要在线拉取新依赖时可显式执行 `CARGO_OFFLINE=false scripts/check-all.sh`。`scripts/test-migration.sh` 默认会执行 `admin-migration rollback-plan --format json`，确保没有真实数据库连接时也能持续校验回滚文档出口。头像文件迁移校验已经从“只报告差异”升级为阻断门禁：`verify-files` 会输出 `status=passed/failed`，缺失、多余或 SHA256 变化都会让 CLI 非 0 退出，发布前必须修复后复验。
 
-前端质量门禁必须包含 `lint`、架构扫描、`typecheck`、`test`、`build` 五段；`scripts/test-frontend-architecture.mjs` 会阻断页面/业务组件直接 `fetch`、引入 `axios`、绕过 `src/api/*` 调用 `apiRequest`、在业务层直接引入 Radix 原语，以及在业务页面散写 inline style，确保请求封装和 `frontend-template` 组件风格不会在后续页面中退化。Playwright E2E 通过 `RUN_E2E=true scripts/test-frontend.sh` 显式开启，避免本地缺少浏览器二进制时阻塞普通提交，但发布候选版本必须开启 E2E。
+前端质量门禁必须包含 `lint`、架构扫描、`typecheck`、`test`、`build` 五段；`scripts/test-frontend-architecture.mjs` 会阻断页面/业务组件直接 `fetch`、引入 `axios`、绕过 `src/api/*` 调用 `apiRequest`、在业务层直接引入 Radix 原语、在业务页面散写 inline style、业务代码直接读写 Web Storage，以及生产页面遗留“真实项目/模板演示/参考页”等假实现文案，确保请求封装、本地偏好封装和 `frontend-template` 组件风格不会在后续页面中退化。Playwright E2E 通过 `RUN_E2E=true scripts/test-frontend.sh` 显式开启，避免本地缺少浏览器二进制时阻塞普通提交，但发布候选版本必须开启 E2E。
 
-当前 E2E 已从登录/工作台 happy path 扩展到列表状态矩阵、订单导出、系统写入和账号设置关键链路：`apps/desktop/web/e2e/business-list-states.spec.ts` 覆盖订单列表、当前页 CSV 下载和回单管理，`apps/desktop/web/e2e/system-list-states.spec.ts` 覆盖发货公司、用户管理、角色权限、菜单管理，`apps/desktop/web/e2e/system-write-flows.spec.ts` 覆盖角色菜单授权、菜单创建和页面注册表状态门禁，`apps/desktop/web/e2e/account-settings.spec.ts` 覆盖系统设置入口、当前用户改密、旧 `avatar` 字段 multipart 上传和头像 cache bust。所有 spec 都会在真实浏览器中断言登录后菜单进入、旧接口 payload/header、Bearer token、关键交互，以及加载/错误/操作反馈时仍保留 `frontend-template` 的侧栏/顶栏页面壳、不回退登录页。公共登录、会话、菜单、工作台图表、模板壳断言和旧列表响应已经抽到 `apps/desktop/web/e2e/support/*`，后续每补一个主页面都必须复用这组 helpers，并按同样矩阵补齐。
+当前 E2E 已从登录/工作台 happy path 扩展到列表状态矩阵、订单导出、系统写入和账号设置关键链路：`apps/desktop/web/e2e/business-list-states.spec.ts` 覆盖订单列表、当前页 CSV 下载和回单管理，`apps/desktop/web/e2e/system-list-states.spec.ts` 覆盖发货公司、用户管理、角色权限、菜单管理，`apps/desktop/web/e2e/system-write-flows.spec.ts` 覆盖角色菜单授权、菜单创建和页面注册表状态门禁，`apps/desktop/web/e2e/account-settings.spec.ts` 覆盖系统设置入口、当前用户改密、旧 `avatar` 字段 multipart 上传和头像 cache bust。系统设置的通用/外观偏好已从模板假保存改为 `src/api/settings.ts` 封装的非敏感本地偏好，并通过 API 单测和页面交互测试覆盖加载、确认保存、取消不落盘、恢复默认和异常 payload 归一化。所有 spec 都会在真实浏览器中断言登录后菜单进入、旧接口 payload/header、Bearer token、关键交互，以及加载/错误/操作反馈时仍保留 `frontend-template` 的侧栏/顶栏页面壳、不回退登录页。公共登录、会话、菜单、工作台图表、模板壳断言和旧列表响应已经抽到 `apps/desktop/web/e2e/support/*`，后续每补一个主页面都必须复用这组 helpers，并按同样矩阵补齐。
 
 当前生产 API 已接入 SQLx MySQL 仓储，普通 `scripts/check-all.sh` 覆盖编译、clippy、内存仓储 API 集成测试、前端组件测试和构建；连接真实数据库的 repository/迁移回归必须在影子库设置 `ADMIN_DB_TEST_DATABASE_URL`、`OLD_DATABASE_URL`、`NEW_DATABASE_URL`、`DATABASE_URL` 后单独执行，不允许用本地空库冒充迁移验收。默认门禁会明确打印 `RUN_DB_TESTS=true` 未设置时跳过真实 MySQL repository 集成测试，不能把该跳过视为发布级数据库验收。订单/回单仓储已增加 SQL 注入 payload 回归，确认 `%' OR 1=1 --` 只作为普通筛选文本处理。
 
@@ -985,6 +985,21 @@ Tauri 打包门禁已封装为 `scripts/test-tauri-build.sh`，并接入 `RUN_TA
 - 无 `unwrap`/`expect` 泄漏到核心业务路径，除启动期明确不可恢复错误外。
 - 无明文密码存储、无 SQL 拼接查询、无越权接口。
 - 所有阻断级 bug 关闭后才能切换生产。
+
+### 11.4.1 门禁矩阵
+
+| 场景 | 必跑命令 | 证明什么 | 不能证明什么 |
+| --- | --- | --- | --- |
+| 日常提交 | `CARGO_OFFLINE=true scripts/check-all.sh` | Rust 编译/clippy/内存仓储 API、前端 lint/架构/typecheck/Vitest/build、迁移 CLI 基线、Tauri 合同全部通过 | 不代表真实 MySQL、Playwright、Docker、Tauri 安装包和真实迁移已验收 |
+| 前端交互变更 | `RUN_E2E=true scripts/test-frontend.sh` | 真实浏览器覆盖登录、导航、列表状态、系统写入、账号设置和模板壳保持 | 默认仍是 mock API，不代表 Rust API + MySQL 全链路 |
+| 前端发布候选 | `cd apps/desktop/web && npm run test:coverage` | Vitest 覆盖率阈值达标，防止组件/API 测试只增不验 | 不替代 Playwright 和人工模板风格验收 |
+| DB 仓储变更 | `RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL=mysql://... scripts/check-all.sh` | SQLx repository 在真实 MySQL 测试库里验证分页、筛选、事务、弱关联和注入 payload | 只允许指向可重建测试库，不能指向旧生产库或新生产库 |
+| 迁移变更 | `OLD_DATABASE_URL=mysql://... NEW_DATABASE_URL=mysql://... NEW_AVATAR_DIR=/tmp/admin_yh_avatar_shadow scripts/test-migration.sh` | 迁移 dry-run、rollback-plan、头像文件 verify 和影子库对账可重复执行 | 未设置 `MIGRATION_APPLY=true` 时不执行真实 apply |
+| Docker 发布候选 | `RUN_DOCKER=true scripts/check-all.sh` | API/Web 镜像构建、compose MySQL/API/Web 健康检查通过 | 不代表桌面 `.app` 或 DMG 可安装 |
+| Tauri 发布候选 | `RUN_TAURI=true scripts/check-all.sh` | sidecar runtime smoke、release sidecar、macOS `.app` 打包和 bundled binary 检查通过 | 不代表 DMG 已通过 |
+| macOS DMG 发布 | `RUN_TAURI=true RUN_TAURI_DMG=true scripts/check-all.sh` | DMG 构建流程通过 | 如果 GUI/Finder/hdiutil 环境失败，必须记录原因并以 `.app` 通过作为替代验证，不能伪造 DMG 通过 |
+
+发布候选版本至少按顺序执行：默认门禁 -> Playwright E2E -> coverage -> 真实 MySQL repository -> 迁移 dry-run/verify -> Docker -> Tauri `.app` -> DMG。任何一步失败都必须记录 commit、命令、脱敏环境变量、失败阶段、关键日志和是否允许替代验证。
 
 ### 11.5 测试数据策略
 

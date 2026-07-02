@@ -1,6 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { RotateCcw, Save } from 'lucide-react'
 
+import {
+  DEFAULT_APP_PREFERENCES,
+  loadAppPreferences,
+  resetAppearancePreferences,
+  saveAppPreferences,
+  type AppPreferences,
+} from '@/api/settings'
 import { AccountPreferences } from '@/components/account/AccountPreferences'
 import { FormField, FormSection } from '@/components/layout/FormScaffold'
 import { PageSurface } from '@/components/layout/PageScaffold'
@@ -12,12 +19,6 @@ import { MultiSelect } from '@/components/ui/multi-select'
 import { Switch } from '@/components/ui/switch'
 import { useConfirm } from '@/components/ui/use-confirm'
 import type { SessionUser } from '@/session/types'
-
-/**
- * 参考页 —— 「带选项卡的设置页」范本。
- * TabbedSettingsPage 负责标题、可横向滚动的选项卡、切换动画;
- * 保存成功通过 message 回传,组件内部统一弹全局 toast(见 GlobalToastProvider)。
- */
 
 type Tab = 'account' | 'general' | 'appearance'
 
@@ -49,23 +50,42 @@ export default function Settings({ user, onAvatarUploaded }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<Tab>('account')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const confirm = useConfirm()
+  const [preferences, setPreferences] = useState<AppPreferences>(DEFAULT_APP_PREFERENCES)
 
-  const [siteName, setSiteName] = useState('宇涵物流订单系统')
-  const [contact, setContact] = useState('admin@yuhang.local')
-  const [owner, setOwner] = useState('ops')
-  const [features, setFeatures] = useState(['audit-log', 'export'])
-  const [compactMode, setCompactMode] = useState(false)
-  const [animations, setAnimations] = useState(true)
+  useEffect(() => {
+    let mounted = true
+    loadAppPreferences()
+      .then((stored) => {
+        if (mounted) setPreferences(stored)
+      })
+      .catch((error: unknown) => {
+        if (mounted) {
+          setMessage({ type: 'error', text: error instanceof Error ? error.message : '系统偏好加载失败' })
+        }
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const updatePreferences = <K extends keyof AppPreferences>(key: K, value: AppPreferences[K]) => {
+    setPreferences((current) => ({ ...current, [key]: value }))
+  }
 
   const save = async () => {
-    // 真实项目里这里 await 一个 api/client 调用;模板只演示反馈链路。
     const confirmed = await confirm({
-      title: '保存设置',
-      description: '确认保存当前页面配置? 真实项目中这里通常会接 api/client 的保存接口。',
+      title: '保存系统偏好',
+      description: '确认保存当前系统偏好? 仅保存站点展示、负责团队、能力开关和界面偏好等非敏感配置。',
       confirmText: '保存',
     })
     if (!confirmed) return
-    setMessage({ type: 'success', text: '设置已保存' })
+    try {
+      const saved = await saveAppPreferences(preferences)
+      setPreferences(saved)
+      setMessage({ type: 'success', text: '系统偏好已保存' })
+    } catch (error: unknown) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : '系统偏好保存失败' })
+    }
   }
 
   const resetAppearance = async () => {
@@ -76,9 +96,13 @@ export default function Settings({ user, onAvatarUploaded }: SettingsProps) {
       variant: 'destructive',
     })
     if (!confirmed) return
-    setCompactMode(false)
-    setAnimations(true)
-    setMessage({ type: 'success', text: '外观偏好已恢复默认' })
+    try {
+      const saved = await resetAppearancePreferences(preferences)
+      setPreferences(saved)
+      setMessage({ type: 'success', text: '外观偏好已恢复默认' })
+    } catch (error: unknown) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : '外观偏好恢复失败' })
+    }
   }
 
   return (
@@ -107,16 +131,16 @@ export default function Settings({ user, onAvatarUploaded }: SettingsProps) {
         <PageSurface title="基本信息" description="展示名称与联系方式。">
           <FormSection className="sm:max-w-lg">
             <FormField label="站点名称" htmlFor="site-name" required>
-              <Input id="site-name" value={siteName} onChange={(event) => setSiteName(event.target.value)} />
+              <Input id="site-name" value={preferences.siteName} onChange={(event) => updatePreferences('siteName', event.target.value)} />
             </FormField>
             <FormField label="联系邮箱" htmlFor="contact" description="用于系统通知、审计提醒和异常告警。">
-              <Input id="contact" type="email" value={contact} onChange={(event) => setContact(event.target.value)} />
+              <Input id="contact" type="email" value={preferences.contact} onChange={(event) => updatePreferences('contact', event.target.value)} />
             </FormField>
             <FormField label="负责团队" description="可搜索的单选组件,替代原生 select。">
-              <Combobox options={OWNER_OPTIONS} value={owner} onValueChange={setOwner} searchPlaceholder="搜索团队..." />
+              <Combobox options={OWNER_OPTIONS} value={preferences.owner} onValueChange={(value) => updatePreferences('owner', value)} searchPlaceholder="搜索团队..." />
             </FormField>
             <FormField label="启用能力" description="可搜索的多选组件,适合标签、角色、能力开关等场景。">
-              <MultiSelect options={FEATURE_OPTIONS} value={features} onValueChange={setFeatures} searchPlaceholder="搜索能力..." />
+              <MultiSelect options={FEATURE_OPTIONS} value={preferences.features} onValueChange={(value) => updatePreferences('features', value)} searchPlaceholder="搜索能力..." />
             </FormField>
           </FormSection>
         </PageSurface>
@@ -139,14 +163,14 @@ export default function Settings({ user, onAvatarUploaded }: SettingsProps) {
                 <span className="block text-sm font-medium">紧凑模式</span>
                 <span className="block text-xs text-muted-foreground">收紧间距以容纳更多内容</span>
               </span>
-              <Switch checked={compactMode} onCheckedChange={setCompactMode} />
+              <Switch checked={preferences.compactMode} onCheckedChange={(checked) => updatePreferences('compactMode', checked)} />
             </label>
             <label className="flex items-center justify-between gap-4 rounded-xl border border-border/70 px-4 py-3">
               <span>
                 <span className="block text-sm font-medium">页面动效</span>
                 <span className="block text-xs text-muted-foreground">关闭后切换页面不再有过渡动画</span>
               </span>
-              <Switch checked={animations} onCheckedChange={setAnimations} />
+              <Switch checked={preferences.animations} onCheckedChange={(checked) => updatePreferences('animations', checked)} />
             </label>
           </div>
         </PageSurface>
