@@ -109,6 +109,65 @@ async function mockLoginSession(page: Page) {
     })
   })
 
+  await page.route('**/api/chart/headerList', async (route) => {
+    expect(route.request().headers().authorization).toBe('Bearer e2e-token')
+
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 0,
+        data: [
+          {
+            amount: 'ordercount',
+            title: '订单总数：',
+            tips: '已同步旧系统 chart 数据',
+            subtitle: '订单',
+            number1: 12,
+            number2: 0,
+          },
+          {
+            amount: 'orderfreight',
+            title: '运费总额：',
+            tips: '环比增长 6.8%',
+            subtitle: '运费',
+            number1: 3050.5,
+            number2: 0,
+          },
+        ],
+      }),
+    })
+  })
+
+  await page.route('**/api/chart/company/order/sumfreight', async (route) => {
+    expect(route.request().headers().authorization).toBe('Bearer e2e-token')
+
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 0,
+        data: [
+          { id: 1, name: '宇涵测试客户', sumfreight: 1880 },
+          { id: 2, name: '上海直营网点', sumfreight: 1170.5 },
+        ],
+      }),
+    })
+  })
+
+  await page.route('**/api/chart/company/receipt/sumreceipt', async (route) => {
+    expect(route.request().headers().authorization).toBe('Bearer e2e-token')
+
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 0,
+        data: [
+          { id: 1, name: '宇涵测试客户', sumReceipt: 4 },
+          { id: 2, name: '上海直营网点', sumReceipt: 0 },
+        ],
+      }),
+    })
+  })
+
   await page.route('**/api/auth/logout', async (route) => {
     expect(route.request().headers().authorization).toBe('Bearer e2e-token')
 

@@ -152,4 +152,33 @@ describe('dashboard legacy chart api', () => {
       ],
     })
   })
+
+  it('always uses legacy chart endpoints instead of development fallback data', async () => {
+    vi.stubEnv('VITE_USE_MOCKS', '1')
+    fetchMock
+      .mockImplementationOnce(() => jsonResponse([]))
+      .mockImplementationOnce(() => jsonResponse([]))
+      .mockImplementationOnce(() => jsonResponse([]))
+
+    const summary = await getDashboardSummary('7d')
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/chart/headerList',
+      '/api/chart/company/order/sumfreight',
+      '/api/chart/company/receipt/sumreceipt',
+    ])
+    expect(summary).toEqual({
+      stats: [],
+      freightTrend: [],
+      pendingTasks: [
+        {
+          id: 'receipt-empty',
+          title: '暂无回单数据',
+          owner: '财务',
+          status: 'normal',
+          updatedAt: '今日',
+        },
+      ],
+    })
+  })
 })

@@ -1,7 +1,7 @@
-# 前端典范模板(web)
+# adminYh Tauri 前端
 
-一套可直接派生的内部后台前端基线。从 AMP-Manager 沉淀、经 ASXSDashboard 验证后抽取,
-目标是:**新项目 clone 下来就有一致的外壳、设计语言和工程约定,只往里填业务。**
+宇涵物流订单系统桌面端前端，已从 `frontend-template/web` 派生到 React + Vite + shadcn/ui 体系。
+当前项目不再保留模板假后端；工作台、业务列表、账号设置都必须通过 `apiRequest` 访问 Rust 兼容 API。
 
 技术栈:Vite 6 · React 19 · TypeScript 5.6 · Tailwind 3 · shadcn/ui(Radix)· lucide · motion · recharts。
 
@@ -10,17 +10,14 @@
 ## 快速开始
 
 ```bash
-cd web
+cd apps/desktop/web
 npm install
-npm run dev      # http://localhost:5278,登录页输入任意密码即可看到演示页(走假后端)
+npm run dev      # http://localhost:5278，需要 Rust API 或 Playwright mock 提供 /api/*
 npm run build    # tsc -b && vite build
 npm run lint
 ```
 
-模板自带「假后端」(`src/api/demo.ts`),无需起后端即可看到完整页面。接真实接口时替换它即可。
-
-派生新项目:把 `web/` 整个拷走 → 改 `src/config.ts` 的 `BRAND_NAME` → 删掉 `pages/Overview.tsx`、
-`pages/Settings.tsx`、`api/demo.ts` 这几个示例 → 开始写你自己的页面。
+本地联调必须显式启动后端或在测试里 mock 接口，不能用页面内假数据掩盖后端、鉴权或代理问题。
 
 ---
 
@@ -44,7 +41,7 @@ npm run lint
 ### 1. 设计语言固化在 CSS,页面只描述内容
 所有页面壳走 `PageScaffold`(`PageShell` / `PageSurface` / `PageStat` / `PageStatStrip`),
 对应 `index.css` 里的 `ops-*` 语义类。页面代码里**不要散写卡片/边框/阴影的 Tailwind 组合** ——
-要改外观就改 `ops-*` 一处,全站统一。范本见 `pages/Overview.tsx`。
+要改外观就改 `ops-*` 一处,全站统一。范本见 `pages/Dashboard.tsx`。
 
 ### 2. 主题用 HSL token,不写死颜色
 颜色一律 `hsl(var(--primary))` 之类,light/dark 两套定义在 `index.css :root` / `.dark`。
@@ -53,7 +50,7 @@ npm run lint
 
 ### 3. 数据获取统一走 `useResource`,不要手搓 useEffect
 ```ts
-const { data, loading, error, refresh } = useResource(() => getOverview(range), [range])
+const { data, loading, error, refresh } = useResource(() => getDashboardSummary(range), [range])
 ```
 它处理 loading / error / 竞态 / 刷新。**禁止**再写「`useEffect` + 三个 useState + 用 `refreshKey` 一路透传」那套样板。
 
@@ -107,11 +104,11 @@ const ok = await confirm({
 ## 加一个新页面(checklist)
 
 1. `src/api/<feature>.ts`:用 `apiRequest` 写类型化的数据函数。
-2. `src/pages/<Name>.tsx`:用 `PageShell` + `PageSurface` 搭壳,数据用 `useResource`,照抄 `Overview.tsx` 结构。
+2. `src/pages/<Name>.tsx`:用 `PageShell` + `PageSurface` 搭壳,数据用 `useResource`,参考现有业务页结构。
 3. `src/pages/Dashboard.tsx`:在 `navItems` 加一项,在 `lazy()` 区和 `<main>` 的条件渲染里各加一行。
 4. 表格页优先用 `DataTableToolbar` / `FilterBar` / `Pagination`;表单页优先用 `FormField` + `Combobox` / `MultiSelect`。
 5. 危险操作用 `useConfirm`,不要用 `window.confirm()`。
-6. `npm run lint && npm run build` 应全绿。
+6. `npm run lint && npm run typecheck && npm run test && npm run build` 应全绿。
 
 > 「带选项卡的设置类页面」另有范本:`pages/Settings.tsx` + `TabbedSettingsPage`。
 
@@ -122,4 +119,4 @@ const ok = await confirm({
 - **无 react-router**:理由见约定 7。
 - **无 TanStack Query**:`useResource` 覆盖了 80% 取数场景;真出现复杂缓存/失效再引。
 - **页面文案目前硬编码中文**:i18n 层已就位,需要多语言时再迁。
-- **web 层暂无单测**:示例页逻辑很薄;复杂业务页建议补 Vitest。
+- **不保留开发期假数据兜底**:工作台等业务页面默认请求真实兼容 API；测试数据只允许放在 Vitest/Playwright mock 中。

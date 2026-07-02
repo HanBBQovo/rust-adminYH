@@ -21,7 +21,7 @@ export interface ResourceState<T> {
  *
  * @example
  * const { data, loading, error, refresh } = useResource(
- *   () => getOverview(range),
+ *   () => getDashboardSummary(range),
  *   [range],
  * )
  * if (loading) return <InlineLoader />
