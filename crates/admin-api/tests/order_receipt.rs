@@ -196,6 +196,120 @@ async fn admin_delete_order_cleans_receipt_side_effect() {
 }
 
 #[tokio::test]
+async fn admin_update_order_moves_receipt_when_oddnumber_changes() {
+    let app = build_router(admin_state());
+    let token = login_token(app.clone(), "admin").await;
+
+    let (_, updated_status) = json_request(
+        app.clone(),
+        "PATCH",
+        "/api/receipt/1",
+        Some(&token),
+        r#"{"recoverystate":"已回收"}"#,
+    )
+    .await;
+    assert_eq!(updated_status["code"], 0);
+
+    let (status, updated_order) = json_request(
+        app.clone(),
+        "PATCH",
+        "/api/order/1",
+        Some(&token),
+        r#"{"oddnumber":"YD20260101099","billingAt":"2026-01-03","consignee":"新收货人","consignor":"新发货人","goodsname":"新配件","number":"99","receiptnum":3,"company":"顺丰速运"}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(updated_order["message"], "修改订单信息成功！");
+
+    let (_, old_receipt_list) = json_request(
+        app.clone(),
+        "POST",
+        "/api/receipt/list",
+        Some(&token),
+        r#"{"offset":0,"size":10,"oddnumber":"YD20260101001"}"#,
+    )
+    .await;
+    assert_eq!(old_receipt_list["data"]["totalCount"], 0);
+
+    let (_, new_receipt_list) = json_request(
+        app,
+        "POST",
+        "/api/receipt/list",
+        Some(&token),
+        r#"{"offset":0,"size":10,"oddnumber":"YD20260101099"}"#,
+    )
+    .await;
+    assert_eq!(new_receipt_list["data"]["totalCount"], 1);
+    assert_eq!(
+        new_receipt_list["data"]["list"][0]["billingAt"],
+        "2026-01-03"
+    );
+    assert_eq!(
+        new_receipt_list["data"]["list"][0]["recoverystate"],
+        "已回收"
+    );
+    assert_eq!(new_receipt_list["data"]["list"][0]["recoverynumber"], 3);
+    assert_eq!(new_receipt_list["data"]["list"][0]["consignee"], "新收货人");
+    assert_eq!(new_receipt_list["data"]["list"][0]["goodsnumber"], "99");
+}
+
+#[tokio::test]
+async fn admin_update_order_to_zero_receiptnum_removes_receipt() {
+    let app = build_router(admin_state());
+    let token = login_token(app.clone(), "admin").await;
+
+    let (status, updated_order) = json_request(
+        app.clone(),
+        "PATCH",
+        "/api/order/1",
+        Some(&token),
+        r#"{"oddnumber":"YD20260101001","billingAt":"2026-01-01","consignee":"张三","consignor":"李四","receiptnum":0,"company":"顺丰速运"}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(updated_order["code"], 0);
+
+    let (_, receipt_list) = json_request(
+        app,
+        "POST",
+        "/api/receipt/list",
+        Some(&token),
+        r#"{"offset":0,"size":10,"oddnumber":"YD20260101001"}"#,
+    )
+    .await;
+    assert_eq!(receipt_list["data"]["totalCount"], 0);
+}
+
+#[tokio::test]
+async fn admin_update_order_from_zero_receiptnum_creates_receipt() {
+    let app = build_router(admin_state());
+    let token = login_token(app.clone(), "admin").await;
+
+    let (status, updated_order) = json_request(
+        app.clone(),
+        "PATCH",
+        "/api/order/2",
+        Some(&token),
+        r#"{"oddnumber":"YD20260102001","billingAt":"2026-01-02","consignee":"王五","consignor":"赵六","goodsname":"设备","number":"2","receiptnum":2,"company":"德邦物流"}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(updated_order["code"], 0);
+
+    let (_, receipt_list) = json_request(
+        app,
+        "POST",
+        "/api/receipt/list",
+        Some(&token),
+        r#"{"offset":0,"size":10,"oddnumber":"YD20260102001"}"#,
+    )
+    .await;
+    assert_eq!(receipt_list["data"]["totalCount"], 1);
+    assert_eq!(receipt_list["data"]["list"][0]["recoverystate"], "未回收");
+    assert_eq!(receipt_list["data"]["list"][0]["recoverynumber"], 2);
+}
+
+#[tokio::test]
 async fn memory_list_keeps_old_data_only_shape_and_order_side_effect() {
     let app = build_router(admin_state());
     let token = login_token(app.clone(), "admin").await;

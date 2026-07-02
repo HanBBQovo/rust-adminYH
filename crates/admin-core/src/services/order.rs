@@ -584,6 +584,7 @@ impl OrderStore for InMemoryOrderStore {
                 .iter_mut()
                 .find(|order| order.id == order_id)
                 .ok_or_else(|| AppError::NotFound(format!("order {order_id}")))?;
+            let previous_order = order.clone();
             *order = order_from_input(order_id, &input);
             drop(orders);
 
@@ -598,9 +599,7 @@ impl OrderStore for InMemoryOrderStore {
             }
             drop(company_orders);
 
-            if input.receiptnum > 0 {
-                self.create_or_update_receipt_from_order(&input, Some(input.oddnumber.as_str()))?;
-            }
+            self.reconcile_receipt_after_order_update(&previous_order, &input)?;
             self.insert_memory(&input.consignee)?;
             self.insert_memory(&input.consignor)?;
             Ok(())
@@ -703,6 +702,30 @@ impl OrderStore for InMemoryOrderStore {
 }
 
 impl InMemoryOrderStore {
+    fn reconcile_receipt_after_order_update(
+        &self,
+        previous_order: &OrderRecord,
+        input: &NormalizedOrderInput,
+    ) -> AppResult<()> {
+        if input.receiptnum > 0 {
+            let can_move_previous_receipt = previous_order.oddnumber != input.oddnumber
+                && !self.oddnumber_has_positive_receipt_need(&previous_order.oddnumber)?;
+            let previous_oddnumber =
+                can_move_previous_receipt.then_some(previous_order.oddnumber.as_str());
+            self.create_or_update_receipt_from_order(input, previous_oddnumber)?;
+            if previous_order.oddnumber != input.oddnumber {
+                self.delete_receipt_if_no_positive_need(&previous_order.oddnumber)?;
+            }
+            return Ok(());
+        }
+
+        self.delete_receipt_if_no_positive_need(&previous_order.oddnumber)?;
+        if previous_order.oddnumber != input.oddnumber {
+            self.delete_receipt_if_no_positive_need(&input.oddnumber)?;
+        }
+        Ok(())
+    }
+
     fn create_or_update_receipt_from_order(
         &self,
         input: &NormalizedOrderInput,
@@ -716,6 +739,7 @@ impl InMemoryOrderStore {
         });
         if let Some(receipt) = receipt {
             receipt.oddnumber = input.oddnumber.clone();
+            receipt.billing_at = input.billing_at;
             receipt.recoverynumber = input.receiptnum;
             receipt.consignor = input.consignor.clone();
             receipt.consignee = input.consignee.clone();
@@ -743,6 +767,26 @@ impl InMemoryOrderStore {
         ));
         *next_receipt_id += 1;
         Ok(())
+    }
+
+    fn delete_receipt_if_no_positive_need(&self, oddnumber: &str) -> AppResult<()> {
+        if self.oddnumber_has_positive_receipt_need(oddnumber)? {
+            return Ok(());
+        }
+        self.receipts
+            .lock()
+            .map_err(|_| AppError::Internal)?
+            .retain(|receipt| receipt.oddnumber != oddnumber);
+        Ok(())
+    }
+
+    fn oddnumber_has_positive_receipt_need(&self, oddnumber: &str) -> AppResult<bool> {
+        Ok(self
+            .orders
+            .lock()
+            .map_err(|_| AppError::Internal)?
+            .iter()
+            .any(|order| order.oddnumber == oddnumber && order.receiptnum > 0))
     }
 
     fn insert_memory(&self, value: &str) -> AppResult<()> {

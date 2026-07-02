@@ -72,8 +72,8 @@
 | Company | GET | `/company/:companyId` | `/api/company/:companyId` | 登录 | 公司详情 |
 | Company | POST | `/company/list` | `/api/company/list` | 登录 | 公司分页 |
 | Order | POST | `/order` | `/api/order` | 管理员 | 创建订单，联动 company_order/receipt/memory |
-| Order | DELETE | `/order/:orderId` | `/api/order/:orderId` | 管理员 | 删除订单；级联策略待定 |
-| Order | PATCH | `/order/:orderId` | `/api/order/:orderId` | 管理员 | 修改订单 |
+| Order | DELETE | `/order/:orderId` | `/api/order/:orderId` | 管理员 | 删除订单，事务清理 `company_order` 和安全匹配的 `receipt` |
+| Order | PATCH | `/order/:orderId` | `/api/order/:orderId` | 管理员 | 修改订单，同步 `company_order/receipt/memory` |
 | Order | GET | `/order/:orderId` | `/api/order/:orderId` | 登录 | 订单详情 |
 | Order | POST | `/order/list` | `/api/order/list` | 登录 | 订单分页筛选 |
 | Receipt | POST | `/receipt/list` | `/api/receipt/list` | 登录 | 全部回单 |
