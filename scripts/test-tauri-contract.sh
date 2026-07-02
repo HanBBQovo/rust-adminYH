@@ -113,6 +113,25 @@ assert(
     tauriLib.includes('child.kill()'),
   'sidecar supervisor must drain output streams and stop the child process on app exit',
 )
+assert(
+  tauriLib.includes('wait_for_admin_api_health()') &&
+    tauriLib.includes('probe_admin_api_health') &&
+    tauriLib.includes('admin-api sidecar health check passed') &&
+    tauriLib.includes('health check timed out'),
+  'sidecar supervisor must wait for the managed admin-api /api/health endpoint and emit diagnostics',
+)
+assert(
+  tauriLib.includes('sidecar_preflight_skips_spawn_when_disable_env_is_true') &&
+    tauriLib.includes('sidecar_preflight_skips_spawn_when_health_is_available') &&
+    tauriLib.includes('missing_sidecar_binary_returns_diagnostic_error') &&
+    tauriLib.includes('wait_for_admin_api_health_succeeds_when_endpoint_returns_200'),
+  'Tauri sidecar runtime smoke tests must cover disable, already-running, missing binary, and health success paths',
+)
+assert(
+  read('scripts/test-tauri-build.sh').includes('Tauri sidecar runtime smoke') &&
+    read('scripts/test-tauri-build.sh').includes('cargo test --lib'),
+  'RUN_TAURI build gate must run Tauri sidecar runtime smoke tests before packaging',
+)
 
 console.log('Tauri contract OK')
 NODE

@@ -36,6 +36,9 @@ diagnostics() {
 
 trap diagnostics ERR
 
+section "Tauri sidecar runtime smoke"
+(cd "$TAURI_DIR" && cargo test --lib)
+
 section "Build admin-api sidecar"
 (cd "$ROOT_DIR" && cargo build --release -p admin-api)
 
