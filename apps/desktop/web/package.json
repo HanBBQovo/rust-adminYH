@@ -14,9 +14,10 @@
     "e2e": "playwright test",
     "verify": "npm run lint && npm run typecheck && npm run test && npm run build",
     "preview": "vite preview",
-    "tauri": "npm exec --package @tauri-apps/cli@^2.0.0 -- tauri",
-    "tauri:dev": "npm exec --package @tauri-apps/cli@^2.0.0 -- tauri dev",
-    "tauri:build": "npm exec --package @tauri-apps/cli@^2.0.0 -- tauri build"
+    "tauri": "cd .. && npm exec --prefix web -- tauri",
+    "tauri:dev": "cd .. && npm exec --prefix web -- tauri dev",
+    "tauri:build": "cd .. && npm exec --prefix web -- tauri build",
+    "tauri:build:app": "cd .. && npm exec --prefix web -- tauri build --bundles app"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.17",
@@ -54,6 +55,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@tauri-apps/cli": "^2.11.4",
     "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

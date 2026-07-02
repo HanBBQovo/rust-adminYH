@@ -38,7 +38,7 @@
 ### 测试与质量红线
 
 - 每个功能完成后必须测试，不允许“先做完最后再补测试”；测试缺失视为功能未完成。
-- 每次 commit 前必须至少跑通当前可执行质量门禁：`scripts/check-all.sh`；涉及前端交互的功能必须额外执行 `RUN_E2E=true scripts/test-frontend.sh` 或等价 Playwright 命令；涉及桌面壳、打包配置、图标、权限或发布产物的功能必须执行 `RUN_TAURI=true scripts/check-all.sh`。如果某一类测试因真实数据库、Tauri 签名、系统权限等外部条件无法执行，必须在提交说明或交付记录里写清楚跳过原因和替代验证。
+- 每次 commit 前必须至少跑通当前可执行质量门禁：`scripts/check-all.sh`；涉及前端交互的功能必须额外执行 `RUN_E2E=true scripts/test-frontend.sh` 或等价 Playwright 命令；涉及桌面壳、打包配置、图标、权限或发布产物的功能必须执行 `RUN_TAURI=true scripts/check-all.sh`。`RUN_TAURI=true` 默认验证可启动的 macOS `.app` 产物；发布 macOS 安装包前必须额外执行 `RUN_TAURI=true RUN_TAURI_DMG=true scripts/check-all.sh` 验证 DMG。若 DMG 因本机 GUI/Finder/hdiutil 环境失败，必须记录失败原因，并以 `.app` 打包通过作为替代验证，不能伪造 DMG 已通过。
 - 后端核心逻辑必须做到单元测试 + API 集成测试双覆盖；数据库 repository 和迁移逻辑必须在测试库/影子库跑对账验证。
 - 前端页面不能只看构建成功，必须覆盖 lint、类型检查、组件/交互测试、关键 E2E；涉及模板样式时还要人工/截图验收是否偏离 `frontend-template`。
 - 前端 E2E 起步覆盖登录壳、成功登录、菜单加载、工作台关键数据、范围切换和退出登录；后续每新增一个主页面，至少补一个“进入页面 + 列表加载/空态/错误态”的 Playwright 用例。

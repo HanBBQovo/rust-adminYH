@@ -5,6 +5,7 @@ members = [
     "crates/admin-db",
     "crates/admin-migration",
 ]
+exclude = ["apps/desktop/src-tauri"]
 resolver = "2"
 
 [workspace.package]
