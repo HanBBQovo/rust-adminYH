@@ -27,6 +27,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/health", get(health::health_check))
         .route("/login", post(auth::login))
         .route("/api/login", post(auth::login))
+        .route("/code", get(auth::code))
+        .route("/api/code", get(auth::code))
         .route("/users/me", get(auth::me))
         .route("/api/users/me", get(auth::me))
         .route("/users", post(user::create))

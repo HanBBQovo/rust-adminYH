@@ -69,6 +69,35 @@ async fn login_endpoint_returns_legacy_success_shape() {
 }
 
 #[tokio::test]
+async fn code_endpoint_keeps_legacy_data_only_shape() {
+    let app = build_router(test_state());
+
+    for uri in ["/code", "/api/code"] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(uri)
+                    .body(Body::empty())
+                    .expect("request should build"),
+            )
+            .await
+            .expect("request should succeed");
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body should be readable");
+        let json: serde_json::Value = serde_json::from_slice(&body).expect("body should be JSON");
+
+        assert!(json.get("code").is_none());
+        assert!(json.get("message").is_none());
+        assert!(json["data"].as_str().unwrap().starts_with("<svg"));
+    }
+}
+
+#[tokio::test]
 async fn login_endpoint_keeps_legacy_error_for_bad_password() {
     let app = build_router(test_state());
 

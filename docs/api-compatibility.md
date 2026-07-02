@@ -44,7 +44,7 @@
 | 模块 | 方法 | 旧路径 | 新兼容路径 | 权限 | 备注 |
 |---|---:|---|---|---|---|
 | Auth | POST | `/login` | `/api/login` | 无 | 登录；旧验证码校验已注释，不要假设强验证码 |
-| Auth | GET | `/code` | `/api/code` | 无 | 验证码图片/文本，是否继续启用待定 |
+| Auth | GET | `/code` | `/api/code` | 无 | 兼容旧 `{ data: "<svg...>" }` 响应；登录暂不强制校验验证码 |
 | Chart | GET | `/chart/headerList` | `/api/chart/headerList` | 登录 | 顶部统计 |
 | Chart | GET | `/chart/company/order/count` | `/api/chart/company/order/count` | 登录 | 公司订单数量 |
 | Chart | GET | `/chart/company/order/sumfreight` | `/api/chart/company/order/sumfreight` | 登录 | 公司运费汇总 |
@@ -255,6 +255,7 @@ POST /api/recovery/list
 - `admin-migration verify-files` 已补齐头像文件完整性阻断门禁：对比旧/新头像目录的相对文件名和 SHA256，缺失、多余或内容变化都会输出 `status=failed` 并以非 0 退出，避免数据库迁移通过但磁盘头像漏迁。
 - 登录服务通过 `AuthService` / `AuthUserStore` / `TokenIssuer` 抽象解耦；生产路径已装配 `MySqlUserRepository`，API 集成测试继续使用内存仓储做快速兼容回归，影子库回归需通过真实 `DATABASE_URL` 单独执行。
 - 生产认证不再使用开发态 `dev-{user_id}-{uuid}` token：`production_auth_service` 和 `admin-api` 数据库启动路径统一使用 `SecureTokenIssuer` 生成 32 字节随机 opaque token，并继续写回 `user.token` 保留旧单点登录语义；开发/测试内存服务仍保留 `DevelopmentTokenIssuer` 便于断言。
+- `/api/code` 与旧 `/code` 验证码接口已补齐兼容路由，响应保持旧系统 data-only 形状 `{ data: "<svg...>" }`，不额外包 `{ code, message }`，避免旧前端或迁移期页面因响应形状变化崩溃；登录接口继续兼容旧后端“验证码字段存在但未强制校验”的行为。
 - 菜单服务通过 `MenuService` / `MenuStore` 抽象解耦；生产路径已装配 `MySqlMenuRepository`，API 集成测试继续使用内存菜单仓储验证旧响应形状和权限边界。
 - 公司服务通过 `CompanyService` / `CompanyStore` 抽象解耦；生产路径已装配 `MySqlCompanyRepository`，测试保留内存仓储用于接口兼容回归。
 - 用户管理服务通过 `UserService` / `UserStore` 抽象解耦；生产路径已装配 `MySqlUserRepository`，真实头像文件目录仍由 `APP_STORAGE__AVATAR_DIR` 控制。
