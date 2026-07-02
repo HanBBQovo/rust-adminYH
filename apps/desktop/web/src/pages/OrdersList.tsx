@@ -12,16 +12,13 @@ import {
   type OrderListParams,
   type OrderMutationPayload,
 } from '@/api/orders'
-import { InlineLoader } from '@/components/PageLoader'
+import { DataTableSurface, StickyActionCell, StickyActionHead } from '@/components/layout/DataTableSurface'
 import { FilterBar, FilterField } from '@/components/layout/FilterBar'
-import { PageShell, PageSurface } from '@/components/layout/PageScaffold'
+import { PageShell } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
-import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import { Input } from '@/components/ui/input'
-import { Pagination } from '@/components/ui/pagination'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useConfirm } from '@/components/ui/use-confirm'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
@@ -277,61 +274,52 @@ export default function OrdersList() {
         </FilterField>
       </FilterBar>
 
-      <PageSurface
+      <DataTableSurface
         title="订单数据"
         description="保留旧系统字段名和中文列名；新增、查看、编辑、删除都通过 API 封装处理。"
-        footer={data ? <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} /> : null}
-        bodyClassName="p-0"
+        error={error}
+        loading={loading && !data}
+        isEmpty={!rows.length}
+        emptyTitle="暂无订单"
+        emptyDescription="调整筛选条件后重新查询，或在后续新增订单切片中创建数据。"
+        onRetry={refresh}
+        pagination={data ? { page, pageSize: PAGE_SIZE, total, onPageChange: setPage } : undefined}
       >
-        {error ? (
-          <div className="p-5">
-            <ErrorState message={error} onRetry={refresh} />
-          </div>
-        ) : loading && !data ? (
-          <div className="flex h-64 items-center justify-center">
-            <InlineLoader />
-          </div>
-        ) : rows.length ? (
-          <div className="ops-table-shell">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-14 text-right">序号</TableHead>
-                  <TableHead className="sticky left-0 z-10 min-w-[160px] bg-background">操作</TableHead>
-                  {ORDER_COLUMNS.map((column) => (
-                    <TableHead key={column.key} className={column.className}>{column.label}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row, index) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="text-right font-mono text-xs text-muted-foreground">{(page - 1) * PAGE_SIZE + index + 1}</TableCell>
-                    <TableCell className="sticky left-0 z-10 bg-background">
-                      <div className="flex items-center gap-1">
-                        <Button type="button" variant="ghost" size="icon" aria-label="查看订单" onClick={() => openOrderDialog('view', row)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon" aria-label="编辑订单" onClick={() => openOrderDialog('edit', row)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon" aria-label="删除订单" onClick={() => removeOrder(row)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                    {ORDER_COLUMNS.map((column) => (
-                      <TableCell key={column.key} className={column.className}>{renderCell(row, column)}</TableCell>
-                    ))}
-                  </TableRow>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-14 text-right">序号</TableHead>
+              <StickyActionHead className="min-w-[160px]" />
+              {ORDER_COLUMNS.map((column) => (
+                <TableHead key={column.key} className={column.className}>{column.label}</TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row, index) => (
+              <TableRow key={row.id}>
+                <TableCell className="text-right font-mono text-xs text-muted-foreground">{(page - 1) * PAGE_SIZE + index + 1}</TableCell>
+                <StickyActionCell>
+                  <div className="flex items-center gap-1">
+                    <Button type="button" variant="ghost" size="icon" aria-label="查看订单" onClick={() => openOrderDialog('view', row)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon" aria-label="编辑订单" onClick={() => openOrderDialog('edit', row)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon" aria-label="删除订单" onClick={() => removeOrder(row)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </StickyActionCell>
+                {ORDER_COLUMNS.map((column) => (
+                  <TableCell key={column.key} className={column.className}>{renderCell(row, column)}</TableCell>
                 ))}
-              </TableBody>
-            </Table>
-          </div>
-        ) : (
-          <EmptyState title="暂无订单" description="调整筛选条件后重新查询，或在后续新增订单切片中创建数据。" />
-        )}
-      </PageSurface>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </DataTableSurface>
 
       <OrderFormDialog
         mode={dialogMode}

@@ -10,16 +10,13 @@ import {
   type ReceiptListParams,
   type ReceiptStatusPayload,
 } from '@/api/receipts'
-import { InlineLoader } from '@/components/PageLoader'
+import { DataTableSurface, StickyActionCell, StickyActionHead } from '@/components/layout/DataTableSurface'
 import { FilterBar, FilterField } from '@/components/layout/FilterBar'
-import { PageShell, PageSurface } from '@/components/layout/PageScaffold'
+import { PageShell } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
-import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import { Input } from '@/components/ui/input'
-import { Pagination } from '@/components/ui/pagination'
 import {
   Select,
   SelectContent,
@@ -292,49 +289,40 @@ export default function ReceiptsList() {
         </FilterField>
       </FilterBar>
 
-      <PageSurface
+      <DataTableSurface
         title={meta.title}
         description={meta.description}
-        footer={data ? <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} /> : null}
-        bodyClassName="p-0"
+        error={error}
+        loading={loading && !data}
+        isEmpty={!rows.length}
+        emptyTitle="暂无回单"
+        emptyDescription="调整筛选条件或切换回单状态后重新查询。"
+        onRetry={refresh}
+        pagination={data ? { page, pageSize: PAGE_SIZE, total, onPageChange: setPage } : undefined}
       >
-        {error ? (
-          <div className="p-5">
-            <ErrorState message={error} onRetry={refresh} />
-          </div>
-        ) : loading && !data ? (
-          <div className="flex h-64 items-center justify-center">
-            <InlineLoader />
-          </div>
-        ) : rows.length ? (
-          <div className="ops-table-shell">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-14 text-right">序号</TableHead>
-                  <TableHead className="sticky left-0 z-10 min-w-[220px] bg-background">状态操作</TableHead>
-                  {RECEIPT_COLUMNS.map((column) => (
-                    <TableHead key={column.key} className={column.className}>{column.label}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row, index) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="text-right font-mono text-xs text-muted-foreground">{(page - 1) * PAGE_SIZE + index + 1}</TableCell>
-                    <TableCell className="sticky left-0 z-10 bg-background">{renderStateActions(row)}</TableCell>
-                    {RECEIPT_COLUMNS.map((column) => (
-                      <TableCell key={column.key} className={column.className}>{renderCell(row, column)}</TableCell>
-                    ))}
-                  </TableRow>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-14 text-right">序号</TableHead>
+              <StickyActionHead className="min-w-[220px]">状态操作</StickyActionHead>
+              {RECEIPT_COLUMNS.map((column) => (
+                <TableHead key={column.key} className={column.className}>{column.label}</TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row, index) => (
+              <TableRow key={row.id}>
+                <TableCell className="text-right font-mono text-xs text-muted-foreground">{(page - 1) * PAGE_SIZE + index + 1}</TableCell>
+                <StickyActionCell>{renderStateActions(row)}</StickyActionCell>
+                {RECEIPT_COLUMNS.map((column) => (
+                  <TableCell key={column.key} className={column.className}>{renderCell(row, column)}</TableCell>
                 ))}
-              </TableBody>
-            </Table>
-          </div>
-        ) : (
-          <EmptyState title="暂无回单" description="调整筛选条件或切换回单状态后重新查询。" />
-        )}
-      </PageSurface>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </DataTableSurface>
     </PageShell>
   )
 }
