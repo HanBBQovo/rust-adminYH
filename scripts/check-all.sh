@@ -29,12 +29,24 @@ if [[ "$RELEASE_GATE" == "true" ]]; then
     echo "FAIL: RELEASE_GATE=true 需要 NEW_AVATAR_DIR，发布候选必须执行头像文件迁移校验。"
     exit 1
   fi
+  if [[ "${RUN_E2E:-false}" != "true" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要 RUN_E2E=true，发布候选必须执行 Playwright 真实浏览器 E2E。"
+    exit 1
+  fi
+  if [[ "${RUN_COVERAGE:-false}" != "true" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要 RUN_COVERAGE=true，发布候选必须执行前端覆盖率门禁。"
+    exit 1
+  fi
   if [[ "${RUN_DOCKER:-false}" != "true" ]]; then
     echo "FAIL: RELEASE_GATE=true 需要 RUN_DOCKER=true，发布候选必须构建镜像并执行 compose 健康检查。"
     exit 1
   fi
   if [[ "${RUN_TAURI:-false}" != "true" ]]; then
     echo "FAIL: RELEASE_GATE=true 需要 RUN_TAURI=true，发布候选必须执行 Tauri sidecar 与 .app 打包门禁。"
+    exit 1
+  fi
+  if [[ "${RUN_TAURI_DMG:-false}" != "true" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要 RUN_TAURI_DMG=true，发布候选必须验证 macOS DMG 打包流程；若本机环境不支持，请单独记录失败原因和 .app 替代验证。"
     exit 1
   fi
 

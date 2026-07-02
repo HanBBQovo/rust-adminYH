@@ -4,6 +4,7 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WEB_DIR="${WEB_DIR:-$ROOT_DIR/apps/desktop/web}"
 RUN_E2E="${RUN_E2E:-false}"
+RUN_COVERAGE="${RUN_COVERAGE:-false}"
 
 section() {
   printf '\n==> %s\n' "$1"
@@ -52,6 +53,11 @@ section "Frontend architecture gate"
 node "$ROOT_DIR/scripts/test-frontend-architecture.mjs"
 run_required_script "typecheck" "Frontend typecheck"
 run_required_script "test" "Frontend unit/component tests"
+if [[ "$RUN_COVERAGE" == "true" ]]; then
+  run_required_script "test:coverage" "Frontend coverage gate"
+else
+  echo "SKIP: RUN_COVERAGE=true 未设置，跳过前端覆盖率门禁。"
+fi
 run_required_script "build" "Frontend production build"
 
 if [[ "$RUN_E2E" == "true" ]]; then
