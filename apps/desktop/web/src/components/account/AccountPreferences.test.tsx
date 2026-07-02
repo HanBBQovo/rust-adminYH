@@ -23,6 +23,7 @@ const SESSION_USER = {
   name: 'admin',
   avatarUrl: '/users/58/avatar',
   roles: ['1'],
+  roleIds: [1],
 }
 
 function renderAccountPreferences(options?: { showToast?: ReturnType<typeof vi.fn>; onAvatarUploaded?: ReturnType<typeof vi.fn> }) {

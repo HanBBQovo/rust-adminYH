@@ -5,6 +5,7 @@ export interface SessionUser {
   name: string
   avatarUrl?: string
   roles: string[]
+  roleIds: number[]
 }
 
 export interface LegacyMenuItem {

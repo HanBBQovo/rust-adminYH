@@ -14,7 +14,7 @@ vi.mock('@/api/auth', () => ({
 
 const TEST_SESSION: AdminSession = {
   token: 'token-123',
-  user: { id: 58, name: 'admin', roles: [] },
+  user: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] },
   menus: [],
 }
 

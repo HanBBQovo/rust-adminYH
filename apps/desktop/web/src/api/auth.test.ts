@@ -25,16 +25,21 @@ describe('auth session API', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        json: async () => ({ code: 0, data: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: async () => ({ code: 0, data: [] }),
       })
 
     const session = await loginSession({ name: 'admin', password: 'secret' })
 
-    expect(session.user).toEqual({ id: 58, name: 'admin', avatarUrl: '/users/58/avatar', roles: [] })
+    expect(session.user).toEqual({ id: 58, name: 'admin', avatarUrl: '/users/58/avatar', roles: ['1'], roleIds: [1] })
     expect(session.token).toBe('token-123')
     expect(getAuthToken()).toBe('token-123')
     expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       '/api/role/1/menu',
       expect.objectContaining({
         headers: expect.objectContaining({ authorization: 'Bearer token-123' }),
@@ -52,12 +57,17 @@ describe('auth session API', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        json: async () => ({ code: 0, data: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: async () => ({ code: 0, data: [] }),
       })
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ code: 0, data: { id: 58, name: 'admin', roles: [] } }),
+        json: async () => ({ code: 0, data: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] } }),
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -70,7 +80,8 @@ describe('auth session API', () => {
 
     expect(restored?.user.name).toBe('admin')
     expect(restored?.user.avatarUrl).toBe('/users/58/avatar')
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/users/me', expect.any(Object))
+    expect(restored?.user.roleIds).toEqual([1])
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/users/me', expect.any(Object))
   })
 
   it('clears the session when restore fails', async () => {
@@ -79,6 +90,11 @@ describe('auth session API', () => {
         ok: true,
         status: 200,
         json: async () => ({ code: 0, data: { id: 58, name: 'admin', token: 'token-123' } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ code: 0, data: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] } }),
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -94,5 +110,26 @@ describe('auth session API', () => {
     await loginSession({ name: 'admin', password: 'secret' })
     await expect(restoreSession()).resolves.toBeNull()
     expect(getAuthToken()).toBe('')
+  })
+
+  it('does not request role 1 menus when the current user has no explicit role id', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ code: 0, data: { id: 58, name: 'admin', token: 'token-123' } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ code: 0, data: { id: 58, name: 'admin', roles: [], roleIds: [] } }),
+      })
+
+    const session = await loginSession({ name: 'admin', password: 'secret' })
+
+    expect(session.user.roleIds).toEqual([])
+    expect(session.menus).toEqual([])
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/role/1/menu', expect.any(Object))
   })
 })

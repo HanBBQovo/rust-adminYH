@@ -7,13 +7,15 @@ const SESSION_STORAGE_KEY = nsKey('session')
 function isSession(value: unknown): value is AdminSession {
   if (!value || typeof value !== 'object') return false
   const session = value as Partial<AdminSession>
+  const user = session.user as Partial<AdminSession['user']> | undefined
   return (
     typeof session.token === 'string' &&
     !!session.token &&
-    !!session.user &&
-    typeof session.user.id === 'number' &&
-    typeof session.user.name === 'string' &&
-    Array.isArray(session.user.roles) &&
+    !!user &&
+    typeof user.id === 'number' &&
+    typeof user.name === 'string' &&
+    Array.isArray(user.roles) &&
+    Array.isArray(user.roleIds) &&
     Array.isArray(session.menus)
   )
 }

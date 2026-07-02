@@ -60,12 +60,25 @@ async function mockUnauthenticatedSession(page: Page) {
 }
 
 async function mockLoginSession(page: Page) {
+  let authenticated = false
   await mockUnauthenticatedSession(page)
+
+  await page.route('**/api/users/me', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(
+        authenticated
+          ? { code: 0, data: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] } }
+          : invalidTokenEnvelope,
+      ),
+    })
+  })
 
   await page.route('**/api/login', async (route) => {
     const request = route.request()
     expect(request.method()).toBe('POST')
     expect(request.headers().authorization).toBeUndefined()
+    authenticated = true
 
     await route.fulfill({
       contentType: 'application/json',

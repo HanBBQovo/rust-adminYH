@@ -20,6 +20,7 @@ export interface CurrentUser {
   name: string
   avatarUrl?: string
   roles: string[]
+  roleIds?: number[]
 }
 
 interface LoginPayload {
@@ -27,22 +28,43 @@ interface LoginPayload {
   name: string
   avatarUrl?: string
   token: string
+  roles?: string[]
+  roleIds?: number[]
 }
 
 function toSessionUser(user: CurrentUser | LoginPayload): SessionUser {
+  const roleIds =
+    'roleIds' in user && Array.isArray(user.roleIds)
+      ? user.roleIds.filter((roleId) => Number.isFinite(roleId))
+      : 'roles' in user && Array.isArray(user.roles)
+        ? user.roles.map(Number).filter((roleId) => Number.isFinite(roleId))
+        : []
+
   return {
     id: user.id,
     name: user.name,
     avatarUrl: 'avatarUrl' in user && typeof user.avatarUrl === 'string' ? user.avatarUrl : `/users/${user.id}/avatar`,
     roles: 'roles' in user && Array.isArray(user.roles) ? user.roles : [],
+    roleIds,
   }
 }
 
 async function fetchMenus(user: SessionUser): Promise<LegacyMenuItem[]> {
+  const roleId = user.roleIds[0]
+  if (!roleId) return []
+
   try {
-    return await apiRequest<LegacyMenuItem[]>(`/role/${user.roles[0] || 1}/menu`)
+    return await apiRequest<LegacyMenuItem[]>(`/role/${roleId}/menu`)
   } catch {
     return []
+  }
+}
+
+async function fetchCurrentUserAfterLogin(loginUser: SessionUser): Promise<SessionUser> {
+  try {
+    return toSessionUser(await apiRequest<CurrentUser>('/users/me'))
+  } catch {
+    return loginUser
   }
 }
 
@@ -51,8 +73,9 @@ export async function loginSession(input: LoginInput): Promise<AdminSession> {
     method: 'POST',
     body: JSON.stringify(input),
   })
-  const user = toSessionUser(result)
+  const loginUser = toSessionUser(result)
   setAuthToken(result.token)
+  const user = await fetchCurrentUserAfterLogin(loginUser)
   const session: AdminSession = {
     token: result.token,
     user,
