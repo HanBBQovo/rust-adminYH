@@ -101,6 +101,19 @@ export async function listOrders(params: OrderListParams): Promise<OrderListResu
   }
 }
 
+export async function listOrdersForExport(filters: OrderListFilters, total: number): Promise<LegacyOrder[]> {
+  const size = Math.max(Math.trunc(total), 0)
+  if (size === 0) return []
+
+  const data = await listOrders({
+    page: 1,
+    pageSize: size,
+    ...filters,
+  })
+
+  return data.rows
+}
+
 export async function getOrder(orderId: number): Promise<LegacyOrder | null> {
   return apiRequest<LegacyOrder | null>(`/order/${orderId}`, {
     method: 'GET',

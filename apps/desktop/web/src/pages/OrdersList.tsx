@@ -6,6 +6,7 @@ import {
   deleteOrder,
   getOrder,
   listOrders,
+  listOrdersForExport,
   updateOrder,
   type LegacyOrder,
   type OrderListFilters,
@@ -164,11 +165,12 @@ export default function OrdersList() {
     }
   }
 
-  const exportCurrentPage = async () => {
-    if (!rows.length) return
+  const exportFilteredOrders = async () => {
+    if (total <= 0) return
     setExporting(true)
     try {
-      const mode = await exportOrdersCsv(rows)
+      const exportRows = await listOrdersForExport(filters, total)
+      const mode = await exportOrdersCsv(exportRows)
       showToast('success', mode === 'desktop' ? '订单 CSV 已保存到所选位置。' : '订单 CSV 已开始下载。', { translate: false })
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : '订单导出失败', { translate: false })
@@ -192,9 +194,9 @@ export default function OrdersList() {
             <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
             刷新
           </Button>
-          <Button type="button" className="gap-2" onClick={exportCurrentPage} disabled={!rows.length || exporting}>
+          <Button type="button" className="gap-2" onClick={exportFilteredOrders} disabled={loading || total <= 0 || exporting}>
             <Download className="h-4 w-4" />
-            {exporting ? '导出中' : '导出当前页'}
+            {exporting ? '导出中' : '导出筛选结果'}
           </Button>
         </>
       }

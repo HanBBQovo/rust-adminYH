@@ -8,18 +8,29 @@ import { GlobalToastContext } from '@/components/ui/global-toast-context'
 import OrdersList from '@/pages/OrdersList'
 
 const listOrdersMock = vi.hoisted(() => vi.fn())
+const listOrdersForExportMock = vi.hoisted(() => vi.fn())
 const getOrderMock = vi.hoisted(() => vi.fn())
 const createOrderMock = vi.hoisted(() => vi.fn())
 const updateOrderMock = vi.hoisted(() => vi.fn())
 const deleteOrderMock = vi.hoisted(() => vi.fn())
+const exportOrdersCsvMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/api/orders', () => ({
   listOrders: listOrdersMock,
+  listOrdersForExport: listOrdersForExportMock,
   getOrder: getOrderMock,
   createOrder: createOrderMock,
   updateOrder: updateOrderMock,
   deleteOrder: deleteOrderMock,
 }))
+
+vi.mock('@/pages/orders/order-export', async () => {
+  const actual = await vi.importActual<typeof import('@/pages/orders/order-export')>('@/pages/orders/order-export')
+  return {
+    ...actual,
+    exportOrdersCsv: exportOrdersCsvMock,
+  }
+})
 
 const ORDER_ROW = {
   id: 1,
@@ -78,15 +89,19 @@ function orderField(dialog: HTMLElement, key: string): HTMLInputElement | HTMLTe
 describe('OrdersList', () => {
   beforeEach(() => {
     listOrdersMock.mockReset()
+    listOrdersForExportMock.mockReset()
     getOrderMock.mockReset()
     createOrderMock.mockReset()
     updateOrderMock.mockReset()
     deleteOrderMock.mockReset()
+    exportOrdersCsvMock.mockReset()
     listOrdersMock.mockResolvedValue({ rows: [ORDER_ROW], total: 11 })
+    listOrdersForExportMock.mockResolvedValue([ORDER_ROW])
     getOrderMock.mockResolvedValue(ORDER_ROW)
     createOrderMock.mockResolvedValue(undefined)
     updateOrderMock.mockResolvedValue(undefined)
     deleteOrderMock.mockResolvedValue(undefined)
+    exportOrdersCsvMock.mockResolvedValue('browser')
   })
 
   it('renders old order columns and loads the first page', async () => {
@@ -233,5 +248,82 @@ describe('OrdersList', () => {
     await waitFor(() => {
       expect(deleteOrderMock).not.toHaveBeenCalled()
     })
+  })
+
+  it('exports the complete currently filtered result instead of the loaded page', async () => {
+    const user = userEvent.setup()
+    const { showToast } = renderOrdersList()
+
+    await screen.findByText('YD20260101001')
+    await user.type(screen.getByLabelText('运单号'), 'YD2026')
+    await user.type(screen.getByLabelText('发货人'), '李四')
+    await user.click(screen.getByRole('button', { name: '查询' }))
+
+    await waitFor(() => {
+      expect(listOrdersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          page: 1,
+          pageSize: 10,
+          oddnumber: 'YD2026',
+          consignor: '李四',
+        }),
+      )
+    })
+
+    await user.click(screen.getByRole('button', { name: '导出筛选结果' }))
+
+    await waitFor(() => {
+      expect(listOrdersForExportMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          oddnumber: 'YD2026',
+          consignor: '李四',
+        }),
+        11,
+      )
+      expect(exportOrdersCsvMock).toHaveBeenCalledWith([ORDER_ROW])
+    })
+    expect(showToast).toHaveBeenCalledWith('success', '订单 CSV 已开始下载。', { translate: false })
+  })
+
+  it('keeps filtered export disabled while the list is refreshing', async () => {
+    const user = userEvent.setup()
+    renderOrdersList()
+
+    await screen.findByText('YD20260101001')
+    listOrdersMock.mockImplementationOnce(() => new Promise(() => {}))
+    await user.click(screen.getByRole('button', { name: '刷新' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '导出筛选结果' })).toBeDisabled()
+    })
+    expect(listOrdersForExportMock).not.toHaveBeenCalled()
+  })
+
+  it('disables filtered export when the current result is empty', async () => {
+    listOrdersMock.mockResolvedValueOnce({ rows: [], total: 0 })
+    const user = userEvent.setup()
+    renderOrdersList()
+
+    await screen.findByText('暂无订单')
+    const exportButton = screen.getByRole('button', { name: '导出筛选结果' })
+    expect(exportButton).toBeDisabled()
+    await user.click(exportButton)
+
+    expect(listOrdersForExportMock).not.toHaveBeenCalled()
+    expect(exportOrdersCsvMock).not.toHaveBeenCalled()
+  })
+
+  it('shows an error toast when filtered export fails', async () => {
+    listOrdersForExportMock.mockRejectedValueOnce(new Error('导出接口失败'))
+    const user = userEvent.setup()
+    const { showToast } = renderOrdersList()
+
+    await screen.findByText('YD20260101001')
+    await user.click(screen.getByRole('button', { name: '导出筛选结果' }))
+
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith('error', '导出接口失败', { translate: false })
+    })
+    expect(exportOrdersCsvMock).not.toHaveBeenCalled()
   })
 })

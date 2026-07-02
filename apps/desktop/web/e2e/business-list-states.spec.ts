@@ -34,6 +34,14 @@ const orderFixture = {
   remarks: 'E2E 订单样本',
 }
 
+const secondOrderFixture = {
+  ...orderFixture,
+  id: 102,
+  oddnumber: 'YH20260702002',
+  consignee: '上海筛选收货人',
+  remarks: 'E2E 第二页订单样本',
+}
+
 const receiptFixture = {
   id: 201,
   oddnumber: 'YH20260702001',
@@ -63,17 +71,30 @@ test.describe('business list E2E state matrix', () => {
 
   test('orders page keeps template shell across loading, loaded, empty, and error states', async ({ page }) => {
     let orderState: 'loaded' | 'empty' | 'error' = 'loaded'
+    let orderListRequests = 0
 
     await page.route('**/api/order/list', async (route) => {
       const request = route.request()
+      const payload = request.postDataJSON()
       expect(request.method()).toBe('POST')
       expect(request.headers().authorization).toBe(`Bearer ${e2eToken}`)
-      expect(request.postDataJSON()).toMatchObject({ offset: 0, size: 10 })
+      orderListRequests += 1
+
+      if (payload.size === 2) {
+        expect(payload).toMatchObject({ offset: 0, size: 2, oddnumber: 'YH202607', consignee: '上海' })
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 0, data: { list: [orderFixture, secondOrderFixture], totalCount: 2 } }),
+        })
+        return
+      }
+
+      expect(payload).toMatchObject({ offset: 0, size: 10 })
 
       if (orderState === 'loaded') {
         await route.fulfill({
           contentType: 'application/json',
-          body: JSON.stringify({ code: 0, data: { list: [orderFixture], totalCount: 1 } }),
+          body: JSON.stringify({ code: 0, data: { list: [orderFixture], totalCount: 2 } }),
         })
         return
       }
@@ -100,9 +121,14 @@ test.describe('business list E2E state matrix', () => {
     await expect(page.getByText('订单数据')).toBeVisible()
     await expect(page.getByText(orderFixture.oddnumber).first()).toBeVisible()
     await expect(page.getByText(orderFixture.company)).toBeVisible()
+    await expect(page.getByText(secondOrderFixture.oddnumber)).toHaveCount(0)
+    await page.getByLabel('运单号').fill('YH202607')
+    await page.getByRole('textbox', { name: '收货人', exact: true }).fill('上海')
+    await page.getByRole('button', { name: '查询' }).click()
+    await expect.poll(() => orderListRequests).toBeGreaterThanOrEqual(2)
 
     const downloadPromise = page.waitForEvent('download')
-    await page.getByRole('button', { name: '导出当前页' }).click()
+    await page.getByRole('button', { name: '导出筛选结果' }).click()
     const download = await downloadPromise
     expect(download.suggestedFilename()).toMatch(/^orders-\d{4}-\d{2}-\d{2}\.csv$/)
     const path = await download.path()
@@ -111,8 +137,10 @@ test.describe('business list E2E state matrix', () => {
     expect(csv.charCodeAt(0)).toBe(0xfeff)
     expect(csv).toContain('运单号,开单时间,收货人')
     expect(csv).toContain(orderFixture.oddnumber)
+    expect(csv).toContain(secondOrderFixture.oddnumber)
     expect(csv).toContain(orderFixture.company)
     expect(csv).toContain(orderFixture.remarks)
+    expect(csv).toContain(secondOrderFixture.remarks)
 
     orderState = 'empty'
     await page.getByRole('button', { name: '刷新' }).click()

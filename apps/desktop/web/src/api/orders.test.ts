@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { buildOrderListPayload, createOrder, deleteOrder, getOrder, listOrders, updateOrder } from '@/api/orders'
+import {
+  buildOrderListPayload,
+  createOrder,
+  deleteOrder,
+  getOrder,
+  listOrders,
+  listOrdersForExport,
+  updateOrder,
+} from '@/api/orders'
 
 const fetchMock = vi.fn()
 
@@ -107,6 +115,43 @@ describe('orders api', () => {
         body: JSON.stringify({ offset: 10, size: 10, oddnumber: 'YD2026' }),
       }),
     )
+  })
+
+  it('loads all currently filtered orders for export from the old list route', async () => {
+    fetchMock.mockImplementationOnce(() =>
+      jsonResponse({
+        totalCount: 12,
+        list: [
+          {
+            id: 1,
+            oddnumber: 'YD20260101001',
+            billingAt: '2026-01-01',
+            consignee: '张三',
+          },
+          {
+            id: 2,
+            oddnumber: 'YD20260101002',
+            billingAt: '2026-01-02',
+            consignee: '张三',
+          },
+        ],
+      }),
+    )
+
+    await expect(listOrdersForExport({ oddnumber: 'YD2026', consignor: '李四' }, 12)).resolves.toHaveLength(2)
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/order/list',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ offset: 0, size: 12, oddnumber: 'YD2026', consignor: '李四' }),
+      }),
+    )
+  })
+
+  it('does not request export data when the filtered total is empty', async () => {
+    await expect(listOrdersForExport({ oddnumber: 'YD2026' }, 0)).resolves.toEqual([])
+
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('wraps old order detail and mutation routes', async () => {
