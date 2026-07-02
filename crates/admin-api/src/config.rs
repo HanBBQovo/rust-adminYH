@@ -4,6 +4,8 @@ use admin_core::{AppError, AppResult};
 use admin_db::DatabaseConfig;
 use std::{env, str::FromStr};
 
+pub const DEFAULT_HTTP_PORT: u16 = 16824;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppConfig {
     pub env: String,
@@ -41,7 +43,7 @@ impl AppConfig {
             name: env_or("APP_NAME", "rust-adminYH"),
             http: HttpConfig {
                 host: parse_env("APP_HTTP__HOST", "127.0.0.1")?,
-                port: parse_env("APP_HTTP__PORT", "18080")?,
+                port: parse_env("APP_HTTP__PORT", "16824")?,
                 request_id_header: env_or("APP_HTTP__REQUEST_ID_HEADER", "x-request-id"),
             },
             logging: LoggingConfig {
@@ -83,7 +85,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::AppConfig;
+    use super::{AppConfig, DEFAULT_HTTP_PORT};
 
     #[test]
     fn default_config_loads() {
@@ -91,5 +93,10 @@ mod tests {
 
         assert_eq!(config.name, "rust-adminYH");
         assert!(config.database.max_connections > 0);
+    }
+
+    #[test]
+    fn default_http_port_matches_desktop_contract() {
+        assert_eq!(DEFAULT_HTTP_PORT, 16824);
     }
 }

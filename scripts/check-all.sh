@@ -18,6 +18,9 @@ section "Migration"
 "$ROOT_DIR/scripts/test-migration.sh"
 
 if [[ -f "$ROOT_DIR/apps/desktop/src-tauri/Cargo.toml" ]]; then
+  section "Tauri contract"
+  "$ROOT_DIR/scripts/test-tauri-contract.sh"
+
   if [[ "${RUN_TAURI:-false}" == "true" ]]; then
     section "Tauri build"
     if [[ "${RUN_TAURI_DMG:-false}" == "true" ]]; then

@@ -15,6 +15,22 @@ npm run build
 npm run tauri:dev
 ```
 
+开发期 `/api` 由 Vite 代理到本机 Rust API,默认端口是 `16824`:
+
+```bash
+APP_HTTP__PORT=16824 cargo run -p admin-api
+cd apps/desktop/web && npm run dev
+```
+
+Tauri 生产包不会内置 Vite 代理。当前桌面壳默认连接 `http://127.0.0.1:16824/api`;
+如果要连接内网或远端 API,打包时显式传入:
+
+```bash
+VITE_API_BASE_URL=https://admin-api.example.com/api npm run tauri:build:app
+```
+
+在 sidecar 后端启动链路落地前,双击 `.app` 不会自动启动 `admin-api`,必须先运行本机或远端 Rust API。
+
 ## 质量门禁
 
 - 默认提交前：在仓库根目录运行 `scripts/check-all.sh`。

@@ -15,10 +15,26 @@ export const PRODUCT_SUBTITLE = 'Rust + Tauri 企业管理端'
 export const STORAGE_NAMESPACE = 'admin-yh'
 
 /**
- * API 基础路径。开发期默认走 Vite `/api` 代理;Tauri 打包后可通过
- * VITE_API_BASE_URL 指向本地或内网 Rust HTTP 服务。
+ * 桌面生产默认连接本机 Rust API。Tauri 生产包没有 Vite `/api` 代理,
+ * 所以不能在 production 继续使用相对 `/api`。
  */
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+export const DEFAULT_DESKTOP_API_BASE_URL = 'http://127.0.0.1:16824/api'
+
+function trimTrailingSlashes(value: string): string {
+  return value.replace(/\/+$/, '') || '/'
+}
+
+export function resolveApiBaseUrl(env: Pick<ImportMetaEnv, 'PROD' | 'VITE_API_BASE_URL'>): string {
+  const configuredBaseUrl = env.VITE_API_BASE_URL?.trim()
+  if (configuredBaseUrl) return trimTrailingSlashes(configuredBaseUrl)
+  return env.PROD ? DEFAULT_DESKTOP_API_BASE_URL : '/api'
+}
+
+/**
+ * API 基础路径。开发期默认走 Vite `/api` 代理;Tauri 生产包默认访问
+ * `http://127.0.0.1:16824/api`,也可在打包时用 VITE_API_BASE_URL 指向内网 API。
+ */
+export const API_BASE_URL = resolveApiBaseUrl(import.meta.env)
 
 /** 生成带命名空间前缀的存储键,例如 nsKey('last-page') => 'app:last-page'。 */
 export function nsKey(name: string): string {

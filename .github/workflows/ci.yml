@@ -121,6 +121,8 @@ jobs:
             apps/desktop/src-tauri -> apps/desktop/src-tauri/target
       - name: Install frontend dependencies
         run: npm ci --prefix apps/desktop/web
+      - name: Check Tauri runtime contract
+        run: scripts/test-tauri-contract.sh
       - name: Build Tauri app bundle
         run: CARGO_NET_OFFLINE=false npm run tauri:build:app --prefix apps/desktop/web
       - name: Upload macOS app bundle
