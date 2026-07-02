@@ -257,7 +257,7 @@ test.describe('system write E2E flows', () => {
     await expect(ordersRow.getByText('可接入')).toBeVisible()
     await expect(ordersRow.getByText('建设中')).toHaveCount(0)
 
-    for (const moduleName of ['回单管理', '角色权限', '菜单管理']) {
+    for (const moduleName of ['回单管理', '角色权限', '菜单资源']) {
       await expect(page.getByRole('row').filter({ hasText: moduleName }).getByText('可接入')).toBeVisible()
     }
   })

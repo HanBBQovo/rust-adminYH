@@ -12,11 +12,13 @@ RUNTIME_IMAGE="${RUNTIME_IMAGE:-debian:bookworm-slim}"
 NODE_IMAGE="${NODE_IMAGE:-node:20-slim}"
 NGINX_IMAGE="${NGINX_IMAGE:-nginx:1.27-alpine}"
 MYSQL_IMAGE="${MYSQL_IMAGE:-mysql:8.0}"
+NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmjs.org}"
 API_URL="${API_URL:-http://127.0.0.1:16824/api/health}"
 WEB_URL="${WEB_URL:-http://127.0.0.1:18080/}"
 WEB_API_URL="${WEB_API_URL:-http://127.0.0.1:18080/api/health}"
 WEB_PORT="${WEB_PORT:-18080}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-rust-adminyh-ci}"
+RUN_DOCKER_E2E="${RUN_DOCKER_E2E:-false}"
 
 section() {
   printf '\n==> %s\n' "$1"
@@ -48,14 +50,16 @@ diagnostics() {
   echo "web_image=${WEB_IMAGE}"
   echo "rust_base=${RUST_IMAGE}"
   echo "runtime_base=${RUNTIME_IMAGE}"
-  echo "node_base=${NODE_IMAGE}"
-  echo "nginx_base=${NGINX_IMAGE}"
-  echo "mysql_base=${MYSQL_IMAGE}"
-  echo "api_url=${API_URL}"
+echo "node_base=${NODE_IMAGE}"
+echo "nginx_base=${NGINX_IMAGE}"
+echo "mysql_base=${MYSQL_IMAGE}"
+echo "npm_registry=${NPM_REGISTRY}"
+echo "api_url=${API_URL}"
   echo "web_url=${WEB_URL}"
-  echo "web_api_url=${WEB_API_URL}"
-  echo "web_port=${WEB_PORT}"
-  echo "database_url=$(printf '%s' "${DATABASE_URL:-mysql://admin_yh:admin_yh@mysql:3306/admin_yh}" | redact_url)"
+echo "web_api_url=${WEB_API_URL}"
+echo "web_port=${WEB_PORT}"
+echo "run_docker_e2e=${RUN_DOCKER_E2E}"
+echo "database_url=$(printf '%s' "${DATABASE_URL:-mysql://admin_yh:admin_yh@mysql:3306/admin_yh}" | redact_url)"
   echo
   docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" ps || true
   echo
@@ -77,6 +81,7 @@ echo "runtime_base=${RUNTIME_IMAGE}"
 echo "node_base=${NODE_IMAGE}"
 echo "nginx_base=${NGINX_IMAGE}"
 echo "mysql_base=${MYSQL_IMAGE}"
+echo "npm_registry=${NPM_REGISTRY}"
 
 section "Docker cleanup before run"
 docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" down --volumes --remove-orphans || true
@@ -94,6 +99,7 @@ docker build \
   --file Dockerfile.desktop-web \
   --build-arg NODE_IMAGE="$NODE_IMAGE" \
   --build-arg NGINX_IMAGE="$NGINX_IMAGE" \
+  --build-arg NPM_REGISTRY="$NPM_REGISTRY" \
   --tag "$WEB_IMAGE" \
   .
 
@@ -103,6 +109,7 @@ RUNTIME_IMAGE="$RUNTIME_IMAGE" \
 NODE_IMAGE="$NODE_IMAGE" \
 NGINX_IMAGE="$NGINX_IMAGE" \
 MYSQL_IMAGE="$MYSQL_IMAGE" \
+NPM_REGISTRY="$NPM_REGISTRY" \
 WEB_PORT="$WEB_PORT" \
 docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" up -d mysql admin-api desktop-web
 
@@ -131,6 +138,20 @@ echo "asset_ok=${ASSET_PATH}"
 curl --fail --silent --show-error "$WEB_API_URL" >/tmp/rust-adminyh-web-api-health.json
 cat /tmp/rust-adminyh-web-api-health.json
 echo
+
+if [[ "$RUN_DOCKER_E2E" == "true" ]]; then
+  section "Seed Docker E2E database"
+  docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" exec -T mysql \
+    mysql -uadmin_yh -padmin_yh admin_yh < "$ROOT_DIR/scripts/seed-docker-e2e.sql"
+
+  section "Real API browser E2E"
+  (
+    cd "$ROOT_DIR/apps/desktop/web"
+    PLAYWRIGHT_BASE_URL="${WEB_URL%/}" REAL_API_E2E=true npm run e2e -- e2e/real-api.spec.ts
+  )
+else
+  echo "SKIP: RUN_DOCKER_E2E=true 未设置，跳过 Docker Web + Rust API + MySQL 真实浏览器 E2E。发布前必须执行 RUN_DOCKER_E2E=true。"
+fi
 
 section "Docker compose status"
 docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" ps

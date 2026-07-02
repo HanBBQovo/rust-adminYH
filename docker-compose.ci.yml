@@ -50,6 +50,7 @@ services:
       args:
         NODE_IMAGE: ${NODE_IMAGE:-node:20-slim}
         NGINX_IMAGE: ${NGINX_IMAGE:-nginx:1.27-alpine}
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
         VITE_API_BASE_URL: /api
     image: rust-adminyh/desktop-web:ci
     depends_on:

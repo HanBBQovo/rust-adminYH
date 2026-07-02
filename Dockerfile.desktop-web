@@ -4,10 +4,20 @@ ARG NODE_IMAGE=node:20-slim
 ARG NGINX_IMAGE=nginx:1.27-alpine
 
 FROM ${NODE_IMAGE} AS builder
+ARG NPM_REGISTRY=https://registry.npmjs.org
 WORKDIR /app/apps/desktop/web
 
 COPY apps/desktop/web/package.json apps/desktop/web/package-lock.json ./
-RUN npm ci
+RUN npm ci \
+      --no-audit \
+      --no-fund \
+      --registry=${NPM_REGISTRY} \
+      --replace-registry-host=always \
+      --fetch-retries=5 \
+      --fetch-retry-mintimeout=20000 \
+      --fetch-retry-maxtimeout=120000 \
+    && test -x node_modules/.bin/tsc \
+    && test -x node_modules/.bin/vite
 
 COPY apps/desktop/web ./
 ARG VITE_API_BASE_URL=/api
