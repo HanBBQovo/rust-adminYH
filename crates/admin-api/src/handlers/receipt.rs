@@ -1,34 +1,15 @@
-use admin_core::dto::{
-    CurrentUserResponse, ReceiptListRequest, ReceiptListResponse, ReceiptStatusRequest,
-};
+use admin_core::dto::{ReceiptListRequest, ReceiptListResponse, ReceiptStatusRequest};
 use axum::{
     extract::{Path, State},
-    http::{header::AUTHORIZATION, HeaderMap},
+    http::HeaderMap,
     Json,
 };
 
 use crate::{
-    middleware::auth::require_bearer_token,
+    middleware::auth::require_auth,
     response::{ErrorResponse, JsonResponse, MessageResponse},
     AppState,
 };
-
-async fn require_auth(
-    state: &AppState,
-    headers: &HeaderMap,
-) -> Result<CurrentUserResponse, ErrorResponse> {
-    let token = require_bearer_token(
-        headers
-            .get(AUTHORIZATION)
-            .and_then(|value| value.to_str().ok()),
-    )
-    .map_err(ErrorResponse)?;
-    state
-        .auth_service
-        .current_user(token)
-        .await
-        .map_err(ErrorResponse)
-}
 
 pub async fn list(
     State(state): State<AppState>,
