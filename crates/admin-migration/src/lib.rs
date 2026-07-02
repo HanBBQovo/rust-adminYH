@@ -536,6 +536,7 @@ async fn verify_databases_with_pools(
     let mut warnings = Vec::new();
 
     compare_table_summaries(old_pool, new_pool, &mut checks, &mut warnings).await?;
+    compare_table_fingerprints(old_pool, new_pool, &mut checks, &mut warnings).await?;
     compare_status_distributions(old_pool, new_pool, &mut checks, &mut warnings).await?;
     compare_orphan_counts(old_pool, new_pool, &mut checks, &mut warnings).await?;
     compare_date_bounds(old_pool, new_pool, &mut checks, &mut warnings).await?;
@@ -853,6 +854,26 @@ async fn compare_table_summaries(
     Ok(())
 }
 
+async fn compare_table_fingerprints(
+    old_pool: &MySqlPool,
+    new_pool: &MySqlPool,
+    checks: &mut Vec<String>,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    for spec in TABLE_SPECS {
+        let old = table_fingerprint(old_pool, spec).await?;
+        let new = table_fingerprint(new_pool, spec).await?;
+        push_comparison(
+            checks,
+            warnings,
+            format!("table.{}.fingerprint", spec.table),
+            old == new,
+            format!("old={old} new={new}"),
+        );
+    }
+    Ok(())
+}
+
 async fn compare_status_distributions(
     old_pool: &MySqlPool,
     new_pool: &MySqlPool,
@@ -959,6 +980,84 @@ async fn compare_group_counts(
         format!("old={old:?} new={new:?}"),
     );
     Ok(())
+}
+
+async fn table_fingerprint(pool: &MySqlPool, spec: &TableSpec) -> Result<String> {
+    let sql = table_fingerprint_sql(spec);
+    let rows = sqlx::query(&sql)
+        .fetch_all(pool)
+        .await
+        .with_context(|| format!("failed fingerprint query for table {}", spec.table))?;
+
+    let mut serialized_rows = Vec::with_capacity(rows.len());
+    for row in rows {
+        let values = spec
+            .columns
+            .iter()
+            .map(|column| fingerprint_cell(&row, column))
+            .collect();
+        serialized_rows.push(values);
+    }
+
+    Ok(fingerprint_serialized_rows(&serialized_rows))
+}
+
+fn table_fingerprint_sql(spec: &TableSpec) -> String {
+    let columns = spec
+        .columns
+        .iter()
+        .map(|column| format!("CAST(`{column}` AS CHAR) AS `{column}`"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("SELECT {columns} FROM `{}` ORDER BY `id` ASC", spec.table)
+}
+
+fn fingerprint_cell(row: &MySqlRow, column: &str) -> Option<String> {
+    row.try_get::<Option<String>, _>(column)
+        .ok()
+        .flatten()
+        .or_else(|| row.try_get::<String, _>(column).ok())
+        .or_else(|| {
+            row.try_get::<i64, _>(column)
+                .ok()
+                .map(|value| value.to_string())
+        })
+        .or_else(|| {
+            row.try_get::<u64, _>(column)
+                .ok()
+                .map(|value| value.to_string())
+        })
+        .or_else(|| {
+            row.try_get::<i32, _>(column)
+                .ok()
+                .map(|value| value.to_string())
+        })
+        .or_else(|| {
+            row.try_get::<u32, _>(column)
+                .ok()
+                .map(|value| value.to_string())
+        })
+}
+
+fn fingerprint_serialized_rows(rows: &[Vec<Option<String>>]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(format!("rows:{}\n", rows.len()).as_bytes());
+    for row in rows {
+        hasher.update(format!("cols:{}\n", row.len()).as_bytes());
+        for value in row {
+            match value {
+                Some(value) => {
+                    hasher.update(b"S:");
+                    hasher.update(value.len().to_string().as_bytes());
+                    hasher.update(b":");
+                    hasher.update(value.as_bytes());
+                    hasher.update(b"\n");
+                }
+                None => hasher.update(b"N\n"),
+            }
+        }
+    }
+    format!("{:x}", hasher.finalize())
 }
 
 async fn group_count_map(pool: &MySqlPool, sql: &str) -> Result<BTreeMap<String, i64>> {
@@ -1369,7 +1468,7 @@ fn rollback_verification_steps() -> Vec<String> {
     vec![
         "run inspect-old against the restored database and avatar directory".to_owned(),
         "run migrate --dry-run against a fresh shadow database before any new apply attempt".to_owned(),
-        "run verify and verify-files; row counts, ID ranges, business sums, status distributions, and avatar hashes must pass".to_owned(),
+        "run verify and verify-files; row counts, ID ranges, table fingerprints, business sums, status distributions, and avatar hashes must pass".to_owned(),
         "run API compatibility, Docker health, Tauri sidecar, Playwright E2E, and frontend coverage gates again".to_owned(),
     ]
 }
@@ -1823,6 +1922,73 @@ mod tests {
         assert!(text.contains("verify-files"));
         assert!(text.contains("legacy-compatible login"));
         assert!(text.contains("classify the failure"));
+    }
+
+    #[test]
+    fn table_fingerprint_sql_uses_whitelisted_columns_and_stable_order() {
+        let spec = TableSpec {
+            table: "receipt",
+            columns: &["id", "oddnumber", "recoverystate"],
+        };
+
+        assert_eq!(
+            table_fingerprint_sql(&spec),
+            "SELECT CAST(`id` AS CHAR) AS `id`, CAST(`oddnumber` AS CHAR) AS `oddnumber`, CAST(`recoverystate` AS CHAR) AS `recoverystate` FROM `receipt` ORDER BY `id` ASC"
+        );
+    }
+
+    #[test]
+    fn row_fingerprint_distinguishes_values_nulls_and_order() {
+        let baseline = fingerprint_serialized_rows(&[
+            vec![Some("1".to_owned()), Some("A".to_owned()), None],
+            vec![
+                Some("2".to_owned()),
+                Some("B".to_owned()),
+                Some("".to_owned()),
+            ],
+        ]);
+
+        let same = fingerprint_serialized_rows(&[
+            vec![Some("1".to_owned()), Some("A".to_owned()), None],
+            vec![
+                Some("2".to_owned()),
+                Some("B".to_owned()),
+                Some("".to_owned()),
+            ],
+        ]);
+        let changed_value = fingerprint_serialized_rows(&[
+            vec![Some("1".to_owned()), Some("A".to_owned()), None],
+            vec![
+                Some("2".to_owned()),
+                Some("C".to_owned()),
+                Some("".to_owned()),
+            ],
+        ]);
+        let changed_null = fingerprint_serialized_rows(&[
+            vec![
+                Some("1".to_owned()),
+                Some("A".to_owned()),
+                Some("".to_owned()),
+            ],
+            vec![
+                Some("2".to_owned()),
+                Some("B".to_owned()),
+                Some("".to_owned()),
+            ],
+        ]);
+        let changed_order = fingerprint_serialized_rows(&[
+            vec![
+                Some("2".to_owned()),
+                Some("B".to_owned()),
+                Some("".to_owned()),
+            ],
+            vec![Some("1".to_owned()), Some("A".to_owned()), None],
+        ]);
+
+        assert_eq!(baseline, same);
+        assert_ne!(baseline, changed_value);
+        assert_ne!(baseline, changed_null);
+        assert_ne!(baseline, changed_order);
     }
 
     #[tokio::test]

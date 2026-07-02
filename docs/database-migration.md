@@ -94,7 +94,7 @@ dry-run 只读旧库和新库，输出：
 - `verify-files --old-avatar-dir <OLD_AVATAR_DIR> --new-avatar-dir <NEW_AVATAR_DIR> --format json` 对比头像文件相对路径和 SHA256，用于迁移后的文件完整性检查；缺失、多余或 hash 变化都会输出 `status=failed` 并以非 0 退出，不能把文件差异当成普通 warning 放过。
 - `migrate --old <OLD_DATABASE_URL> --new <NEW_DATABASE_URL> --old-avatar-dir <OLD_AVATAR_DIR> --new-avatar-dir <NEW_AVATAR_DIR> --format json` 已支持真实 apply；默认拒绝写入非空目标库，只有影子库明确需要增量/复跑时才允许加 `--allow-non-empty-target`。
 - 真实 apply 按白名单字段复制 11 张兼容表，保留旧 `id`、MD5 密码、`user.token`、中文回单状态、毫秒 `billingAt`、`company_order.com_name` 和 `receipt.oddnumber`，每张表复制后立即校验行数与 ID 边界，并设置 `AUTO_INCREMENT = MAX(id)+1`。
-- `verify --old <OLD_DATABASE_URL> --new <NEW_DATABASE_URL> --format json` 已从脚手架升级为真实对账：比较所有核心表行数/ID、订单聚合、回单状态分布、RBAC 分布、弱关联孤儿数量、日期边界和头像 DB 指标；任何不一致都会返回 `status=failed`。
+- `verify --old <OLD_DATABASE_URL> --new <NEW_DATABASE_URL> --format json` 已从脚手架升级为真实对账：比较所有核心表行数/ID、白名单字段表级 SHA256 fingerprint、订单聚合、回单状态分布、RBAC 分布、弱关联孤儿数量、日期边界和头像 DB 指标；任何不一致都会返回 `status=failed`。
 
 当前已落地 SQLx 兼容数据库层第一阶段：
 
@@ -152,6 +152,7 @@ dry-run 只读旧库和新库，输出：
 
 - 每张表行数一致。
 - 每张含自增 ID 的表最大 ID 一致。
+- 每张兼容表的白名单字段表级 SHA256 fingerprint 一致，确保行数一致但字段内容被写错时也会阻断。
 - `SUM(order_list.sumfreight)` 一致。
 - `SUM(order_list.receiptnum)` 一致。
 - `receipt` 按 `recoverystate/issuestate/poststate` 分组计数一致。
@@ -160,7 +161,7 @@ dry-run 只读旧库和新库，输出：
 - 用户角色分布一致。
 - 角色菜单数量和根/子菜单数量一致。
 - 头像 DB 记录与磁盘文件 hash 一致；缺失文件有 fallback 策略。
-- 随机抽样 50 条订单、50 条回单、10 个用户详情字段一致。
+- 对订单、回单、用户等核心表不再只依赖随机抽样；`verify` 会按 `TABLE_SPECS` 白名单字段对全表按 `id` 稳定排序后计算内容 fingerprint，发布记录中必须保存这些 `table.<name>.fingerprint` 检查项。
 
 ## 4. 推荐校验 SQL
 
