@@ -65,3 +65,19 @@ fn compat_schema_supports_user_auth_and_avatar_repositories() {
     assert!(schema.contains("INDEX `idx_user_role_user_id` (`user_id`)"));
     assert!(schema.contains("INDEX `idx_user_role_role_id` (`role_id`)"));
 }
+
+#[test]
+fn compat_schema_supports_menu_and_role_repositories() {
+    let schema = fs::read_to_string(SCHEMA_PATH).expect("schema should be readable");
+
+    assert!(schema.contains("`pid` BIGINT NULL DEFAULT 0"));
+    assert!(schema.contains("`type` INT NOT NULL DEFAULT 1"));
+    assert!(schema.contains("`url` VARCHAR(500) NULL"));
+    assert!(schema.contains("`icon` VARCHAR(255) NULL"));
+    assert!(schema.contains("`sort` INT NOT NULL DEFAULT 0"));
+    assert!(schema.contains("INDEX `idx_permission_pid` (`pid`)"));
+    assert!(schema.contains("INDEX `idx_permission_type_sort` (`type`, `sort`)"));
+    assert!(schema.contains("INDEX `idx_role_name` (`name`)"));
+    assert!(schema.contains("INDEX `idx_role_permission_role_id` (`role_id`)"));
+    assert!(schema.contains("INDEX `idx_role_permission_permission_id` (`permission_id`)"));
+}
