@@ -15,6 +15,7 @@ interface DataTableSurfaceProps {
   error?: string | null
   emptyTitle: string
   emptyDescription?: string
+  emptyActions?: ReactNode
   isEmpty: boolean
   onRetry?: () => void
   pagination?: PaginationProps
@@ -28,6 +29,7 @@ export function DataTableSurface({
   error,
   emptyTitle,
   emptyDescription,
+  emptyActions,
   isEmpty,
   onRetry,
   pagination,
@@ -46,7 +48,7 @@ export function DataTableSurface({
           <InlineLoader />
         </div>
       ) : isEmpty ? (
-        <EmptyState title={emptyTitle} description={emptyDescription} />
+        <EmptyState title={emptyTitle} description={emptyDescription} actions={emptyActions} />
       ) : (
         <div className="ops-table-shell">{children}</div>
       )}

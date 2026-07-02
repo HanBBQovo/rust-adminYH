@@ -1,4 +1,4 @@
-import { FolderTree, Plus, RefreshCw, Save, Search } from 'lucide-react'
+import { FolderTree, Plus, RefreshCw, Save } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import {
@@ -11,9 +11,9 @@ import {
   type MenuCreatePayload,
   type MenuTreeItem,
 } from '@/api/menus'
-import { InlineLoader } from '@/components/PageLoader'
+import { DataTableSurface } from '@/components/layout/DataTableSurface'
 import { FormField, FormSection } from '@/components/layout/FormScaffold'
-import { PageShell, PageSurface, PageStat, PageStatStrip } from '@/components/layout/PageScaffold'
+import { PageShell, PageStat, PageStatStrip } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -24,8 +24,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -243,74 +241,60 @@ export default function MenusList() {
         <PageStat label="接口" value="/menu/tree" note="新增使用 POST /menu" />
       </PageStatStrip>
 
-      <PageSurface
+      <DataTableSurface
         title="菜单列表"
         description="保留旧字段 name、type、url、icon、sort、permission、createAt、updateAt；同时兼容 children 和旧 typo chilren。"
-        bodyClassName="p-0"
+        error={error}
+        loading={loading && !data}
+        isEmpty={!flatRows.length}
+        emptyTitle="暂无菜单"
+        emptyDescription="旧 /menu/tree 未返回菜单树。"
+        onRetry={refresh}
+        emptyActions={
+          <Button type="button" className="gap-2" onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4" />
+            创建菜单
+          </Button>
+        }
       >
-        {error ? (
-          <div className="p-5">
-            <ErrorState message={error} onRetry={refresh} />
-          </div>
-        ) : loading && !data ? (
-          <div className="flex h-64 items-center justify-center">
-            <InlineLoader />
-          </div>
-        ) : flatRows.length ? (
-          <div className="ops-table-shell">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-14 text-right">ID</TableHead>
-                  <TableHead className="min-w-[220px]">菜单名称</TableHead>
-                  <TableHead className="min-w-[110px]">类型</TableHead>
-                  <TableHead className="min-w-[240px]">菜单url</TableHead>
-                  <TableHead className="min-w-[140px]">菜单icon</TableHead>
-                  <TableHead className="min-w-[120px]">按钮权限</TableHead>
-                  <TableHead className="min-w-[90px] text-right">排序</TableHead>
-                  <TableHead className="min-w-[220px]">创建时间</TableHead>
-                  <TableHead className="min-w-[220px]">更新时间</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {flatRows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="text-right font-mono text-xs text-muted-foreground">{row.id}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2" style={{ paddingLeft: `${row.depth * 20}px` }}>
-                        <FolderTree className="h-4 w-4 text-primary" />
-                        <span className="font-medium">{row.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{menuTypeLabel(row.type)}</Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{row.url || '-'}</TableCell>
-                    <TableCell className="font-mono text-xs">{row.icon || '-'}</TableCell>
-                    <TableCell className="font-mono text-xs">{row.permission || '-'}</TableCell>
-                    <TableCell className="text-right font-mono text-xs">{row.sort}</TableCell>
-                    <TableCell className="font-mono text-xs">{row.createAt || '-'}</TableCell>
-                    <TableCell className="font-mono text-xs">{row.updateAt || '-'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        ) : (
-          <div className="p-5">
-            <EmptyState
-              title="暂无菜单"
-              description="旧 /menu/tree 未返回菜单树。"
-              actions={
-                <Button type="button" className="gap-2" onClick={() => setDialogOpen(true)}>
-                  <Search className="h-4 w-4" />
-                  创建菜单
-                </Button>
-              }
-            />
-          </div>
-        )}
-      </PageSurface>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-14 text-right">ID</TableHead>
+              <TableHead className="min-w-[220px]">菜单名称</TableHead>
+              <TableHead className="min-w-[110px]">类型</TableHead>
+              <TableHead className="min-w-[240px]">菜单url</TableHead>
+              <TableHead className="min-w-[140px]">菜单icon</TableHead>
+              <TableHead className="min-w-[120px]">按钮权限</TableHead>
+              <TableHead className="min-w-[90px] text-right">排序</TableHead>
+              <TableHead className="min-w-[220px]">创建时间</TableHead>
+              <TableHead className="min-w-[220px]">更新时间</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {flatRows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell className="text-right font-mono text-xs text-muted-foreground">{row.id}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2" style={{ paddingLeft: `${row.depth * 20}px` }}>
+                    <FolderTree className="h-4 w-4 text-primary" />
+                    <span className="font-medium">{row.name}</span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline">{menuTypeLabel(row.type)}</Badge>
+                </TableCell>
+                <TableCell className="font-mono text-xs">{row.url || '-'}</TableCell>
+                <TableCell className="font-mono text-xs">{row.icon || '-'}</TableCell>
+                <TableCell className="font-mono text-xs">{row.permission || '-'}</TableCell>
+                <TableCell className="text-right font-mono text-xs">{row.sort}</TableCell>
+                <TableCell className="font-mono text-xs">{row.createAt || '-'}</TableCell>
+                <TableCell className="font-mono text-xs">{row.updateAt || '-'}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </DataTableSurface>
 
       <MenuFormDialog
         open={dialogOpen}

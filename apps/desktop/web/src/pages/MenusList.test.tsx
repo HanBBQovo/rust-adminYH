@@ -157,10 +157,16 @@ describe('MenusList', () => {
     })
   })
 
-  it('renders the empty state', async () => {
+  it('renders the empty state and keeps the create action available', async () => {
+    const user = userEvent.setup()
     listMenuTreeMock.mockResolvedValueOnce([])
     renderMenusList()
 
     expect(await screen.findByText('暂无菜单')).toBeInTheDocument()
+    const createButtons = screen.getAllByRole('button', { name: '创建菜单' })
+    await user.click(createButtons[createButtons.length - 1])
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '创建菜单' })).toBeInTheDocument()
   })
 })

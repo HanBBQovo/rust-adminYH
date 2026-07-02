@@ -52,10 +52,14 @@ describe('DataTableSurface', () => {
   })
 
   it('renders the empty state', () => {
-    renderTableSurface({ isEmpty: true })
+    renderTableSurface({
+      isEmpty: true,
+      emptyActions: <button type="button">新建数据</button>,
+    })
 
     expect(screen.getByText('暂无数据')).toBeInTheDocument()
     expect(screen.getByText('稍后再试')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '新建数据' })).toBeInTheDocument()
     expect(screen.queryByText('操作按钮')).not.toBeInTheDocument()
   })
 
