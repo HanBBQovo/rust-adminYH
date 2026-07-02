@@ -53,6 +53,9 @@ if cargo metadata --format-version=1 --no-deps | grep -q '"name":"admin-db"'; th
     run_if "admin-db MySQL company repository integration tests" \
       env ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
       cargo test "${CARGO_FLAGS[@]}" -p admin-db --test mysql_company_repository -- --ignored
+    run_if "admin-db MySQL chart repository integration tests" \
+      env ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
+      cargo test "${CARGO_FLAGS[@]}" -p admin-db --test mysql_chart_repository -- --ignored
     run_if "admin-db MySQL role/menu repository integration tests" \
       env ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
       cargo test "${CARGO_FLAGS[@]}" -p admin-db --test mysql_role_menu_repository -- --ignored

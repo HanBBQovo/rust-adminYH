@@ -104,6 +104,7 @@ dry-run 只读旧库和新库，输出：
 - `MySqlOrderRepository` 已实现订单、回单、memory 的 SQLx 参数化仓储：订单创建在事务内写入 `order_list`、`company_order`、可选 `receipt`，并对收/发货人 memory 做存在性检查后再插入。
 - `MySqlCompanyRepository` 已实现公司分页、详情、新增、修改、删除；`Countorder` 按旧口径从 `company_order.com_name` 统计，未命中详情保持空数组语义，公司改名不级联历史订单或公司订单文本。
 - 真实 MySQL 回归已覆盖公司仓储：列表分页、详情数组/空数组、`Countorder` 文本弱关联统计、创建/改名/删除，以及公司改名后历史 `company_order.com_name` 不被静默重写的兼容边界。
+- 真实 MySQL 回归已覆盖图表仓储：首页 header 指标增量、公司订单数、公司运费和回单汇总继续按旧 `company_order`、`order_list`、`receipt` 弱关联口径聚合，避免迁移时误改统计口径。
 - 真实 MySQL 回归已覆盖角色/菜单仓储：角色筛选/增删改、菜单树旧 `children/chilren` 双形状、菜单新增旧 `partentId` 兼容、角色菜单 ID 汇总、权限分配去重替换和失败校验不污染既有 `role_permission`。
 - `MySqlChartRepository` 已实现旧图表 snapshot 查询，继续保留旧口径差异：公司订单数来自 `company_order.com_name`，运费和回单数来自 `order_list.company/sumfreight/receiptnum`，回单总数来自 `receipt`。
 - `MySqlUserRepository` 已实现旧用户和认证 SQLx 仓储，登录 token 继续写回 `user.token`，用户创建在事务内写入 `user`、`user_role`、默认 `avatar`，头像更新在事务内同步 `avatar` 和 `user.avatar_url`。
