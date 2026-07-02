@@ -193,6 +193,59 @@ async fn admin_can_create_update_assign_and_delete_role() {
 }
 
 #[tokio::test]
+async fn role_assign_rejects_unknown_menu_id_without_clearing_existing_permissions() {
+    let app = build_router(admin_state());
+    let token = login_token(app.clone(), "admin").await;
+
+    let (_, before) =
+        json_request(app.clone(), "GET", "/api/role/1/menuIds", Some(&token), "").await;
+    let before_ids = before["data"]["menuIds"]
+        .as_array()
+        .expect("menu ids should be array")
+        .clone();
+
+    let (status, json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/role/assign",
+        Some(&token),
+        r#"{"roleId":1,"menuList":[1,999999]}"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(json["code"], -400);
+    assert_eq!(json["message"], "请求参数错误: 权限菜单不存在: 999999");
+
+    let (_, after) = json_request(app, "GET", "/api/role/1/menuIds", Some(&token), "").await;
+    assert_eq!(
+        after["data"]["menuIds"]
+            .as_array()
+            .expect("menu ids should be array"),
+        &before_ids
+    );
+}
+
+#[tokio::test]
+async fn role_assign_rejects_non_positive_menu_id() {
+    let app = build_router(admin_state());
+    let token = login_token(app.clone(), "admin").await;
+
+    let (status, json) = json_request(
+        app,
+        "POST",
+        "/api/role/assign",
+        Some(&token),
+        r#"{"roleId":1,"menuList":[1,0]}"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(json["code"], -400);
+    assert_eq!(json["message"], "请求参数错误: 权限菜单不能为空");
+}
+
+#[tokio::test]
 async fn role_create_rejects_empty_name() {
     let app = build_router(admin_state());
     let token = login_token(app.clone(), "admin").await;

@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     future::Future,
     pin::Pin,
     sync::{Arc, Mutex},
@@ -55,6 +56,11 @@ pub trait RoleStore: Send + Sync {
         role_id: i64,
         menu_ids: Vec<i64>,
     ) -> ServiceFuture<'a, AppResult<()>>;
+
+    fn validate_menu_ids<'a>(
+        &'a self,
+        menu_ids: &'a [i64],
+    ) -> ServiceFuture<'a, AppResult<Vec<i64>>>;
 }
 
 pub struct CompatRoleService {
@@ -129,7 +135,19 @@ impl RoleService for CompatRoleService {
             if input.role_id <= 0 {
                 return Err(AppError::Validation("角色不能为空".to_owned()));
             }
-            store.replace_menu_ids(input.role_id, input.menu_list).await
+            let menu_ids = normalize_menu_ids(input.menu_list)?;
+            let missing_menu_ids = store.validate_menu_ids(&menu_ids).await?;
+            if !missing_menu_ids.is_empty() {
+                return Err(AppError::Validation(format!(
+                    "权限菜单不存在: {}",
+                    missing_menu_ids
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )));
+            }
+            store.replace_menu_ids(input.role_id, menu_ids).await
         })
     }
 }
@@ -329,6 +347,20 @@ impl RoleStore for InMemoryRoleStore {
             Ok(())
         })
     }
+
+    fn validate_menu_ids<'a>(
+        &'a self,
+        menu_ids: &'a [i64],
+    ) -> ServiceFuture<'a, AppResult<Vec<i64>>> {
+        Box::pin(async move {
+            let allowed_ids = [1, 11, 2, 21, 3, 31, 32];
+            Ok(menu_ids
+                .iter()
+                .copied()
+                .filter(|menu_id| !allowed_ids.contains(menu_id))
+                .collect())
+        })
+    }
 }
 
 pub fn development_role_service() -> CompatRoleService {
@@ -343,6 +375,20 @@ fn normalize_role(input: &RoleMutationRequest) -> AppResult<()> {
         return Err(AppError::Validation("权限介绍不能为空".to_owned()));
     }
     Ok(())
+}
+
+fn normalize_menu_ids(menu_ids: Vec<i64>) -> AppResult<Vec<i64>> {
+    let mut normalized = Vec::new();
+    let mut seen = HashSet::new();
+    for menu_id in menu_ids {
+        if menu_id <= 0 {
+            return Err(AppError::Validation("权限菜单不能为空".to_owned()));
+        }
+        if seen.insert(menu_id) {
+            normalized.push(menu_id);
+        }
+    }
+    Ok(normalized)
 }
 
 fn filter_roles(roles: &[RoleRecord], input: &RoleListRequest) -> Vec<RoleRecord> {
@@ -445,5 +491,35 @@ mod tests {
             .expect("menus should replace");
 
         assert_eq!(service.detail(2).await.unwrap().unwrap().name, "普通用户");
+    }
+
+    #[tokio::test]
+    async fn role_assign_rejects_non_positive_menu_ids() {
+        let service = development_role_service();
+
+        let error = service
+            .assign(RoleAssignRequest {
+                role_id: 2,
+                menu_list: vec![1, 0],
+            })
+            .await
+            .expect_err("invalid menu id should fail");
+
+        assert_eq!(error.to_string(), "请求参数错误: 权限菜单不能为空");
+    }
+
+    #[tokio::test]
+    async fn role_assign_rejects_unknown_menu_ids_before_replace() {
+        let service = development_role_service();
+
+        let error = service
+            .assign(RoleAssignRequest {
+                role_id: 2,
+                menu_list: vec![1, 999_999],
+            })
+            .await
+            .expect_err("unknown menu id should fail");
+
+        assert_eq!(error.to_string(), "请求参数错误: 权限菜单不存在: 999999");
     }
 }

@@ -137,6 +137,23 @@ impl RoleStore for MySqlRoleRepository {
             tx.commit().await.map_err(db_error)
         })
     }
+
+    fn validate_menu_ids<'a>(
+        &'a self,
+        menu_ids: &'a [i64],
+    ) -> ServiceFuture<'a, AppResult<Vec<i64>>> {
+        Box::pin(async move {
+            if menu_ids.is_empty() {
+                return Ok(Vec::new());
+            }
+            let existing = fetch_existing_permission_ids(&self.pool, menu_ids).await?;
+            Ok(menu_ids
+                .iter()
+                .copied()
+                .filter(|menu_id| !existing.contains(menu_id))
+                .collect())
+        })
+    }
 }
 
 fn role_select_sql(filter_sql: &str) -> String {
@@ -225,6 +242,27 @@ async fn ensure_role_exists(tx: &mut Transaction<'_, MySql>, role_id: i64) -> Ap
         return Err(AppError::NotFound(format!("role {role_id}")));
     }
     Ok(())
+}
+
+async fn fetch_existing_permission_ids(
+    pool: &MySqlPool,
+    menu_ids: &[i64],
+) -> AppResult<HashSet<i64>> {
+    let mut query = QueryBuilder::new("SELECT `id` FROM `permission` WHERE `id` IN (");
+    let mut separated = query.separated(", ");
+    for menu_id in menu_ids {
+        separated.push_bind(*menu_id);
+    }
+    separated.push_unseparated(")");
+
+    query
+        .build()
+        .fetch_all(pool)
+        .await
+        .map_err(db_error)?
+        .into_iter()
+        .map(|row| row.try_get::<i64, _>("id").map_err(db_error))
+        .collect()
 }
 
 fn role_from_row(row: sqlx::mysql::MySqlRow) -> RoleRecord {
