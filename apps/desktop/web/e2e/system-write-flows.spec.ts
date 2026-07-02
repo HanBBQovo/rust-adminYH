@@ -66,9 +66,52 @@ const navMenus = [
 
 const navItems = navMenus.map((menu) => menu.name)
 
+const resourceRegistryFixture = [
+  {
+    key: 'orders',
+    title: '订单管理',
+    description: '承运单、货运信息、结算状态',
+    count: 2,
+    status: 'ready',
+    apiPath: '/order/list',
+    legacyPath: 'adminYh/src/views/orders',
+    owner: '业务前台',
+  },
+  {
+    key: 'receipts',
+    title: '回单管理',
+    description: '未回收、已回收、回单状态追踪',
+    count: 2,
+    status: 'ready',
+    apiPath: '/receipt/list',
+    legacyPath: 'adminYh/src/views/receipt',
+    owner: '业务前台',
+  },
+  {
+    key: 'roles',
+    title: '角色权限',
+    description: '角色、菜单授权、权限树',
+    count: 2,
+    status: 'ready',
+    apiPath: '/role/list',
+    legacyPath: 'adminYh/src/views/role',
+    owner: '系统设置',
+  },
+  {
+    key: 'menus',
+    title: '菜单资源',
+    description: '侧边栏、路由、权限节点',
+    count: 6,
+    status: 'ready',
+    apiPath: '/menu/tree',
+    legacyPath: 'adminYh/src/router',
+    owner: '系统设置',
+  },
+]
+
 test.describe('system write E2E flows', () => {
   test.beforeEach(async ({ page }) => {
-    await mockAdminSession(page, { menus: navMenus })
+    await mockAdminSession(page, { menus: navMenus, resources: resourceRegistryFixture })
   })
 
   test('assigns role menu permissions through the legacy role assignment payload', async ({ page }) => {
@@ -209,7 +252,7 @@ test.describe('system write E2E flows', () => {
     await expectTemplateShell(page, '页面注册表', navItems)
     await expect(page.getByRole('heading', { name: '业务模块' })).toBeVisible()
 
-    const ordersRow = page.getByRole('row').filter({ hasText: '运单管理' })
+    const ordersRow = page.getByRole('row').filter({ hasText: '订单管理' })
     await expect(ordersRow.getByText('/order/list')).toBeVisible()
     await expect(ordersRow.getByText('可接入')).toBeVisible()
     await expect(ordersRow.getByText('建设中')).toHaveCount(0)

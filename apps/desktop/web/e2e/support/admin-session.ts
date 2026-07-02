@@ -10,6 +10,7 @@ export const invalidTokenEnvelope = {
 export interface MockSessionOptions {
   menus: Array<{ id: number; name: string; url: string }>
   currentUser?: Record<string, unknown>
+  resources?: Array<Record<string, unknown>>
 }
 
 export async function mockAdminSession(page: Page, options: MockSessionOptions) {
@@ -103,6 +104,20 @@ export async function mockAdminSession(page: Page, options: MockSessionOptions) 
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({ code: 0, data: [] }),
+    })
+  })
+
+  await page.route('**/api/admin/resources', async (route) => {
+    expect(route.request().method()).toBe('GET')
+    expect(route.request().headers().authorization).toBe(`Bearer ${e2eToken}`)
+
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 0,
+        data: options.resources ?? [],
+        message: 'success',
+      }),
     })
   })
 }
