@@ -42,6 +42,18 @@ fi
 
 if cargo metadata --format-version=1 --no-deps | grep -q '"name":"admin-db"'; then
   run_if "admin-db package tests" cargo test "${CARGO_FLAGS[@]}" -p admin-db
+  if [[ "${RUN_DB_TESTS:-false}" == "true" ]]; then
+    if [[ -z "${ADMIN_DB_TEST_DATABASE_URL:-}" ]]; then
+      echo "ERROR: RUN_DB_TESTS=true 需要设置 ADMIN_DB_TEST_DATABASE_URL 指向可重建的 MySQL 测试库。"
+      exit 1
+    fi
+    run_if "admin-db MySQL repository integration tests" \
+      env ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
+      cargo test "${CARGO_FLAGS[@]}" -p admin-db --test mysql_order_repository -- --ignored
+  else
+    echo
+    echo "SKIP: RUN_DB_TESTS=true 未设置，跳过真实 MySQL repository 集成测试。发布前必须执行 RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL=... scripts/check-all.sh。"
+  fi
 fi
 
 echo

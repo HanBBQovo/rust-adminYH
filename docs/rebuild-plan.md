@@ -954,9 +954,9 @@ scripts/test-e2e.sh
 
 前端质量门禁必须包含 `lint`、`typecheck`、`test`、`build` 四段；Playwright E2E 通过 `RUN_E2E=true scripts/test-frontend.sh` 显式开启，避免本地缺少浏览器二进制时阻塞普通提交，但发布候选版本必须开启 E2E。
 
-当前生产 API 已接入 SQLx MySQL 仓储，普通 `scripts/check-all.sh` 覆盖编译、clippy、内存仓储 API 集成测试、前端组件测试和构建；连接真实数据库的 repository/迁移回归必须在影子库设置 `OLD_DATABASE_URL`、`NEW_DATABASE_URL`、`DATABASE_URL` 后单独执行，不允许用本地空库冒充迁移验收。
+当前生产 API 已接入 SQLx MySQL 仓储，普通 `scripts/check-all.sh` 覆盖编译、clippy、内存仓储 API 集成测试、前端组件测试和构建；连接真实数据库的 repository/迁移回归必须在影子库设置 `ADMIN_DB_TEST_DATABASE_URL`、`OLD_DATABASE_URL`、`NEW_DATABASE_URL`、`DATABASE_URL` 后单独执行，不允许用本地空库冒充迁移验收。默认门禁会明确打印 `RUN_DB_TESTS=true` 未设置时跳过真实 MySQL repository 集成测试，不能把该跳过视为发布级数据库验收。
 
-每次接入一个真实 SQLx 仓储后，必须至少完成三层验证：`cargo test --offline -p admin-db` 验证仓储编译和 schema 契约、`cargo test --offline -p admin-api -p admin-db` 验证 API 装配编译、`scripts/check-all.sh` 验证全仓库回归。
+每次接入一个真实 SQLx 仓储后，必须至少完成四层验证：`cargo test --offline -p admin-db` 验证仓储编译和 schema 契约、`cargo test --offline -p admin-api -p admin-db` 验证 API 装配编译、`scripts/check-all.sh` 验证全仓库回归、`RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL=mysql://... scripts/check-all.sh` 验证真实 MySQL repository 事务路径。当前订单仓储已提供 `crates/admin-db/tests/mysql_order_repository.rs`，覆盖真实 MySQL 下订单创建、回单同步更新和弱关联删除清理。
 
 ### 11.4 发布门禁
 
