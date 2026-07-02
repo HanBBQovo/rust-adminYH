@@ -92,6 +92,9 @@ dry-run 只读旧库和新库，输出：
 - `inspect-old --old <OLD_DATABASE_URL> --old-avatar-dir <OLD_AVATAR_DIR> --format json` 输出每表行数、ID 边界、重复数据、孤儿关系、回单状态枚举、日期边界、头像文件 SHA256 和 DB/磁盘差异。
 - `migrate --dry-run --old <OLD_DATABASE_URL> --new <NEW_DATABASE_URL> --old-avatar-dir <OLD_AVATAR_DIR> --format json` 复用同一套旧库审计，并明确标记 `dry-run only`，禁止真实写入。
 - `verify-files --old-avatar-dir <OLD_AVATAR_DIR> --new-avatar-dir <NEW_AVATAR_DIR> --format json` 对比头像文件相对路径和 SHA256，用于迁移后的文件完整性检查。
+- `migrate --old <OLD_DATABASE_URL> --new <NEW_DATABASE_URL> --old-avatar-dir <OLD_AVATAR_DIR> --new-avatar-dir <NEW_AVATAR_DIR> --format json` 已支持真实 apply；默认拒绝写入非空目标库，只有影子库明确需要增量/复跑时才允许加 `--allow-non-empty-target`。
+- 真实 apply 按白名单字段复制 11 张兼容表，保留旧 `id`、MD5 密码、`user.token`、中文回单状态、毫秒 `billingAt`、`company_order.com_name` 和 `receipt.oddnumber`，每张表复制后立即校验行数与 ID 边界，并设置 `AUTO_INCREMENT = MAX(id)+1`。
+- `verify --old <OLD_DATABASE_URL> --new <NEW_DATABASE_URL> --format json` 已从脚手架升级为真实对账：比较所有核心表行数/ID、订单聚合、回单状态分布、RBAC 分布、弱关联孤儿数量、日期边界和头像 DB 指标；任何不一致都会返回 `status=failed`。
 
 当前已落地 SQLx 兼容数据库层第一阶段：
 
@@ -213,6 +216,19 @@ cargo run -p admin-migration -- inspect-old --old "$OLD_DATABASE_URL" --old-avat
 cargo run -p admin-migration -- migrate --dry-run --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL" --old-avatar-dir "$OLD_AVATAR_DIR" --format json
 cargo run -p admin-migration -- verify --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL" --format json
 ```
+
+真实迁移 apply 只在显式开启时执行，避免误写生产库：
+
+```bash
+MIGRATION_APPLY=true \
+OLD_DATABASE_URL=mysql://user:pass@127.0.0.1/admin_yh_shadow_old \
+NEW_DATABASE_URL=mysql://user:pass@127.0.0.1/admin_yh_shadow_new \
+OLD_AVATAR_DIR=/Users/hanhan/Desktop/code/adminYh-server/uploads/avatar \
+NEW_AVATAR_DIR=/tmp/admin-yh-new-avatar \
+scripts/test-migration.sh
+```
+
+如目标影子库不是空库，必须人工确认后额外设置 `MIGRATION_ALLOW_NON_EMPTY_TARGET=true`；生产切换前不建议开启该选项。
 
 如果设置 `NEW_AVATAR_DIR`，脚本还会执行：
 

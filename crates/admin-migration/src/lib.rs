@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::{self, Display},
+    fs,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -25,6 +26,113 @@ const EXPECTED_TABLES: &[&str] = &[
     "order_list",
     "company_order",
     "receipt",
+];
+
+const COPY_BATCH_SIZE: usize = 250;
+
+const TABLE_SPECS: &[TableSpec] = &[
+    TableSpec {
+        table: "role",
+        columns: &["id", "name", "intro", "createAt", "updateAt"],
+    },
+    TableSpec {
+        table: "permission",
+        columns: &[
+            "id", "pid", "name", "type", "url", "icon", "sort", "createAt", "updateAt",
+        ],
+    },
+    TableSpec {
+        table: "user",
+        columns: &[
+            "id",
+            "name",
+            "password",
+            "avatar_url",
+            "token",
+            "enable",
+            "createAt",
+            "updateAt",
+        ],
+    },
+    TableSpec {
+        table: "company",
+        columns: &["id", "name", "createAt", "updateAt"],
+    },
+    TableSpec {
+        table: "memory",
+        columns: &["id", "name", "createAt", "updateAt"],
+    },
+    TableSpec {
+        table: "avatar",
+        columns: &[
+            "id", "filename", "mimetype", "size", "user_id", "createAt", "updateAt",
+        ],
+    },
+    TableSpec {
+        table: "user_role",
+        columns: &["id", "user_id", "role_id", "createAt", "updateAt"],
+    },
+    TableSpec {
+        table: "role_permission",
+        columns: &["id", "role_id", "permission_id", "createAt", "updateAt"],
+    },
+    TableSpec {
+        table: "order_list",
+        columns: &[
+            "id",
+            "oddnumber",
+            "billingAt",
+            "consignee",
+            "consigneephone",
+            "address",
+            "method",
+            "goodsname",
+            "number",
+            "pack",
+            "weight",
+            "measurement",
+            "cainsurance",
+            "value",
+            "insurance",
+            "consignor",
+            "consignorphone",
+            "freight",
+            "delivery",
+            "sumfreight",
+            "freightstate",
+            "paynow",
+            "paygo",
+            "payback",
+            "paymonth",
+            "receiptnum",
+            "company",
+            "remarks",
+            "createAt",
+            "updateAt",
+        ],
+    },
+    TableSpec {
+        table: "company_order",
+        columns: &["id", "com_name", "order_id", "createAt", "updateAt"],
+    },
+    TableSpec {
+        table: "receipt",
+        columns: &[
+            "id",
+            "oddnumber",
+            "billingAt",
+            "recoverystate",
+            "issuestate",
+            "poststate",
+            "recoverynumber",
+            "consignor",
+            "consignee",
+            "goodsname",
+            "goodsnumber",
+            "createAt",
+            "updateAt",
+        ],
+    },
 ];
 
 const DUPLICATE_CHECKS: &[DuplicateCheck] = &[
@@ -163,11 +271,15 @@ pub enum Commands {
         #[arg(long)]
         dry_run: bool,
         #[arg(long)]
+        allow_non_empty_target: bool,
+        #[arg(long)]
         old: String,
         #[arg(long)]
         new: String,
         #[arg(long)]
         old_avatar_dir: Option<PathBuf>,
+        #[arg(long)]
+        new_avatar_dir: Option<PathBuf>,
         #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
         format: OutputFormat,
     },
@@ -220,49 +332,26 @@ pub async fn run_cli(cli: Cli) -> Result<()> {
         }
         Commands::Migrate {
             dry_run,
+            allow_non_empty_target,
             old,
             new,
             old_avatar_dir,
+            new_avatar_dir,
             format,
         } => {
-            if !dry_run {
-                return Err(anyhow!(
-                    "apply migration is intentionally disabled in this slice; rerun with --dry-run"
-                ));
-            }
-
-            let mut report = inspect_old(&old, old_avatar_dir.as_deref()).await?;
-            report.command = "migrate --dry-run".to_owned();
-            report.new_database = Some(DatabaseRef {
-                url_masked: mask_database_url(&new),
-            });
-            report
-                .warnings
-                .push("dry-run only: no rows or files were written".to_owned());
+            let report = migrate_database(
+                &old,
+                &new,
+                old_avatar_dir.as_deref(),
+                new_avatar_dir.as_deref(),
+                dry_run,
+                allow_non_empty_target,
+            )
+            .await?;
             print_report(&report, format)
         }
         Commands::Verify { old, new, format } => {
-            let report = VerifyReport {
-                command: "verify".to_owned(),
-                generated_at: generated_at(),
-                old_database: DatabaseRef {
-                    url_masked: mask_database_url(&old),
-                },
-                new_database: DatabaseRef {
-                    url_masked: mask_database_url(&new),
-                },
-                status: "pending".to_owned(),
-                checks: vec![
-                    "row counts".to_owned(),
-                    "max ids".to_owned(),
-                    "freight and receipt totals".to_owned(),
-                    "receipt status distributions".to_owned(),
-                    "role and permission distributions".to_owned(),
-                ],
-                warnings: vec![
-                    "verify is scaffolded until the new SQLx schema is finalized".to_owned(),
-                ],
-            };
+            let report = verify_databases(&old, &new).await?;
             print_report(&report, format)
         }
         Commands::VerifyFiles {
@@ -328,6 +417,197 @@ pub async fn inspect_old(old_url: &str, old_avatar_dir: Option<&Path>) -> Result
         date_bounds,
         avatar_files,
         avatar_diff,
+        copy_summaries: Vec::new(),
+        avatar_file_copy: None,
+        warnings,
+    })
+}
+
+pub async fn migrate_database(
+    old_url: &str,
+    new_url: &str,
+    old_avatar_dir: Option<&Path>,
+    new_avatar_dir: Option<&Path>,
+    dry_run: bool,
+    allow_non_empty_target: bool,
+) -> Result<MigrationReport> {
+    let mut report = inspect_old(old_url, old_avatar_dir).await?;
+    report.command = if dry_run {
+        "migrate --dry-run".to_owned()
+    } else {
+        "migrate".to_owned()
+    };
+    report.new_database = Some(DatabaseRef {
+        url_masked: mask_database_url(new_url),
+    });
+
+    if dry_run {
+        report
+            .warnings
+            .push("dry-run only: no rows or files were written".to_owned());
+        if new_avatar_dir.is_some() {
+            report
+                .warnings
+                .push("dry-run only: avatar files were not copied".to_owned());
+        }
+        return Ok(report);
+    }
+
+    let old_pool = MySqlPool::connect(old_url)
+        .await
+        .with_context(|| "failed to connect to legacy database for migration")?;
+    let new_pool = MySqlPool::connect(new_url)
+        .await
+        .with_context(|| "failed to connect to target database for migration")?;
+
+    if !allow_non_empty_target {
+        ensure_target_empty(&new_pool).await?;
+    }
+
+    for spec in TABLE_SPECS {
+        let summary = copy_table(&old_pool, &new_pool, spec).await?;
+        report.copy_summaries.push(summary);
+    }
+
+    if let (Some(old_dir), Some(new_dir)) = (old_avatar_dir, new_avatar_dir) {
+        report.avatar_file_copy = Some(copy_avatar_files(old_dir, new_dir).await?);
+    } else if old_avatar_dir.is_some() {
+        report.warnings.push(
+            "old avatar directory provided but new avatar directory missing; skipped file copy"
+                .to_owned(),
+        );
+    }
+
+    let verify_report = verify_databases_with_pools(&old_pool, &new_pool, old_url, new_url).await?;
+    if verify_report.status != "passed" {
+        return Err(anyhow!(
+            "migration verification failed after apply: {}",
+            verify_report.warnings.join("; ")
+        ));
+    }
+
+    report.warnings.push(
+        "apply completed: target database row counts, ids, aggregates, statuses and weak relations verified"
+            .to_owned(),
+    );
+    Ok(report)
+}
+
+pub async fn verify_databases(old_url: &str, new_url: &str) -> Result<VerifyReport> {
+    let old_pool = MySqlPool::connect(old_url)
+        .await
+        .with_context(|| "failed to connect to legacy database for verification")?;
+    let new_pool = MySqlPool::connect(new_url)
+        .await
+        .with_context(|| "failed to connect to target database for verification")?;
+
+    verify_databases_with_pools(&old_pool, &new_pool, old_url, new_url).await
+}
+
+async fn verify_databases_with_pools(
+    old_pool: &MySqlPool,
+    new_pool: &MySqlPool,
+    old_url: &str,
+    new_url: &str,
+) -> Result<VerifyReport> {
+    let mut checks = Vec::new();
+    let mut warnings = Vec::new();
+
+    compare_table_summaries(old_pool, new_pool, &mut checks, &mut warnings).await?;
+    compare_status_distributions(old_pool, new_pool, &mut checks, &mut warnings).await?;
+    compare_orphan_counts(old_pool, new_pool, &mut checks, &mut warnings).await?;
+    compare_date_bounds(old_pool, new_pool, &mut checks, &mut warnings).await?;
+
+    compare_scalar_metrics(
+        "order_list.metrics",
+        "SELECT CAST(COUNT(*) AS CHAR) AS row_count, CAST(COUNT(DISTINCT `oddnumber`) AS CHAR) AS distinct_oddnumber, CAST(COALESCE(SUM(CAST(NULLIF(`sumfreight`, '') AS DECIMAL(20,2))), 0) AS CHAR) AS sumfreight, CAST(COALESCE(SUM(`receiptnum`), 0) AS CHAR) AS receiptnum, CAST(MIN(`billingAt`) AS CHAR) AS min_billingAt, CAST(MAX(`billingAt`) AS CHAR) AS max_billingAt FROM `order_list`",
+        &[
+            "row_count",
+            "distinct_oddnumber",
+            "sumfreight",
+            "receiptnum",
+            "min_billingAt",
+            "max_billingAt",
+        ],
+        old_pool,
+        new_pool,
+        &mut checks,
+        &mut warnings,
+    )
+    .await?;
+    compare_scalar_metrics(
+        "avatar.db_metrics",
+        "SELECT CAST(COUNT(*) AS CHAR) AS row_count, CAST(COUNT(DISTINCT `filename`) AS CHAR) AS distinct_filename, CAST(COUNT(DISTINCT `user_id`) AS CHAR) AS distinct_user_id FROM `avatar`",
+        &["row_count", "distinct_filename", "distinct_user_id"],
+        old_pool,
+        new_pool,
+        &mut checks,
+        &mut warnings,
+    )
+    .await?;
+    compare_scalar_metrics(
+        "user.avatar_url_metrics",
+        "SELECT CAST(COUNT(*) AS CHAR) AS row_count, CAST(SUM(CASE WHEN `avatar_url` IS NOT NULL AND `avatar_url` <> '' THEN 1 ELSE 0 END) AS CHAR) AS users_with_avatar_url FROM `user`",
+        &["row_count", "users_with_avatar_url"],
+        old_pool,
+        new_pool,
+        &mut checks,
+        &mut warnings,
+    )
+    .await?;
+
+    compare_group_counts(
+        "receipt.status_combo",
+        "SELECT CONCAT_WS('|', `recoverystate`, `issuestate`, `poststate`) AS value, COUNT(*) AS total FROM `receipt` GROUP BY `recoverystate`, `issuestate`, `poststate`",
+        old_pool,
+        new_pool,
+        &mut checks,
+        &mut warnings,
+    )
+    .await?;
+    compare_group_counts(
+        "user_role.by_role",
+        "SELECT CAST(`role_id` AS CHAR) AS value, COUNT(*) AS total FROM `user_role` GROUP BY `role_id`",
+        old_pool,
+        new_pool,
+        &mut checks,
+        &mut warnings,
+    )
+    .await?;
+    compare_group_counts(
+        "role_permission.by_role",
+        "SELECT CAST(`role_id` AS CHAR) AS value, COUNT(*) AS total FROM `role_permission` GROUP BY `role_id`",
+        old_pool,
+        new_pool,
+        &mut checks,
+        &mut warnings,
+    )
+    .await?;
+    compare_group_counts(
+        "permission.pid_type",
+        "SELECT CONCAT_WS('|', `pid`, `type`) AS value, COUNT(*) AS total FROM `permission` GROUP BY `pid`, `type`",
+        old_pool,
+        new_pool,
+        &mut checks,
+        &mut warnings,
+    )
+    .await?;
+
+    Ok(VerifyReport {
+        command: "verify".to_owned(),
+        generated_at: generated_at(),
+        old_database: DatabaseRef {
+            url_masked: mask_database_url(old_url),
+        },
+        new_database: DatabaseRef {
+            url_masked: mask_database_url(new_url),
+        },
+        status: if warnings.is_empty() {
+            "passed".to_owned()
+        } else {
+            "failed".to_owned()
+        },
+        checks,
         warnings,
     })
 }
@@ -373,6 +653,319 @@ pub async fn verify_files(
     })
 }
 
+async fn ensure_target_empty(pool: &MySqlPool) -> Result<()> {
+    let summaries = inspect_tables(pool).await?;
+    let populated = summaries
+        .into_iter()
+        .filter(|table| table.row_count > 0)
+        .map(|table| format!("{}={}", table.name, table.row_count))
+        .collect::<Vec<_>>();
+
+    if populated.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow!(
+            "target database is not empty; refusing apply without --allow-non-empty-target: {}",
+            populated.join(", ")
+        ))
+    }
+}
+
+async fn copy_table(
+    old_pool: &MySqlPool,
+    new_pool: &MySqlPool,
+    spec: &TableSpec,
+) -> Result<TableCopySummary> {
+    let columns = quoted_columns(spec.columns);
+    let select_columns = cast_columns(spec.columns);
+    let placeholders = std::iter::repeat("?")
+        .take(spec.columns.len())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let select_sql = format!(
+        "SELECT {select_columns} FROM `{}` ORDER BY `id` ASC",
+        spec.table
+    );
+    let insert_sql = format!(
+        "INSERT INTO `{}` ({columns}) VALUES ({placeholders})",
+        spec.table
+    );
+
+    let rows = sqlx::query(&select_sql)
+        .fetch_all(old_pool)
+        .await
+        .with_context(|| format!("failed to read source table {}", spec.table))?;
+    let mut copied = 0_i64;
+
+    for chunk in rows.chunks(COPY_BATCH_SIZE) {
+        let mut tx = new_pool
+            .begin()
+            .await
+            .with_context(|| format!("failed to begin target transaction for {}", spec.table))?;
+        for row in chunk {
+            let mut query = sqlx::query(&insert_sql);
+            for column in spec.columns {
+                let value = string_cell_ref(row, column);
+                query = query.bind(value);
+            }
+            query
+                .execute(&mut *tx)
+                .await
+                .with_context(|| format!("failed to insert row into {}", spec.table))?;
+            copied += 1;
+        }
+        tx.commit()
+            .await
+            .with_context(|| format!("failed to commit copied rows for {}", spec.table))?;
+    }
+
+    let old_summary = inspect_table(old_pool, spec.table).await?;
+    let new_summary = inspect_table(new_pool, spec.table).await?;
+    if old_summary != new_summary {
+        return Err(anyhow!(
+            "post-copy table summary mismatch for {}: old={old_summary:?} new={new_summary:?}",
+            spec.table
+        ));
+    }
+    set_auto_increment(new_pool, spec.table, old_summary.max_id).await?;
+
+    Ok(TableCopySummary {
+        table: spec.table.to_owned(),
+        copied_rows: copied,
+        row_count: new_summary.row_count,
+        min_id: new_summary.min_id,
+        max_id: new_summary.max_id,
+    })
+}
+
+async fn set_auto_increment(pool: &MySqlPool, table: &str, max_id: Option<i64>) -> Result<()> {
+    let Some(max_id) = max_id else {
+        return Ok(());
+    };
+    let next_id = max_id.saturating_add(1).max(1);
+    let sql = format!("ALTER TABLE `{table}` AUTO_INCREMENT = {next_id}");
+    sqlx::query(&sql)
+        .execute(pool)
+        .await
+        .with_context(|| format!("failed to set AUTO_INCREMENT for {table}"))?;
+    Ok(())
+}
+
+async fn copy_avatar_files(old_dir: &Path, new_dir: &Path) -> Result<FileCopySummary> {
+    let old_dir = old_dir.to_path_buf();
+    let new_dir = new_dir.to_path_buf();
+    task::spawn_blocking(move || copy_avatar_files_blocking(&old_dir, &new_dir))
+        .await
+        .with_context(|| "failed to join avatar copy task")?
+}
+
+fn copy_avatar_files_blocking(old_dir: &Path, new_dir: &Path) -> Result<FileCopySummary> {
+    if !old_dir.exists() {
+        return Err(anyhow!(
+            "old avatar directory does not exist: {}",
+            old_dir.display()
+        ));
+    }
+
+    fs::create_dir_all(new_dir)
+        .with_context(|| format!("failed to create {}", new_dir.display()))?;
+
+    let mut copied_files = 0_u64;
+    let mut copied_bytes = 0_u64;
+    for entry in WalkDir::new(old_dir).sort_by_file_name() {
+        let entry = entry.with_context(|| format!("failed to read {}", old_dir.display()))?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+
+        let source = entry.path();
+        let relative_path = source.strip_prefix(old_dir).unwrap_or(source);
+        let target = new_dir.join(relative_path);
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("failed to create {}", parent.display()))?;
+        }
+        let bytes = fs::copy(source, &target).with_context(|| {
+            format!(
+                "failed to copy {} to {}",
+                source.display(),
+                target.display()
+            )
+        })?;
+        copied_files += 1;
+        copied_bytes += bytes;
+    }
+
+    Ok(FileCopySummary {
+        old_directory: old_dir.display().to_string(),
+        new_directory: new_dir.display().to_string(),
+        copied_files,
+        copied_bytes,
+    })
+}
+
+async fn compare_table_summaries(
+    old_pool: &MySqlPool,
+    new_pool: &MySqlPool,
+    checks: &mut Vec<String>,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    for table in EXPECTED_TABLES {
+        let old = inspect_table(old_pool, table).await?;
+        let new = inspect_table(new_pool, table).await?;
+        push_comparison(
+            checks,
+            warnings,
+            format!("table.{table}.summary"),
+            old == new,
+            format!("old={old:?} new={new:?}"),
+        );
+    }
+    Ok(())
+}
+
+async fn compare_status_distributions(
+    old_pool: &MySqlPool,
+    new_pool: &MySqlPool,
+    checks: &mut Vec<String>,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let old = inspect_status_distributions(old_pool).await?;
+    let new = inspect_status_distributions(new_pool).await?;
+    for (old_status, new_status) in old.iter().zip(new.iter()) {
+        push_comparison(
+            checks,
+            warnings,
+            format!("status.{}", old_status.field),
+            old_status.values == new_status.values,
+            format!("old={:?} new={:?}", old_status.values, new_status.values),
+        );
+    }
+    Ok(())
+}
+
+async fn compare_orphan_counts(
+    old_pool: &MySqlPool,
+    new_pool: &MySqlPool,
+    checks: &mut Vec<String>,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let old = inspect_orphans(old_pool).await?;
+    let new = inspect_orphans(new_pool).await?;
+    for (old_orphan, new_orphan) in old.iter().zip(new.iter()) {
+        push_comparison(
+            checks,
+            warnings,
+            format!("orphan.{}", old_orphan.name),
+            old_orphan.count == new_orphan.count,
+            format!("old={} new={}", old_orphan.count, new_orphan.count),
+        );
+    }
+    Ok(())
+}
+
+async fn compare_date_bounds(
+    old_pool: &MySqlPool,
+    new_pool: &MySqlPool,
+    checks: &mut Vec<String>,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let old = inspect_date_bounds(old_pool).await?;
+    let new = inspect_date_bounds(new_pool).await?;
+    for (old_bounds, new_bounds) in old.iter().zip(new.iter()) {
+        push_comparison(
+            checks,
+            warnings,
+            format!("date_bounds.{}", old_bounds.field),
+            old_bounds.min == new_bounds.min && old_bounds.max == new_bounds.max,
+            format!(
+                "old=({:?},{:?}) new=({:?},{:?})",
+                old_bounds.min, old_bounds.max, new_bounds.min, new_bounds.max
+            ),
+        );
+    }
+    Ok(())
+}
+
+async fn compare_scalar_metrics(
+    label: &str,
+    sql: &str,
+    columns: &[&str],
+    old_pool: &MySqlPool,
+    new_pool: &MySqlPool,
+    checks: &mut Vec<String>,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let old = fetch_optional_row(old_pool, sql).await?;
+    let new = fetch_optional_row(new_pool, sql).await?;
+    for column in columns {
+        let old_value = string_cell(&old, column);
+        let new_value = string_cell(&new, column);
+        push_comparison(
+            checks,
+            warnings,
+            format!("{label}.{column}"),
+            old_value == new_value,
+            format!("old={old_value:?} new={new_value:?}"),
+        );
+    }
+    Ok(())
+}
+
+async fn compare_group_counts(
+    label: &str,
+    sql: &str,
+    old_pool: &MySqlPool,
+    new_pool: &MySqlPool,
+    checks: &mut Vec<String>,
+    warnings: &mut Vec<String>,
+) -> Result<()> {
+    let old = group_count_map(old_pool, sql).await?;
+    let new = group_count_map(new_pool, sql).await?;
+    push_comparison(
+        checks,
+        warnings,
+        label.to_owned(),
+        old == new,
+        format!("old={old:?} new={new:?}"),
+    );
+    Ok(())
+}
+
+async fn group_count_map(pool: &MySqlPool, sql: &str) -> Result<BTreeMap<String, i64>> {
+    let rows = sqlx::query(sql)
+        .fetch_all(pool)
+        .await
+        .with_context(|| format!("failed group count query: {sql}"))?;
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let row = Some(row);
+            (
+                string_cell(&row, "value").unwrap_or_else(|| "<NULL>".to_owned()),
+                i64_cell(&row, "total").unwrap_or_default(),
+            )
+        })
+        .collect())
+}
+
+fn push_comparison(
+    checks: &mut Vec<String>,
+    warnings: &mut Vec<String>,
+    label: String,
+    passed: bool,
+    detail: String,
+) {
+    checks.push(format!(
+        "{}: {}",
+        label,
+        if passed { "passed" } else { "failed" }
+    ));
+    if !passed {
+        warnings.push(format!("{label} mismatch: {detail}"));
+    }
+}
+
 async fn inspect_tables(pool: &MySqlPool) -> Result<Vec<TableSummary>> {
     let mut tables = Vec::with_capacity(EXPECTED_TABLES.len());
     for table in EXPECTED_TABLES {
@@ -388,6 +981,35 @@ async fn inspect_tables(pool: &MySqlPool) -> Result<Vec<TableSummary>> {
         });
     }
     Ok(tables)
+}
+
+async fn inspect_table(pool: &MySqlPool, table: &str) -> Result<TableSummary> {
+    let sql = format!(
+        "SELECT COUNT(*) AS row_count, MIN(`id`) AS min_id, MAX(`id`) AS max_id FROM `{table}`"
+    );
+    let row = fetch_optional_row(pool, &sql).await?;
+    Ok(TableSummary {
+        name: table.to_owned(),
+        row_count: i64_cell(&row, "row_count").unwrap_or_default(),
+        min_id: i64_cell(&row, "min_id"),
+        max_id: i64_cell(&row, "max_id"),
+    })
+}
+
+fn quoted_columns(columns: &[&str]) -> String {
+    columns
+        .iter()
+        .map(|column| format!("`{column}`"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn cast_columns(columns: &[&str]) -> String {
+    columns
+        .iter()
+        .map(|column| format!("CAST(`{column}` AS CHAR) AS `{column}`"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 async fn inspect_duplicates(pool: &MySqlPool) -> Result<Vec<DuplicateSummary>> {
@@ -627,6 +1249,10 @@ fn i64_cell(row: &Option<MySqlRow>, column: &str) -> Option<i64> {
 
 fn string_cell(row: &Option<MySqlRow>, column: &str) -> Option<String> {
     let row = row.as_ref()?;
+    string_cell_ref(row, column)
+}
+
+fn string_cell_ref(row: &MySqlRow, column: &str) -> Option<String> {
     row.try_get::<String, _>(column)
         .ok()
         .or_else(|| {
@@ -811,6 +1437,10 @@ pub struct MigrationReport {
     pub avatar_files: Option<AvatarFileInventory>,
     #[serde(rename = "avatarDiff", skip_serializing_if = "Option::is_none")]
     pub avatar_diff: Option<AvatarDiff>,
+    #[serde(rename = "copySummaries", skip_serializing_if = "Vec::is_empty")]
+    pub copy_summaries: Vec<TableCopySummary>,
+    #[serde(rename = "avatarFileCopy", skip_serializing_if = "Option::is_none")]
+    pub avatar_file_copy: Option<FileCopySummary>,
     pub warnings: Vec<String>,
 }
 
@@ -858,7 +1488,7 @@ pub struct DatabaseRef {
     pub url_masked: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq, Eq)]
 pub struct TableSummary {
     pub name: String,
     #[serde(rename = "rowCount")]
@@ -867,6 +1497,31 @@ pub struct TableSummary {
     pub min_id: Option<i64>,
     #[serde(rename = "maxId")]
     pub max_id: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TableCopySummary {
+    pub table: String,
+    #[serde(rename = "copiedRows")]
+    pub copied_rows: i64,
+    #[serde(rename = "rowCount")]
+    pub row_count: i64,
+    #[serde(rename = "minId")]
+    pub min_id: Option<i64>,
+    #[serde(rename = "maxId")]
+    pub max_id: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FileCopySummary {
+    #[serde(rename = "oldDirectory")]
+    pub old_directory: String,
+    #[serde(rename = "newDirectory")]
+    pub new_directory: String,
+    #[serde(rename = "copiedFiles")]
+    pub copied_files: u64,
+    #[serde(rename = "copiedBytes")]
+    pub copied_bytes: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -893,7 +1548,7 @@ pub struct StatusDistribution {
     pub values: Vec<StatusValue>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq, Eq)]
 pub struct StatusValue {
     pub value: String,
     pub count: i64,
@@ -958,6 +1613,11 @@ struct DateBoundCheck {
     table: &'static str,
     column: &'static str,
     label: &'static str,
+}
+
+struct TableSpec {
+    table: &'static str,
+    columns: &'static [&'static str],
 }
 
 #[cfg(test)]

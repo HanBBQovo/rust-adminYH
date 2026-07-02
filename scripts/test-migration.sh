@@ -14,6 +14,8 @@ OLD_DATABASE_URL="${OLD_DATABASE_URL:-}"
 NEW_DATABASE_URL="${NEW_DATABASE_URL:-}"
 OLD_AVATAR_DIR="${OLD_AVATAR_DIR:-/Users/hanhan/Desktop/code/adminYh-server/uploads/avatar}"
 NEW_AVATAR_DIR="${NEW_AVATAR_DIR:-}"
+MIGRATION_APPLY="${MIGRATION_APPLY:-false}"
+MIGRATION_ALLOW_NON_EMPTY_TARGET="${MIGRATION_ALLOW_NON_EMPTY_TARGET:-false}"
 
 section() {
   printf '\n==> %s\n' "$1"
@@ -51,6 +53,18 @@ if [[ -f Cargo.toml ]] && cargo metadata --format-version=1 --no-deps 2>/dev/nul
   if require_url_pair_for_apply; then
     cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- inspect-old --old "$OLD_DATABASE_URL" --old-avatar-dir "$OLD_AVATAR_DIR" --format json
     cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- migrate --dry-run --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL" --old-avatar-dir "$OLD_AVATAR_DIR" --format json
+    if [[ "$MIGRATION_APPLY" == "true" ]]; then
+      APPLY_ARGS=(migrate --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL" --old-avatar-dir "$OLD_AVATAR_DIR" --format json)
+      if [[ -n "$NEW_AVATAR_DIR" ]]; then
+        APPLY_ARGS+=(--new-avatar-dir "$NEW_AVATAR_DIR")
+      fi
+      if [[ "$MIGRATION_ALLOW_NON_EMPTY_TARGET" == "true" ]]; then
+        APPLY_ARGS+=(--allow-non-empty-target)
+      fi
+      cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- "${APPLY_ARGS[@]}"
+    else
+      echo "SKIP: MIGRATION_APPLY=true 未设置，跳过真实 apply。只允许在影子库/测试库开启。"
+    fi
     cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- verify --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL" --format json
     if [[ -n "$NEW_AVATAR_DIR" ]]; then
       cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- verify-files --old-avatar-dir "$OLD_AVATAR_DIR" --new-avatar-dir "$NEW_AVATAR_DIR" --format json
