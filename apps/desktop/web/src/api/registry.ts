@@ -57,9 +57,9 @@ export const RESOURCE_REGISTRY: ResourceSummary[] = [
   {
     key: 'roles',
     title: '角色权限',
-    description: '角色、菜单树和 role_permission 关系维护。',
+    description: '角色列表、角色维护和菜单授权分配，兼容旧 role_permission 替换语义。',
     count: 5,
-    status: 'blocked',
+    status: 'ready',
     apiPath: '/role/list',
     legacyPath: 'src/views/main/system/role',
     owner: '管理员',

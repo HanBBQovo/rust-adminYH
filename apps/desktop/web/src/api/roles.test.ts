@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { buildRoleListPayload, listAssignableRoles, listRoles } from '@/api/roles'
+import {
+  assignRoleMenus,
+  buildRoleListPayload,
+  createRole,
+  deleteRole,
+  getRole,
+  getRoleMenuIds,
+  listAssignableRoles,
+  listMenuTree,
+  listRoles,
+  updateRole,
+} from '@/api/roles'
 
 const fetchMock = vi.fn()
 
@@ -100,6 +111,62 @@ describe('roles api', () => {
         method: 'POST',
         body: JSON.stringify({ offset: 0, size: 100 }),
       }),
+    )
+  })
+
+  it('wraps role detail, mutations, menu tree, menu ids, and assign routes', async () => {
+    fetchMock
+      .mockImplementationOnce(() => jsonResponse(ROLE_ROWS[0]))
+      .mockImplementationOnce(() => jsonResponse(null))
+      .mockImplementationOnce(() => jsonResponse(null))
+      .mockImplementationOnce(() => jsonResponse(null))
+      .mockImplementationOnce(() => jsonResponse([
+        {
+          id: 1,
+          name: '系统管理',
+          type: 1,
+          sort: 1,
+          chilren: [{ id: 11, name: '角色管理', type: 2, sort: 1, partentId: 1 }],
+        },
+      ]))
+      .mockImplementationOnce(() => jsonResponse({ id: 1, name: '超级管理员', intro: '所有权限', menuIds: [1, 11] }))
+      .mockImplementationOnce(() => jsonResponse(null))
+      .mockImplementationOnce(() => jsonResponse(null))
+
+    await expect(getRole(1)).resolves.toEqual(ROLE_ROWS[0])
+    await expect(createRole({ name: '财务', intro: '部分权限' })).resolves.toBeUndefined()
+    await expect(updateRole(3, { name: '财务主管', intro: '所有权限' })).resolves.toBeUndefined()
+    await expect(deleteRole(3)).resolves.toBeUndefined()
+    await expect(listMenuTree()).resolves.toEqual([
+      {
+        id: 1,
+        name: '系统管理',
+        type: 1,
+        sort: 1,
+        chilren: [{ id: 11, name: '角色管理', type: 2, sort: 1, partentId: 1 }],
+      },
+    ])
+    await expect(getRoleMenuIds(1)).resolves.toEqual({ id: 1, name: '超级管理员', intro: '所有权限', menuIds: [1, 11] })
+    await expect(assignRoleMenus({ roleId: 1, menuList: [1, 11, 11] })).resolves.toBeUndefined()
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/role/1', expect.any(Object))
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/role',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: '财务', intro: '部分权限' }) }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/role/3',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ name: '财务主管', intro: '所有权限' }) }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/role/3', expect.objectContaining({ method: 'DELETE' }))
+    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/menu/tree', expect.any(Object))
+    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/role/1/menuIds', expect.any(Object))
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      7,
+      '/api/role/assign',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ roleId: 1, menuList: [1, 11, 11] }) }),
     )
   })
 })

@@ -1,4 +1,4 @@
-import { Building2, ClipboardList, FileCheck2, LayoutDashboard, PackageCheck, Settings, Users } from 'lucide-react'
+import { Building2, ClipboardList, FileCheck2, KeyRound, LayoutDashboard, PackageCheck, Settings, Users } from 'lucide-react'
 
 import type { AppPage, LegacyMenuItem, SessionNavItem } from '@/session/types'
 
@@ -8,6 +8,7 @@ const FALLBACK_NAV_ITEMS: SessionNavItem[] = [
   { key: 'receipts', label: '回单管理', icon: FileCheck2 },
   { key: 'companies', label: '发货公司', icon: Building2 },
   { key: 'users', label: '用户管理', icon: Users },
+  { key: 'roles', label: '角色权限', icon: KeyRound },
   { key: 'registry', label: '页面注册表', icon: ClipboardList },
   { key: 'settings', label: '系统设置', icon: Settings },
 ]
@@ -18,7 +19,8 @@ const PAGE_MATCHERS: Array<{ key: AppPage; icon: SessionNavItem['icon']; pattern
   { key: 'receipts', icon: FileCheck2, patterns: [/receipt|notrecovery|recovery|回单|未回收|已回收/i] },
   { key: 'companies', icon: Building2, patterns: [/order\/company|company|发货公司/i] },
   { key: 'users', icon: Users, patterns: [/system\/user|\/users?\b|用户管理/i] },
-  { key: 'registry', icon: ClipboardList, patterns: [/registry|system\/(?!user\b)|system$|role|menu|页面|角色|菜单/i] },
+  { key: 'roles', icon: KeyRound, patterns: [/system\/role|system\/menu|\/role\b|\/menu\b|角色管理|权限|菜单管理/i] },
+  { key: 'registry', icon: ClipboardList, patterns: [/registry|system$|页面/i] },
   { key: 'settings', icon: Settings, patterns: [/setting|settings|profile|系统设置|设置/i] },
 ]
 

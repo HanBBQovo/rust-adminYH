@@ -4,7 +4,7 @@ import { adaptLegacyMenus } from '@/session/menu-adapter'
 
 describe('adaptLegacyMenus', () => {
   it('falls back to template nav when old menus are empty', () => {
-    expect(adaptLegacyMenus([]).map((item) => item.key)).toEqual(['workspace', 'orders', 'receipts', 'companies', 'users', 'registry', 'settings'])
+    expect(adaptLegacyMenus([]).map((item) => item.key)).toEqual(['workspace', 'orders', 'receipts', 'companies', 'users', 'roles', 'registry', 'settings'])
   })
 
   it('maps old menu labels and urls into template pages', () => {
@@ -18,7 +18,7 @@ describe('adaptLegacyMenus', () => {
     expect(items[1].label).toBe('订单管理')
   })
 
-  it('deduplicates repeated registry menu matches', () => {
+  it('deduplicates repeated role permission menu matches', () => {
     const items = adaptLegacyMenus([
       {
         name: '系统管理',
@@ -29,7 +29,7 @@ describe('adaptLegacyMenus', () => {
       },
     ])
 
-    expect(items.map((item) => item.key)).toEqual(['registry'])
+    expect(items.map((item) => item.key)).toEqual(['roles'])
   })
 
   it('maps old company menus into the company page', () => {
@@ -44,5 +44,12 @@ describe('adaptLegacyMenus', () => {
 
     expect(items.map((item) => item.key)).toEqual(['users'])
     expect(items[0].label).toBe('用户管理')
+  })
+
+  it('maps old role menus into the roles page', () => {
+    const items = adaptLegacyMenus([{ name: '角色管理', url: '/main/system/role' }])
+
+    expect(items.map((item) => item.key)).toEqual(['roles'])
+    expect(items[0].label).toBe('角色管理')
   })
 })

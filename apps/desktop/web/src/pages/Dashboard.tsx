@@ -18,6 +18,7 @@ const OrdersList = lazy(() => import('@/pages/OrdersList'))
 const ReceiptsList = lazy(() => import('@/pages/ReceiptsList'))
 const CompaniesList = lazy(() => import('@/pages/CompaniesList'))
 const UsersList = lazy(() => import('@/pages/UsersList'))
+const RolesList = lazy(() => import('@/pages/RolesList'))
 const ResourceRegistry = lazy(() => import('@/pages/ResourceRegistry'))
 const SettingsPage = lazy(() => import('@/pages/Settings'))
 
@@ -245,6 +246,7 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
                     {currentPage === 'receipts' ? <ReceiptsList /> : null}
                     {currentPage === 'companies' ? <CompaniesList /> : null}
                     {currentPage === 'users' ? <UsersList /> : null}
+                    {currentPage === 'roles' ? <RolesList /> : null}
                     {currentPage === 'registry' ? <ResourceRegistry /> : null}
                     {currentPage === 'settings' ? <SettingsPage /> : null}
                   </motion.div>
