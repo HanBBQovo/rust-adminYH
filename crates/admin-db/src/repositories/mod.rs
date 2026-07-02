@@ -8,7 +8,7 @@ pub mod user;
 
 pub use chart::MySqlChartRepository;
 pub use company::MySqlCompanyRepository;
-pub use health::HealthRepository;
+pub use health::{HealthRepository, MySqlHealthRepository};
 pub use menu::MySqlMenuRepository;
 pub use order::MySqlOrderRepository;
 pub use role::MySqlRoleRepository;

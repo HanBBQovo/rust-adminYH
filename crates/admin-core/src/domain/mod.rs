@@ -7,7 +7,7 @@ pub mod user;
 
 pub use chart::{ChartCompany, ChartOrderMetric};
 pub use company::Company;
-pub use health::{HealthReport, ServiceStatus};
+pub use health::{HealthCheck, HealthReport, ServiceStatus};
 pub use menu::MenuNode;
 pub use order::{OrderRecord, ReceiptRecord};
 pub use user::AuthUser;

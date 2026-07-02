@@ -1,8 +1,13 @@
-use admin_core::dto::HealthResponse;
-use axum::extract::State;
+use admin_core::{domain::ServiceStatus, dto::HealthResponse, ApiResponse};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 
-use crate::{response::JsonResponse, AppState};
+use crate::AppState;
 
-pub async fn health_check(State(state): State<AppState>) -> JsonResponse<HealthResponse> {
-    JsonResponse(HealthResponse::from(state.health_service.report()))
+pub async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
+    let report = state.health_service.report().await;
+    let status = match report.status {
+        ServiceStatus::Ok => StatusCode::OK,
+        ServiceStatus::Degraded => StatusCode::SERVICE_UNAVAILABLE,
+    };
+    (status, Json(ApiResponse::ok(HealthResponse::from(report))))
 }

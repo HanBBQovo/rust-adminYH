@@ -14,8 +14,8 @@ use admin_core::{
 };
 use admin_db::{
     repositories::{
-        MySqlChartRepository, MySqlCompanyRepository, MySqlMenuRepository, MySqlOrderRepository,
-        MySqlRoleRepository, MySqlUserRepository,
+        MySqlChartRepository, MySqlCompanyRepository, MySqlHealthRepository, MySqlMenuRepository,
+        MySqlOrderRepository, MySqlRoleRepository, MySqlUserRepository,
     },
     MySqlPool,
 };
@@ -42,6 +42,8 @@ impl AppServices {
         let menu_repository = Arc::new(MySqlMenuRepository::new(pool.clone()));
         let role_repository = Arc::new(MySqlRoleRepository::new(pool.clone()));
         let order_repository = Arc::new(MySqlOrderRepository::new(pool.clone()));
+        let health_service =
+            health_service.with_check(Arc::new(MySqlHealthRepository::new(pool.clone())));
 
         Self {
             health_service: Arc::new(health_service),
@@ -66,7 +68,7 @@ impl AppServices {
         }
     }
 
-    pub fn disabled(health_service: StaticHealthService) -> Self {
+    pub fn disabled(health_service: impl HealthService + 'static) -> Self {
         Self {
             health_service: Arc::new(health_service),
             auth_service: Arc::new(DisabledAuthService),

@@ -21,6 +21,18 @@ async fn mysql_api_compatibility_uses_real_database_services() {
 
     let app = build_router(test_state(pool.clone()));
 
+    let (health_status, health_json) =
+        json_request(app.clone(), "GET", "/api/health", None, "").await;
+    assert_eq!(health_status, StatusCode::OK);
+    assert_eq!(health_json["code"], 0);
+    assert_eq!(health_json["data"]["service"], "rust-adminYH");
+    assert_eq!(health_json["data"]["status"], "ok");
+    assert!(health_json["data"]["checks"]
+        .as_array()
+        .expect("health checks should be an array")
+        .iter()
+        .any(|check| check["name"] == "database" && check["status"] == "ok"));
+
     let (missing_status, missing_json) = json_request(
         app.clone(),
         "POST",

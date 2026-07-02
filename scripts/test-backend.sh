@@ -63,6 +63,9 @@ if cargo metadata --format-version=1 --no-deps | grep -q '"name":"admin-db"'; th
     run_if "admin-db MySQL user auth integration tests" \
       env ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
       cargo test "${CARGO_FLAGS[@]}" -p admin-db --test mysql_user_auth_repository -- --ignored
+    run_if "admin-db MySQL health integration tests" \
+      env ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
+      cargo test "${CARGO_FLAGS[@]}" -p admin-db --test mysql_health_repository -- --ignored
     run_if "admin-api MySQL API compatibility integration tests" \
       env RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
       cargo test "${CARGO_FLAGS[@]}" -p admin-api --test mysql_api_compatibility -- --ignored
