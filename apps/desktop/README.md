@@ -32,14 +32,14 @@ Tauri 生产包不会内置 Vite 代理。当前桌面壳默认连接 `http://12
 VITE_API_BASE_URL=https://admin-api.example.com/api ADMIN_YH_DESKTOP_DISABLE_SIDECAR=true npm run tauri:build:app
 ```
 
-打包 `.app` 前必须先构建 release 版 API,并通过 `TAURI_CONFIG` 注入资源映射,
-把 `apps/desktop/src-tauri/target/release/admin-api` 打进
+打包 `.app` 前必须先构建 release 版 API,并通过 Tauri `--config` 注入资源映射,
+把仓库根目录的 `target/release/admin-api` 打进
 `Contents/Resources/binaries/admin-api`:
 
 ```bash
-cd apps/desktop/src-tauri
 cargo build --release -p admin-api
-TAURI_CONFIG='{"bundle":{"resources":{"../target/release/admin-api":"binaries/admin-api"}}}' npm run tauri:build:app --prefix ../web
+cd apps/desktop/web
+npm run tauri:build:app -- --config '{"bundle":{"resources":{"../../../target/release/admin-api":"binaries/admin-api"}}}'
 ```
 
 诊断开关:
@@ -52,7 +52,7 @@ TAURI_CONFIG='{"bundle":{"resources":{"../target/release/admin-api":"binaries/ad
 
 - 默认提交前：在仓库根目录运行 `scripts/check-all.sh`。
 - 前端交互改动：运行 `RUN_E2E=true scripts/test-frontend.sh`。
-- 桌面壳、图标、CSP、capability、打包配置改动：运行 `RUN_TAURI=true scripts/check-all.sh`。
+- 桌面壳、图标、CSP、capability、打包配置改动：运行 `RUN_TAURI=true scripts/check-all.sh`。该门禁会先构建 release `admin-api` sidecar，再通过 Tauri `--config` 注入资源映射构建 `.app`，并校验 `Contents/Resources/binaries/admin-api` 存在且可执行。
 - macOS 安装包发布前：运行 `RUN_TAURI=true RUN_TAURI_DMG=true scripts/check-all.sh`。
 - 真实迁移演练：配置 `OLD_DATABASE_URL`、`NEW_DATABASE_URL`，在影子库上运行 `scripts/test-migration.sh`；真实 apply 只允许测试库/影子库加 `MIGRATION_APPLY=true`。
 

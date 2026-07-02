@@ -966,7 +966,9 @@ Docker/容器门禁已作为发布级测试的一部分补齐：`Dockerfile.admi
 
 Docker 基础镜像允许通过环境变量覆盖：`RUST_IMAGE`、`RUNTIME_IMAGE`、`NODE_IMAGE`、`NGINX_IMAGE`、`MYSQL_IMAGE`。本机或 CI 如果 Docker Hub 直连不稳定，可以先预拉取内部镜像或镜像站版本，再用这些变量执行 `scripts/test-docker.sh`；脚本会在诊断中打印实际使用的基础镜像，便于定位是网络拉取失败、构建失败还是启动失败。
 
-Tauri 桌面壳已开始向自包含企业桌面包收敛：生产 `.app` 默认连接固定本机 API `http://127.0.0.1:16824/api`，Rust 主进程会从应用资源目录启动 `admin-api` sidecar，并把 `APP_HTTP__HOST` 固定为 `127.0.0.1`、`APP_HTTP__PORT` 固定为 `16824`。该实现不向 renderer 开放 `shell/process/fs/dialog` 权限，CSP 也收窄到固定 loopback 端口和显式远端 HTTPS。发布构建前必须先生成 `apps/desktop/src-tauri/target/release/admin-api`，再用 `TAURI_CONFIG='{"bundle":{"resources":{"../target/release/admin-api":"binaries/admin-api"}}}'` 注入 release-only 资源映射，避免普通 `cargo check` 因 release sidecar 不存在而失败；远端 API 包可通过 `ADMIN_YH_DESKTOP_DISABLE_SIDECAR=true` 禁用本机 sidecar，开发排障可通过 `ADMIN_YH_DESKTOP_ADMIN_API_BIN=/path/to/admin-api` 指定二进制。sidecar 失败时必须记录二进制路径、退出/启动错误、stdout/stderr、`APP_HTTP__PORT`、`API_BASE_URL` 和 `/api/health` 探测结果。
+Tauri 桌面壳已开始向自包含企业桌面包收敛：生产 `.app` 默认连接固定本机 API `http://127.0.0.1:16824/api`，Rust 主进程会从应用资源目录启动 `admin-api` sidecar，并把 `APP_HTTP__HOST` 固定为 `127.0.0.1`、`APP_HTTP__PORT` 固定为 `16824`。该实现不向 renderer 开放 `shell/process/fs/dialog` 权限，CSP 也收窄到固定 loopback 端口和显式远端 HTTPS。发布构建前必须先从仓库根 workspace 生成 `target/release/admin-api`，再用 Tauri `--config '{"bundle":{"resources":{"../../../target/release/admin-api":"binaries/admin-api"}}}'` 注入 release-only 资源映射，避免普通 `cargo check` 因 release sidecar 不存在而失败；远端 API 包可通过 `ADMIN_YH_DESKTOP_DISABLE_SIDECAR=true` 禁用本机 sidecar，开发排障可通过 `ADMIN_YH_DESKTOP_ADMIN_API_BIN=/path/to/admin-api` 指定二进制。sidecar 失败时必须记录二进制路径、退出/启动错误、stdout/stderr、`APP_HTTP__PORT`、`API_BASE_URL` 和 `/api/health` 探测结果。
+
+Tauri 打包门禁已封装为 `scripts/test-tauri-build.sh`，并接入 `RUN_TAURI=true scripts/check-all.sh` 与 GitHub Actions 的 `tauri-app` job。该脚本先构建 `admin-api` release sidecar，再用 release-only Tauri `--config` 构建 `.app`，最后检查 `.app/Contents/Resources/binaries/admin-api` 是否存在且可执行。若构建失败，脚本必须输出 commit、Tauri 目录、Web 目录、sidecar 路径、资源注入 JSON 和当前 bundle 目录内容，不能只返回笼统的 Tauri build failed。
 
 ### 11.4 发布门禁
 
