@@ -951,7 +951,7 @@ scripts/test-migration.sh
 scripts/test-e2e.sh
 ```
 
-当前仓库已提供 `scripts/check-all.sh`、`scripts/test-backend.sh`、`scripts/test-frontend.sh`、`scripts/test-migration.sh` 作为统一质量门禁入口。默认情况下，Rust 脚本使用 `CARGO_OFFLINE=true`，保证在依赖已缓存但网络不稳定时仍可稳定运行；需要在线拉取新依赖时可显式执行 `CARGO_OFFLINE=false scripts/check-all.sh`。`scripts/test-migration.sh` 默认会执行 `admin-migration rollback-plan --format json`，确保没有真实数据库连接时也能持续校验回滚文档出口。
+当前仓库已提供 `scripts/check-all.sh`、`scripts/test-backend.sh`、`scripts/test-frontend.sh`、`scripts/test-migration.sh` 作为统一质量门禁入口。默认情况下，Rust 脚本使用 `CARGO_OFFLINE=true`，保证在依赖已缓存但网络不稳定时仍可稳定运行；需要在线拉取新依赖时可显式执行 `CARGO_OFFLINE=false scripts/check-all.sh`。`scripts/test-migration.sh` 默认会执行 `admin-migration rollback-plan --format json`，确保没有真实数据库连接时也能持续校验回滚文档出口。头像文件迁移校验已经从“只报告差异”升级为阻断门禁：`verify-files` 会输出 `status=passed/failed`，缺失、多余或 SHA256 变化都会让 CLI 非 0 退出，发布前必须修复后复验。
 
 前端质量门禁必须包含 `lint`、`typecheck`、`test`、`build` 四段；Playwright E2E 通过 `RUN_E2E=true scripts/test-frontend.sh` 显式开启，避免本地缺少浏览器二进制时阻塞普通提交，但发布候选版本必须开启 E2E。
 

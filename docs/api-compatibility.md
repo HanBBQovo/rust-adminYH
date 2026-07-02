@@ -247,6 +247,7 @@ POST /api/recovery/list
 - `admin-api` 启动路径已接入真实 SQLx 仓储：生产运行时通过 `DATABASE_URL` 建立 `MySqlPool`，并装配 `CompatAuthService`、`CompatUserService`、`CompatMenuService`、`CompatRoleService`、`CompatCompanyService`、`CompatOrderService`、`CompatReceiptService`、`CompatMemoryService`、`CompatChartService`；测试仍可通过 `AppState::with_services` 注入内存仓储，保证业务测试和生产装配解耦。
 - `/api/upload/avatar` 已先落地 multipart 头像上传兼容入口和集成测试，兼容旧字段名 `avatar`、上传成功文案、头像读取 bytes + `Content-Type` 直出。
 - `/api/upload/avatar` 后端已补齐安全校验：缺失 token 返回旧未登录 envelope，非 `avatar` 字段、空文件、非 jpg/png MIME/扩展名和超过 500kb 均返回旧 `{ code: -400 }` 业务错误；前端校验不再是唯一防线。
+- `admin-migration verify-files` 已补齐头像文件完整性阻断门禁：对比旧/新头像目录的相对文件名和 SHA256，缺失、多余或内容变化都会输出 `status=failed` 并以非 0 退出，避免数据库迁移通过但磁盘头像漏迁。
 - 登录服务通过 `AuthService` / `AuthUserStore` / `TokenIssuer` 抽象解耦；生产路径已装配 `MySqlUserRepository`，API 集成测试继续使用内存仓储做快速兼容回归，影子库回归需通过真实 `DATABASE_URL` 单独执行。
 - 菜单服务通过 `MenuService` / `MenuStore` 抽象解耦；生产路径已装配 `MySqlMenuRepository`，API 集成测试继续使用内存菜单仓储验证旧响应形状和权限边界。
 - 公司服务通过 `CompanyService` / `CompanyStore` 抽象解耦；生产路径已装配 `MySqlCompanyRepository`，测试保留内存仓储用于接口兼容回归。

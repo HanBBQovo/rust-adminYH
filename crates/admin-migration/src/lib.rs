@@ -352,7 +352,16 @@ pub async fn run_cli(cli: Cli) -> Result<()> {
         }
         Commands::Verify { old, new, format } => {
             let report = verify_databases(&old, &new).await?;
-            print_report(&report, format)
+            let passed = report.status == "passed";
+            print_report(&report, format)?;
+            if passed {
+                Ok(())
+            } else {
+                Err(anyhow!(
+                    "migration verification failed: {}",
+                    report.warnings.join("; ")
+                ))
+            }
         }
         Commands::VerifyFiles {
             old_avatar_dir,
@@ -360,7 +369,21 @@ pub async fn run_cli(cli: Cli) -> Result<()> {
             format,
         } => {
             let report = verify_files(&old_avatar_dir, &new_avatar_dir).await?;
-            print_report(&report, format)
+            let passed = report.status == "passed";
+            let failure_summary = format!(
+                "missing_in_new={} extra_in_new={} changed={}",
+                report.missing_in_new.len(),
+                report.extra_in_new.len(),
+                report.changed.len()
+            );
+            print_report(&report, format)?;
+            if passed {
+                Ok(())
+            } else {
+                Err(anyhow!(
+                    "avatar file verification failed: {failure_summary}"
+                ))
+            }
         }
         Commands::RollbackPlan { format } => {
             let report = RollbackPlanReport {
@@ -622,17 +645,17 @@ pub async fn verify_files(
     let old_hashes = file_hash_map(&old_files);
     let new_hashes = file_hash_map(&new_files);
 
-    let missing_in_new = old_hashes
+    let missing_in_new: Vec<String> = old_hashes
         .keys()
         .filter(|path| !new_hashes.contains_key(*path))
         .cloned()
         .collect();
-    let extra_in_new = new_hashes
+    let extra_in_new: Vec<String> = new_hashes
         .keys()
         .filter(|path| !old_hashes.contains_key(*path))
         .cloned()
         .collect();
-    let changed = old_hashes
+    let changed: Vec<String> = old_hashes
         .iter()
         .filter_map(|(path, old_hash)| {
             new_hashes
@@ -641,10 +664,17 @@ pub async fn verify_files(
                 .map(|_| path.clone())
         })
         .collect();
+    let status = if missing_in_new.is_empty() && extra_in_new.is_empty() && changed.is_empty() {
+        "passed"
+    } else {
+        "failed"
+    }
+    .to_owned();
 
     Ok(FileVerifyReport {
         command: "verify-files".to_owned(),
         generated_at: generated_at(),
+        status,
         old_avatar_files: old_files,
         new_avatar_files: new_files,
         missing_in_new,
@@ -1393,6 +1423,7 @@ impl TextReport for FileVerifyReport {
         [
             format!("command={}", self.command),
             format!("generated_at={}", self.generated_at),
+            format!("status={}", self.status),
             format!(
                 "old_files={} new_files={}",
                 self.old_avatar_files.file_count, self.new_avatar_files.file_count
@@ -1463,6 +1494,7 @@ pub struct FileVerifyReport {
     pub command: String,
     #[serde(rename = "generatedAt")]
     pub generated_at: String,
+    pub status: String,
     #[serde(rename = "oldAvatarFiles")]
     pub old_avatar_files: AvatarFileInventory,
     #[serde(rename = "newAvatarFiles")]
@@ -1624,7 +1656,10 @@ struct TableSpec {
 mod tests {
     use super::*;
     use clap::CommandFactory;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use tokio::fs;
+
+    static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn cli_definition_is_valid() {
@@ -1735,11 +1770,74 @@ mod tests {
         fs::remove_dir_all(root).await.unwrap();
     }
 
+    #[tokio::test]
+    async fn verify_files_marks_identical_avatar_dirs_passed() {
+        let old_root = unique_temp_dir();
+        let new_root = unique_temp_dir();
+        fs::create_dir_all(&old_root).await.unwrap();
+        fs::create_dir_all(&new_root).await.unwrap();
+        fs::write(old_root.join("default.jpg"), b"default")
+            .await
+            .unwrap();
+        fs::write(new_root.join("default.jpg"), b"default")
+            .await
+            .unwrap();
+
+        let report = verify_files(&old_root, &new_root).await.unwrap();
+        assert_eq!(report.status, "passed");
+        assert!(report.missing_in_new.is_empty());
+        assert!(report.extra_in_new.is_empty());
+        assert!(report.changed.is_empty());
+
+        fs::remove_dir_all(old_root).await.unwrap();
+        fs::remove_dir_all(new_root).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn verify_files_marks_missing_extra_and_changed_files_failed() {
+        let old_root = unique_temp_dir();
+        let new_root = unique_temp_dir();
+        fs::create_dir_all(old_root.join("nested")).await.unwrap();
+        fs::create_dir_all(&new_root).await.unwrap();
+        fs::write(old_root.join("default.jpg"), b"default")
+            .await
+            .unwrap();
+        fs::write(old_root.join("nested").join("user.jpg"), b"user")
+            .await
+            .unwrap();
+        fs::write(old_root.join("changed.jpg"), b"old")
+            .await
+            .unwrap();
+        fs::write(new_root.join("default.jpg"), b"default")
+            .await
+            .unwrap();
+        fs::write(new_root.join("changed.jpg"), b"new")
+            .await
+            .unwrap();
+        fs::write(new_root.join("extra.jpg"), b"extra")
+            .await
+            .unwrap();
+
+        let report = verify_files(&old_root, &new_root).await.unwrap();
+        assert_eq!(report.status, "failed");
+        assert_eq!(report.missing_in_new, vec!["user.jpg"]);
+        assert_eq!(report.extra_in_new, vec!["extra.jpg"]);
+        assert_eq!(report.changed, vec!["changed.jpg"]);
+        assert!(report.to_text().contains("status=failed"));
+
+        fs::remove_dir_all(old_root).await.unwrap();
+        fs::remove_dir_all(new_root).await.unwrap();
+    }
+
     fn unique_temp_dir() -> PathBuf {
         let suffix = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        std::env::temp_dir().join(format!("admin-migration-test-{suffix}"))
+        let counter = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!(
+            "admin-migration-test-{}-{suffix}-{counter}",
+            std::process::id()
+        ))
     }
 }
