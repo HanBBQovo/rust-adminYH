@@ -49,6 +49,9 @@ if [[ -f Cargo.toml ]] && cargo metadata --format-version=1 --no-deps 2>/dev/nul
   section "admin-migration unit tests"
   cargo test "${CARGO_FLAGS[@]}" -p admin-migration
 
+  section "admin-migration rollback plan"
+  cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- rollback-plan --format json
+
   section "admin-migration dry-run/verify"
   if require_url_pair_for_apply; then
     cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- inspect-old --old "$OLD_DATABASE_URL" --old-avatar-dir "$OLD_AVATAR_DIR" --format json

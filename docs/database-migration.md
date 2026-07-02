@@ -206,6 +206,8 @@ SELECT DISTINCT poststate FROM receipt ORDER BY poststate;
 scripts/test-migration.sh
 ```
 
+该脚本默认会输出 `admin-migration rollback-plan --format json`，用于持续校验回滚步骤没有从发布门禁中丢失。
+
 环境变量：
 
 - `OLD_DATABASE_URL`：旧库或影子旧库连接串。

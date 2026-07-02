@@ -1675,6 +1675,39 @@ mod tests {
         }
     }
 
+    #[test]
+    fn parses_rollback_plan_command() {
+        let cli = Cli::try_parse_from(["admin-migration", "rollback-plan", "--format", "json"])
+            .expect("rollback plan cli parses");
+
+        match cli.command {
+            Commands::RollbackPlan { format } => {
+                assert_eq!(format, OutputFormat::Json);
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn rollback_plan_documents_restore_and_verify_steps() {
+        let report = RollbackPlanReport {
+            command: "rollback-plan".to_owned(),
+            generated_at: "test".to_owned(),
+            steps: vec![
+                "stop new writes and preserve current failed target database".to_owned(),
+                "restore old MySQL dump into a clean target database".to_owned(),
+                "restore avatar archive into the target upload directory".to_owned(),
+                "run inspect-old, migrate --dry-run, verify, and verify-files again".to_owned(),
+                "switch traffic only after all blocking checks pass".to_owned(),
+            ],
+        };
+
+        let text = report.to_text();
+        assert!(text.contains("restore old MySQL dump"));
+        assert!(text.contains("verify-files"));
+        assert!(text.contains("switch traffic only after all blocking checks pass"));
+    }
+
     #[tokio::test]
     async fn inventories_avatar_files_with_hashes() {
         let root = unique_temp_dir();
