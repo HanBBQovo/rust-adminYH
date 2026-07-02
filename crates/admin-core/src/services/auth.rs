@@ -8,7 +8,7 @@ use std::{
 use uuid::Uuid;
 
 use crate::{
-    auth::{LegacyMd5PasswordVerifier, PasswordVerifier},
+    auth::{Argon2PasswordHasher, CompatPasswordVerifier, PasswordHasher, PasswordVerifier},
     domain::AuthUser,
     dto::{CurrentUserResponse, LoginRequest, LoginResponse},
     AppError, AppResult,
@@ -30,6 +30,12 @@ pub trait AuthUserStore: Send + Sync {
 
     fn save_token<'a>(&'a self, user_id: i64, token: &'a str) -> ServiceFuture<'a, AppResult<()>>;
 
+    fn update_password_hash<'a>(
+        &'a self,
+        user_id: i64,
+        password_hash: &'a str,
+    ) -> ServiceFuture<'a, AppResult<()>>;
+
     fn find_by_token<'a>(
         &'a self,
         token: &'a str,
@@ -43,6 +49,7 @@ pub trait TokenIssuer: Send + Sync {
 pub struct CompatAuthService {
     users: Arc<dyn AuthUserStore>,
     password_verifier: Arc<dyn PasswordVerifier>,
+    password_hasher: Arc<dyn PasswordHasher>,
     token_issuer: Arc<dyn TokenIssuer>,
 }
 
@@ -50,11 +57,13 @@ impl CompatAuthService {
     pub fn new(
         users: Arc<dyn AuthUserStore>,
         password_verifier: Arc<dyn PasswordVerifier>,
+        password_hasher: Arc<dyn PasswordHasher>,
         token_issuer: Arc<dyn TokenIssuer>,
     ) -> Self {
         Self {
             users,
             password_verifier,
+            password_hasher,
             token_issuer,
         }
     }
@@ -64,6 +73,7 @@ impl AuthService for CompatAuthService {
     fn login<'a>(&'a self, input: LoginRequest) -> ServiceFuture<'a, AppResult<LoginResponse>> {
         let users = Arc::clone(&self.users);
         let password_verifier = Arc::clone(&self.password_verifier);
+        let password_hasher = Arc::clone(&self.password_hasher);
         let token_issuer = Arc::clone(&self.token_issuer);
 
         Box::pin(async move {
@@ -82,6 +92,13 @@ impl AuthService for CompatAuthService {
                 return Err(AppError::LegacyAuth(
                     "密码错误，请重新输入密码尝试登录！".to_owned(),
                 ));
+            }
+
+            if user.password_hash.is_legacy_md5() {
+                let upgraded_hash = password_hasher.hash_password(&input.password)?;
+                users
+                    .update_password_hash(user.id, upgraded_hash.as_str())
+                    .await?;
             }
 
             let token = token_issuer.issue(&user)?;
@@ -224,6 +241,22 @@ impl AuthUserStore for InMemoryAuthUserStore {
         })
     }
 
+    fn update_password_hash<'a>(
+        &'a self,
+        user_id: i64,
+        password_hash: &'a str,
+    ) -> ServiceFuture<'a, AppResult<()>> {
+        Box::pin(async move {
+            let mut users = self.users_by_name.lock().map_err(|_| AppError::Internal)?;
+            let user = users
+                .values_mut()
+                .find(|user| user.id == user_id)
+                .ok_or_else(|| AppError::NotFound(format!("user {user_id}")))?;
+            user.password_hash.replace(password_hash);
+            Ok(())
+        })
+    }
+
     fn find_by_token<'a>(
         &'a self,
         token: &'a str,
@@ -254,7 +287,17 @@ impl AuthUserStore for InMemoryAuthUserStore {
 pub fn development_auth_service(users: Arc<dyn AuthUserStore>) -> CompatAuthService {
     CompatAuthService::new(
         users,
-        Arc::new(LegacyMd5PasswordVerifier),
+        Arc::new(CompatPasswordVerifier),
+        Arc::new(Argon2PasswordHasher),
+        Arc::new(DevelopmentTokenIssuer::default()),
+    )
+}
+
+pub fn production_auth_service(users: Arc<dyn AuthUserStore>) -> CompatAuthService {
+    CompatAuthService::new(
+        users,
+        Arc::new(CompatPasswordVerifier),
+        Arc::new(Argon2PasswordHasher),
         Arc::new(DevelopmentTokenIssuer::default()),
     )
 }
@@ -264,8 +307,12 @@ mod tests {
     use std::sync::Arc;
 
     use crate::{
+        auth::{Argon2PasswordHasher, PasswordHasher},
         dto::LoginRequest,
-        services::{development_auth_service, AuthService, InMemoryAuthUserStore},
+        services::{
+            development_auth_service, production_auth_service, AuthService, AuthUserStore,
+            InMemoryAuthUserStore,
+        },
     };
 
     #[tokio::test]
@@ -288,6 +335,37 @@ mod tests {
         assert_eq!(response.name, "admin");
         assert!(response.token.starts_with("dev-58-"));
         assert_eq!(store.saved_token(58).unwrap(), Some(response.token));
+        let upgraded = store
+            .find_by_name("admin")
+            .await
+            .unwrap()
+            .expect("user should exist");
+        assert!(upgraded.password_hash.is_argon2());
+    }
+
+    #[tokio::test]
+    async fn argon2_password_login_does_not_rehash() {
+        let hasher = Argon2PasswordHasher;
+        let hash = hasher.hash_password("secret").unwrap();
+        let user = crate::domain::AuthUser::new(58, "admin", hash.clone()).with_role_ids([1]);
+        let store = Arc::new(InMemoryAuthUserStore::new([user]));
+        let service = production_auth_service(store.clone());
+
+        service
+            .login(LoginRequest {
+                name: "admin".to_owned(),
+                password: "secret".to_owned(),
+                code: None,
+            })
+            .await
+            .expect("argon2 password should authenticate");
+
+        let after_login = store
+            .find_by_name("admin")
+            .await
+            .unwrap()
+            .expect("user should exist");
+        assert_eq!(after_login.password_hash, hash);
     }
 
     #[tokio::test]

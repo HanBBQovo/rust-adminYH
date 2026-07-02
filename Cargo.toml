@@ -20,10 +20,12 @@ admin-core = { path = "crates/admin-core" }
 admin-db = { path = "crates/admin-db" }
 
 anyhow = "1.0"
+argon2 = "0.5.3"
 axum = { version = "0.8", features = ["macros", "multipart"] }
 clap = { version = "4.6", features = ["derive"] }
 dotenvy = "0.15"
 http = "1.1"
+rand_core = { version = "0.6", features = ["getrandom"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"

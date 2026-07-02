@@ -71,6 +71,14 @@ impl AuthUserStore for MySqlUserRepository {
         })
     }
 
+    fn update_password_hash<'a>(
+        &'a self,
+        user_id: i64,
+        password_hash: &'a str,
+    ) -> AuthServiceFuture<'a, AppResult<()>> {
+        <Self as UserStore>::update_password(self, user_id, password_hash)
+    }
+
     fn find_by_token<'a>(
         &'a self,
         token: &'a str,

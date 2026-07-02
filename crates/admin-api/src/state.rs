@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use admin_core::{
-    auth::LegacyMd5PasswordVerifier,
+    auth::{Argon2PasswordHasher, CompatPasswordVerifier},
     services::{
         AuthService, ChartService, CompanyService, CompatAuthService, CompatChartService,
         CompatCompanyService, CompatMemoryService, CompatMenuService, CompatOrderService,
@@ -47,7 +47,8 @@ impl AppServices {
             health_service: Arc::new(health_service),
             auth_service: Arc::new(CompatAuthService::new(
                 user_repository.clone(),
-                Arc::new(LegacyMd5PasswordVerifier),
+                Arc::new(CompatPasswordVerifier),
+                Arc::new(Argon2PasswordHasher),
                 Arc::new(DevelopmentTokenIssuer::default()),
             )),
             menu_service: Arc::new(CompatMenuService::new(menu_repository)),

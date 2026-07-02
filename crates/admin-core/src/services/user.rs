@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    auth::legacy_md5_hex,
+    auth::{Argon2PasswordHasher, PasswordHasher},
     dto::{
         AvatarInfo, AvatarUploadInput, LegacyUserRecord, UserCreateRequest, UserDetailResponse,
         UserListItemResponse, UserListRequest, UserListResponse, UserPasswordRequest,
@@ -95,11 +95,22 @@ pub trait UserStore: Send + Sync {
 
 pub struct CompatUserService {
     store: Arc<dyn UserStore>,
+    password_hasher: Arc<dyn PasswordHasher>,
 }
 
 impl CompatUserService {
     pub fn new(store: Arc<dyn UserStore>) -> Self {
-        Self { store }
+        Self::with_password_hasher(store, Arc::new(Argon2PasswordHasher))
+    }
+
+    pub fn with_password_hasher(
+        store: Arc<dyn UserStore>,
+        password_hasher: Arc<dyn PasswordHasher>,
+    ) -> Self {
+        Self {
+            store,
+            password_hasher,
+        }
     }
 }
 
@@ -136,15 +147,17 @@ impl UserService for CompatUserService {
 
     fn create<'a>(&'a self, input: UserCreateRequest) -> ServiceFuture<'a, AppResult<()>> {
         let store = Arc::clone(&self.store);
+        let password_hasher = Arc::clone(&self.password_hasher);
         Box::pin(async move {
             normalize_new_user(&input)?;
             if store.find_by_name(input.name.trim()).await?.is_some() {
                 return Err(AppError::Validation("用户已存在".to_owned()));
             }
+            let password_hash = password_hasher.hash_password(&input.password)?;
             store
                 .create(UserCreateRequest {
                     name: input.name.trim().to_owned(),
-                    password: legacy_md5_hex(input.password.as_bytes()).to_owned(),
+                    password: password_hash.as_str().to_owned(),
                     role_id: input.role_id,
                 })
                 .await
@@ -182,13 +195,14 @@ impl UserService for CompatUserService {
         input: UserPasswordRequest,
     ) -> ServiceFuture<'a, AppResult<()>> {
         let store = Arc::clone(&self.store);
+        let password_hasher = Arc::clone(&self.password_hasher);
         Box::pin(async move {
             let password = input.password();
             if password.is_empty() {
                 return Err(AppError::Validation("密码不能为空！".to_owned()));
             }
-            let password_hash = legacy_md5_hex(password.as_bytes());
-            store.update_password(user_id, &password_hash).await
+            let password_hash = password_hasher.hash_password(password)?;
+            store.update_password(user_id, password_hash.as_str()).await
         })
     }
 
@@ -541,10 +555,14 @@ fn filter_users(users: &[LegacyUserRecord], input: &UserListRequest) -> Vec<Lega
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use crate::{
-        auth::legacy_md5_hex,
+        auth::{CompatPasswordVerifier, PasswordHash, PasswordVerifier},
         dto::{UserCreateRequest, UserListRequest, UserPasswordRequest, UserUpdateRequest},
-        services::{development_user_service, UserService},
+        services::{
+            development_user_service, CompatUserService, InMemoryUserStore, UserService, UserStore,
+        },
     };
 
     #[tokio::test]
@@ -582,7 +600,8 @@ mod tests {
 
     #[tokio::test]
     async fn user_create_update_password_and_remove_mutates_store() {
-        let service = development_user_service();
+        let store = Arc::new(InMemoryUserStore::with_seed_data());
+        let service = CompatUserService::new(store.clone());
 
         service
             .create(UserCreateRequest {
@@ -595,6 +614,9 @@ mod tests {
         let detail = service.detail(60).await.unwrap().unwrap();
         assert_eq!(detail.name, "new_user");
         assert_eq!(detail.role.id, 2);
+        let stored = store.find_by_id(60).await.unwrap().unwrap();
+        assert!(stored.password_hash.starts_with("$argon2"));
+        assert_ne!(stored.password_hash, "secret2");
 
         service
             .update(
@@ -612,6 +634,16 @@ mod tests {
             .update_password(60, UserPasswordRequest::Raw("new-secret".to_owned()))
             .await
             .expect("password should update");
+        let stored = store.find_by_id(60).await.unwrap().unwrap();
+        assert!(stored.password_hash.starts_with("$argon2"));
+        assert!(!stored
+            .password_hash
+            .chars()
+            .all(|ch| ch.is_ascii_hexdigit()));
+        assert!(CompatPasswordVerifier.verify(
+            "new-secret",
+            &PasswordHash::new(stored.password_hash.clone())
+        ));
         let avatar = service.avatar(60).await.unwrap().unwrap();
         assert_eq!(avatar.filename, "default.jpg");
 
@@ -665,7 +697,8 @@ mod tests {
 
     #[tokio::test]
     async fn user_password_request_supports_object_and_raw_password() {
-        let service = development_user_service();
+        let store = Arc::new(InMemoryUserStore::with_seed_data());
+        let service = CompatUserService::new(store.clone());
 
         service
             .update_password(
@@ -677,12 +710,20 @@ mod tests {
             .await
             .expect("object password should update");
 
-        let store_password = legacy_md5_hex("object-secret".as_bytes());
+        let object_hash = store.find_by_id(59).await.unwrap().unwrap().password_hash;
+        assert!(object_hash.starts_with("$argon2"));
+        assert!(
+            CompatPasswordVerifier.verify("object-secret", &PasswordHash::new(object_hash.clone()))
+        );
+
         service
             .update_password(59, UserPasswordRequest::Raw("raw-secret".to_owned()))
             .await
             .expect("raw password should update");
 
-        assert_ne!(store_password, legacy_md5_hex("raw-secret".as_bytes()));
+        let raw_hash = store.find_by_id(59).await.unwrap().unwrap().password_hash;
+        assert!(raw_hash.starts_with("$argon2"));
+        assert_ne!(object_hash, raw_hash);
+        assert!(CompatPasswordVerifier.verify("raw-secret", &PasswordHash::new(raw_hash)));
     }
 }

@@ -1,3 +1,13 @@
+use argon2::{
+    password_hash::{
+        PasswordHash as ArgonPasswordHash, PasswordHasher as _, PasswordVerifier as _, SaltString,
+    },
+    Argon2,
+};
+use rand_core::OsRng;
+
+use crate::{AppError, AppResult};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PasswordHash(String);
 
@@ -13,10 +23,22 @@ impl PasswordHash {
     pub fn is_legacy_md5(&self) -> bool {
         self.0.len() == 32 && self.0.chars().all(|ch| ch.is_ascii_hexdigit())
     }
+
+    pub fn is_argon2(&self) -> bool {
+        self.0.starts_with("$argon2")
+    }
+
+    pub fn replace(&mut self, value: impl Into<String>) {
+        self.0 = value.into();
+    }
 }
 
 pub trait PasswordVerifier: Send + Sync {
     fn verify(&self, password: &str, hash: &PasswordHash) -> bool;
+}
+
+pub trait PasswordHasher: Send + Sync {
+    fn hash_password(&self, password: &str) -> AppResult<PasswordHash>;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -26,6 +48,39 @@ impl PasswordVerifier for LegacyMd5PasswordVerifier {
     fn verify(&self, password: &str, hash: &PasswordHash) -> bool {
         hash.is_legacy_md5()
             && legacy_md5_hex(password.as_bytes()) == hash.as_str().to_ascii_lowercase()
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Argon2PasswordHasher;
+
+impl PasswordHasher for Argon2PasswordHasher {
+    fn hash_password(&self, password: &str) -> AppResult<PasswordHash> {
+        let salt = SaltString::generate(&mut OsRng);
+        let hash = Argon2::default()
+            .hash_password(password.as_bytes(), &salt)
+            .map_err(|error| AppError::Database(format!("密码哈希失败: {error}")))?
+            .to_string();
+        Ok(PasswordHash::new(hash))
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct CompatPasswordVerifier;
+
+impl PasswordVerifier for CompatPasswordVerifier {
+    fn verify(&self, password: &str, hash: &PasswordHash) -> bool {
+        if hash.is_legacy_md5() {
+            return LegacyMd5PasswordVerifier.verify(password, hash);
+        }
+
+        let Ok(parsed) = ArgonPasswordHash::new(hash.as_str()) else {
+            return false;
+        };
+
+        Argon2::default()
+            .verify_password(password.as_bytes(), &parsed)
+            .is_ok()
     }
 }
 
@@ -113,7 +168,10 @@ pub fn legacy_md5_hex(input: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{legacy_md5_hex, LegacyMd5PasswordVerifier, PasswordHash, PasswordVerifier};
+    use super::{
+        legacy_md5_hex, Argon2PasswordHasher, CompatPasswordVerifier, LegacyMd5PasswordVerifier,
+        PasswordHash, PasswordHasher, PasswordVerifier,
+    };
 
     #[test]
     fn legacy_md5_matches_old_node_hash() {
@@ -130,5 +188,32 @@ mod tests {
 
         assert!(verifier.verify("password", &hash));
         assert!(!verifier.verify("wrong", &hash));
+    }
+
+    #[test]
+    fn argon2_hasher_emits_phc_hash() {
+        let hasher = Argon2PasswordHasher;
+        let hash = hasher
+            .hash_password("secret")
+            .expect("argon2 hash should be generated");
+
+        assert!(hash.is_argon2());
+        assert!(!hash.is_legacy_md5());
+        assert!(hash.as_str().len() > 32);
+    }
+
+    #[test]
+    fn compat_verifier_accepts_argon2_and_legacy_md5() {
+        let hasher = Argon2PasswordHasher;
+        let verifier = CompatPasswordVerifier;
+        let argon_hash = hasher
+            .hash_password("secret")
+            .expect("argon2 hash should be generated");
+        let legacy_hash = PasswordHash::new(legacy_md5_hex(b"secret"));
+
+        assert!(verifier.verify("secret", &argon_hash));
+        assert!(verifier.verify("secret", &legacy_hash));
+        assert!(!verifier.verify("wrong", &argon_hash));
+        assert!(!verifier.verify("wrong", &legacy_hash));
     }
 }

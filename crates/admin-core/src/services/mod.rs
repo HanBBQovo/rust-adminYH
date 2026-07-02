@@ -8,8 +8,9 @@ pub mod role;
 pub mod user;
 
 pub use auth::{
-    development_auth_service, AuthService, AuthUserStore, CompatAuthService,
-    DevelopmentTokenIssuer, DisabledAuthService, InMemoryAuthUserStore, TokenIssuer,
+    development_auth_service, production_auth_service, AuthService, AuthUserStore,
+    CompatAuthService, DevelopmentTokenIssuer, DisabledAuthService, InMemoryAuthUserStore,
+    TokenIssuer,
 };
 pub use chart::{
     development_chart_service, ChartService, ChartStore, CompatChartService, DisabledChartService,
