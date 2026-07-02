@@ -1,10 +1,7 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 
-const invalidTokenEnvelope = {
-  code: -200,
-  message: '无效的token或登录已失效！请重新登录~',
-}
+import { e2eToken, expectTemplateShell, loginAsAdmin, mockAdminSession } from './support/admin-session'
 
 const orderFixture = {
   id: 101,
@@ -51,107 +48,17 @@ const receiptFixture = {
   goodsnumber: '12',
 }
 
-async function mockSession(page: Page) {
-  let authenticated = false
-
-  await page.route('**/api/users/me', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify(
-        authenticated
-          ? { code: 0, data: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] } }
-          : invalidTokenEnvelope,
-      ),
-    })
-  })
-
-  await page.route('**/api/login', async (route) => {
-    expect(route.request().method()).toBe('POST')
-    authenticated = true
-
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        code: 0,
-        data: {
-          id: 58,
-          name: 'admin',
-          token: 'e2e-token',
-        },
-      }),
-    })
-  })
-
-  await page.route('**/api/role/1/menu', async (route) => {
-    expect(route.request().headers().authorization).toBe('Bearer e2e-token')
-
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        code: 0,
-        data: [
-          { id: 1, name: '工作台', url: '/main/workbench' },
-          { id: 2, name: '订单列表', url: '/main/order/orders' },
-          { id: 3, name: '回单管理', url: '/main/receipt' },
-        ],
-      }),
-    })
-  })
-
-  await page.route('**/api/chart/headerList', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        code: 0,
-        data: [
-          {
-            amount: 'ordercount',
-            title: '订单总数：',
-            tips: '已同步旧系统 chart 数据',
-            subtitle: '订单',
-            number1: 12,
-            number2: 0,
-          },
-        ],
-      }),
-    })
-  })
-
-  await page.route('**/api/chart/company/order/sumfreight', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ code: 0, data: [] }),
-    })
-  })
-
-  await page.route('**/api/chart/company/receipt/sumreceipt', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({ code: 0, data: [] }),
-    })
-  })
-}
-
-async function login(page: Page) {
-  await page.goto('/')
-  await expect(page.getByRole('heading', { name: '宇涵物流订单系统' })).toBeVisible()
-  await page.getByLabel('账号').fill('admin')
-  await page.getByLabel('密码').fill('admin123')
-  await page.getByRole('button', { name: /登录/ }).click()
-  await expect(page.getByRole('main').getByRole('heading', { name: '工作台' })).toBeVisible()
-}
-
-async function expectTemplateShell(page: Page, activeHeading: string) {
-  await expect(page.getByRole('main').getByRole('heading', { name: activeHeading })).toBeVisible()
-  await expect(page.getByRole('button', { name: '工作台' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '订单列表' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '回单管理' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /退出登录/ })).toBeVisible()
-}
+const businessNavItems = ['工作台', '订单列表', '回单管理']
 
 test.describe('business list E2E state matrix', () => {
   test.beforeEach(async ({ page }) => {
-    await mockSession(page)
+    await mockAdminSession(page, {
+      menus: [
+        { id: 1, name: '工作台', url: '/main/workbench' },
+        { id: 2, name: '订单列表', url: '/main/order/orders' },
+        { id: 3, name: '回单管理', url: '/main/receipt' },
+      ],
+    })
   })
 
   test('orders page keeps template shell across loading, loaded, empty, and error states', async ({ page }) => {
@@ -160,7 +67,7 @@ test.describe('business list E2E state matrix', () => {
     await page.route('**/api/order/list', async (route) => {
       const request = route.request()
       expect(request.method()).toBe('POST')
-      expect(request.headers().authorization).toBe('Bearer e2e-token')
+      expect(request.headers().authorization).toBe(`Bearer ${e2eToken}`)
       expect(request.postDataJSON()).toMatchObject({ offset: 0, size: 10 })
 
       if (orderState === 'loaded') {
@@ -186,10 +93,10 @@ test.describe('business list E2E state matrix', () => {
       })
     })
 
-    await login(page)
+    await loginAsAdmin(page)
     await page.getByRole('button', { name: '订单列表' }).click()
 
-    await expectTemplateShell(page, '订单列表')
+    await expectTemplateShell(page, '订单列表', businessNavItems)
     await expect(page.getByText('订单数据')).toBeVisible()
     await expect(page.getByText(orderFixture.oddnumber).first()).toBeVisible()
     await expect(page.getByText(orderFixture.company)).toBeVisible()
@@ -211,14 +118,14 @@ test.describe('business list E2E state matrix', () => {
     await page.getByRole('button', { name: '刷新' }).click()
     await expect(page.getByText('暂无订单')).toBeVisible()
     await expect(page.getByText(orderFixture.oddnumber)).toHaveCount(0)
-    await expectTemplateShell(page, '订单列表')
+    await expectTemplateShell(page, '订单列表', businessNavItems)
 
     orderState = 'error'
     await page.getByRole('button', { name: '刷新' }).click()
     await expect(page.getByText('订单列表加载失败')).toBeVisible()
     await expect(page.getByRole('button', { name: '重试' })).toBeVisible()
     await expect(page.getByRole('heading', { name: '宇涵物流订单系统' })).toHaveCount(0)
-    await expectTemplateShell(page, '订单列表')
+    await expectTemplateShell(page, '订单列表', businessNavItems)
   })
 
   test('receipts page keeps template shell across loading, loaded, empty, and error states', async ({ page }) => {
@@ -227,7 +134,7 @@ test.describe('business list E2E state matrix', () => {
     await page.route('**/api/receipt/list', async (route) => {
       const request = route.request()
       expect(request.method()).toBe('POST')
-      expect(request.headers().authorization).toBe('Bearer e2e-token')
+      expect(request.headers().authorization).toBe(`Bearer ${e2eToken}`)
       expect(request.postDataJSON()).toMatchObject({ offset: 0, size: 10 })
 
       if (receiptState === 'loaded') {
@@ -253,10 +160,10 @@ test.describe('business list E2E state matrix', () => {
       })
     })
 
-    await login(page)
+    await loginAsAdmin(page)
     await page.getByRole('button', { name: '回单管理' }).click()
 
-    await expectTemplateShell(page, '回单管理')
+    await expectTemplateShell(page, '回单管理', businessNavItems)
     await expect(page.getByRole('heading', { name: '全部回单' })).toBeVisible()
     await expect(page.getByText(receiptFixture.oddnumber).first()).toBeVisible()
     await expect(page.getByText('未回收').first()).toBeVisible()
@@ -265,13 +172,13 @@ test.describe('business list E2E state matrix', () => {
     await page.getByRole('button', { name: '刷新' }).click()
     await expect(page.getByText('暂无回单')).toBeVisible()
     await expect(page.getByText(receiptFixture.oddnumber)).toHaveCount(0)
-    await expectTemplateShell(page, '回单管理')
+    await expectTemplateShell(page, '回单管理', businessNavItems)
 
     receiptState = 'error'
     await page.getByRole('button', { name: '刷新' }).click()
     await expect(page.getByText('回单列表加载失败')).toBeVisible()
     await expect(page.getByRole('button', { name: '重试' })).toBeVisible()
     await expect(page.getByRole('heading', { name: '宇涵物流订单系统' })).toHaveCount(0)
-    await expectTemplateShell(page, '回单管理')
+    await expectTemplateShell(page, '回单管理', businessNavItems)
   })
 })

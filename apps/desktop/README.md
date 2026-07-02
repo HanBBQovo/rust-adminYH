@@ -53,6 +53,7 @@ npm run tauri:build:app -- --config '{"bundle":{"resources":{"../../../target/re
 - 默认提交前：在仓库根目录运行 `scripts/check-all.sh`。
 - 前端架构约束：`scripts/test-frontend.sh` 会自动运行 `scripts/test-frontend-architecture.mjs`，阻断页面直接请求、绕过 API 封装、业务层直接使用 Radix 原语和业务页散写 inline style。
 - 前端交互改动：运行 `RUN_E2E=true scripts/test-frontend.sh`。
+- E2E 共享封装：新增主页面验收用例时，必须复用 `web/e2e/support/*` 中的登录、会话、菜单、模板壳和旧列表响应 helpers，不要在 spec 内重复散写 token、菜单 mock 或旧响应结构。
 - 桌面壳、图标、CSP、capability、打包配置改动：运行 `RUN_TAURI=true scripts/check-all.sh`。该门禁会先构建 release `admin-api` sidecar，再通过 Tauri `--config` 注入资源映射构建 `.app`，并校验 `Contents/Resources/binaries/admin-api` 存在且可执行。
 - macOS 安装包发布前：运行 `RUN_TAURI=true RUN_TAURI_DMG=true scripts/check-all.sh`。
 - 真实迁移演练：配置 `OLD_DATABASE_URL`、`NEW_DATABASE_URL`，在影子库上运行 `scripts/test-migration.sh`；真实 apply 只允许测试库/影子库加 `MIGRATION_APPLY=true`。
