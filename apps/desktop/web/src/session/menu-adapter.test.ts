@@ -3,8 +3,12 @@ import { describe, expect, it } from 'vitest'
 import { adaptLegacyMenus } from '@/session/menu-adapter'
 
 describe('adaptLegacyMenus', () => {
-  it('falls back to template nav when old menus are empty', () => {
-    expect(adaptLegacyMenus([]).map((item) => item.key)).toEqual(['workspace', 'orders', 'receipts', 'companies', 'users', 'roles', 'menus', 'registry', 'settings'])
+  it('does not grant template nav permissions when old menus are empty', () => {
+    expect(adaptLegacyMenus([])).toEqual([])
+  })
+
+  it('does not grant template nav permissions when menus do not match known pages', () => {
+    expect(adaptLegacyMenus([{ name: '未知模块', url: '/main/unknown' }])).toEqual([])
   })
 
   it('maps old menu labels and urls into template pages', () => {

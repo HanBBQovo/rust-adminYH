@@ -1,16 +1,18 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { Boxes, ChevronLeft, ChevronRight, LogOut, PanelLeft } from 'lucide-react'
+import { Boxes, ChevronLeft, ChevronRight, LogOut, PanelLeft, ShieldAlert } from 'lucide-react'
 
 import { logout } from '@/api/auth'
 import { ChunkLoadBoundary } from '@/components/ChunkLoadBoundary'
 import { PageLoader } from '@/components/PageLoader'
+import { PageShell, PageSurface } from '@/components/layout/PageScaffold'
 import { ThemeToggleButton } from '@/components/theme'
 import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { BRAND_NAME, nsKey } from '@/config'
 import { AnimatePresence, motion } from '@/lib/motion'
 import { cn } from '@/lib/utils'
-import { adaptLegacyMenus, fallbackNavItems } from '@/session/menu-adapter'
+import { adaptLegacyMenus } from '@/session/menu-adapter'
 import type { AdminSession, AppPage, SessionNavItem } from '@/session/types'
 
 const Workspace = lazy(() => import('@/pages/Workspace'))
@@ -50,25 +52,23 @@ interface DashboardProps {
 
 export default function Dashboard({ session, onLogout }: DashboardProps) {
   const [activeSession, setActiveSession] = useState(session)
-  const navItems = useMemo(() => {
-    const adapted = adaptLegacyMenus(activeSession.menus)
-    return adapted.length ? adapted : fallbackNavItems()
-  }, [activeSession.menus])
+  const navItems = useMemo(() => adaptLegacyMenus(activeSession.menus), [activeSession.menus])
   const [currentPage, setCurrentPage] = useState<AppPage>(() => readStoredPage(navItems))
   const [collapsed, setCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [isMobileViewport, setIsMobileViewport] = useState(false)
 
   const currentItem = useMemo(
-    () => navItems.find((item) => item.key === currentPage) || navItems[0],
+    () => navItems.find((item) => item.key === currentPage) || navItems[0] || null,
     [currentPage, navItems],
   )
-  const CurrentIcon = currentItem.icon
+  const CurrentIcon = currentItem?.icon ?? ShieldAlert
 
   useEffect(() => {
-    document.title = `${currentItem.label} - ${BRAND_NAME}`
-    window.localStorage.setItem(PAGE_STORAGE_KEY, currentPage)
-  }, [currentItem.label, currentPage])
+    const title = currentItem?.label ?? '暂无可用菜单'
+    document.title = `${title} - ${BRAND_NAME}`
+    if (currentItem) window.localStorage.setItem(PAGE_STORAGE_KEY, currentPage)
+  }, [currentItem, currentPage])
 
   useEffect(() => {
     if (!navItems.some((item) => item.key === currentPage)) {
@@ -134,6 +134,18 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
     <nav className="flex flex-col gap-1">
       {navItems.map((item) => renderNavItem(item, { collapsed: compact, onSelect }))}
     </nav>
+  )
+
+  const emptyPermissionState = (
+    <PageShell title="暂无可用菜单" description="当前账号没有可显示的后台菜单权限。" width="4xl">
+      <PageSurface>
+        <EmptyState
+          icon={<ShieldAlert className="h-5 w-5" />}
+          title="暂无可用菜单"
+          description="请联系管理员检查当前账号的角色和菜单授权。系统不会在空菜单时回退显示默认管理入口。"
+        />
+      </PageSurface>
+    </PageShell>
   )
 
   return (
@@ -222,7 +234,7 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
                   </Button>
                 ) : null}
                 <CurrentIcon className="h-5 w-5 text-primary" />
-                <h2 className="truncate text-base font-semibold md:text-lg">{currentItem.label}</h2>
+                <h2 className="truncate text-base font-semibold md:text-lg">{currentItem?.label ?? '暂无可用菜单'}</h2>
               </motion.div>
 
               <div className="ml-auto flex min-w-0 items-center gap-2">
@@ -235,7 +247,7 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
             </header>
 
             <main className="p-4 md:p-6">
-              <ChunkLoadBoundary scopeLabel={currentItem.label}>
+              <ChunkLoadBoundary scopeLabel={currentItem?.label ?? '暂无可用菜单'}>
                 <Suspense fallback={<PageLoader />}>
                   <motion.div
                     key={currentPage}
@@ -243,15 +255,16 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
                   >
-                    {currentPage === 'workspace' ? <Workspace /> : null}
-                    {currentPage === 'orders' ? <OrdersList /> : null}
-                    {currentPage === 'receipts' ? <ReceiptsList /> : null}
-                    {currentPage === 'companies' ? <CompaniesList /> : null}
-                    {currentPage === 'users' ? <UsersList /> : null}
-                    {currentPage === 'roles' ? <RolesList /> : null}
-                    {currentPage === 'menus' ? <MenusList /> : null}
-                    {currentPage === 'registry' ? <ResourceRegistry /> : null}
-                    {currentPage === 'settings' ? (
+                    {!navItems.length ? emptyPermissionState : null}
+                    {navItems.length && currentPage === 'workspace' ? <Workspace /> : null}
+                    {navItems.length && currentPage === 'orders' ? <OrdersList /> : null}
+                    {navItems.length && currentPage === 'receipts' ? <ReceiptsList /> : null}
+                    {navItems.length && currentPage === 'companies' ? <CompaniesList /> : null}
+                    {navItems.length && currentPage === 'users' ? <UsersList /> : null}
+                    {navItems.length && currentPage === 'roles' ? <RolesList /> : null}
+                    {navItems.length && currentPage === 'menus' ? <MenusList /> : null}
+                    {navItems.length && currentPage === 'registry' ? <ResourceRegistry /> : null}
+                    {navItems.length && currentPage === 'settings' ? (
                       <SettingsPage
                         user={activeSession.user}
                         onAvatarUploaded={(cacheBust) => {

@@ -46,7 +46,7 @@ export function adaptLegacyMenus(menus: LegacyMenuItem[]): SessionNavItem[] {
     return source ? [{ key, label: labelForPage(key, source), icon }] : []
   })
 
-  if (!matched.length) return FALLBACK_NAV_ITEMS
+  if (!matched.length) return []
 
   const keys = new Set<AppPage>()
   return matched.filter((item) => {
@@ -54,8 +54,4 @@ export function adaptLegacyMenus(menus: LegacyMenuItem[]): SessionNavItem[] {
     keys.add(item.key)
     return true
   })
-}
-
-export function fallbackNavItems(): SessionNavItem[] {
-  return FALLBACK_NAV_ITEMS
 }
