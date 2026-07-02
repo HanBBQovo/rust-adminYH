@@ -227,6 +227,7 @@ POST /api/recovery/list
 - `/api/chart/headerList`、`/api/chart/company/order/count`、`/api/chart/company/order/sumfreight`、`/api/chart/company/receipt/sumreceipt` 已先落地内存图表统计仓储和集成测试，兼容旧顶部统计标题、公司维度字段名 `ordercount/sumfreight/sumReceipt`、登录鉴权要求。
 - 前端工作台 `src/api/dashboard.ts` 已改为通过封装层读取旧 `chart` 接口组合数据，不再依赖未实现的 `/chart/dashboard`；配套 `dashboard.test.ts` 覆盖旧字段映射、公司维度聚合和实际请求路径。
 - 前端订单模块已在 `src/api/orders.ts` 和 `OrdersList` 页面补齐列表 + CRUD 第一阶段：通过封装层请求 `/api/order/list`、`GET /api/order/:id`、`POST /api/order`、`PATCH /api/order/:id`、`DELETE /api/order/:id`，保留旧订单字段、搜索条件、分页、当前页 CSV 导出、旧弹窗必填校验、查看只读、编辑保存和删除确认；配套 API/页面测试覆盖 payload、请求路径、字段渲染、筛选、分页、必填校验、toast、confirm 和刷新行为。
+- 前端回单模块已在 `src/api/receipts.ts` 和 `ReceiptsList` 页面补齐列表 + 状态流转第一阶段：通过封装层请求 `/api/receipt/list`、`/api/notrecovery/list`、`/api/recovery/list`、`PATCH /api/receipt/:id`，复用一个页面承载全部回单/未回收/已回收三个旧入口，保留旧回单字段、搜索条件、分页、回收/接收/寄出按钮和 `issuestate='已接收'` 兼容值；配套 API/页面测试覆盖三类列表路径、旧 payload、状态 PATCH、筛选、分页、toast、空态和刷新行为。
 - `/api/upload/avatar` 已先落地 multipart 头像上传兼容入口和集成测试，兼容旧字段名 `avatar`、上传成功文案、头像读取 bytes + `Content-Type` 直出。
 - 第一阶段登录服务通过 `AuthService` / `AuthUserStore` / `TokenIssuer` 抽象解耦；当前测试使用内存用户仓储，不声称已经连接旧 MySQL。
 - 第一阶段菜单服务通过 `MenuService` / `MenuStore` 抽象解耦；当前测试使用内存菜单仓储，不声称已经连接旧 MySQL。

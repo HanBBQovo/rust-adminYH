@@ -27,9 +27,9 @@ export const RESOURCE_REGISTRY: ResourceSummary[] = [
   {
     key: 'receipts',
     title: '回单管理',
-    description: '覆盖全部回单、未回收、已回收与状态流转。',
+    description: '覆盖全部回单、未回收、已回收与回收/接收/寄出状态流转。',
     count: 341,
-    status: 'building',
+    status: 'ready',
     apiPath: '/receipt/list',
     legacyPath: 'src/views/main/receipt/*',
     owner: '客服',

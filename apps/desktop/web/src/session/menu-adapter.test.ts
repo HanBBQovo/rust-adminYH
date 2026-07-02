@@ -4,7 +4,7 @@ import { adaptLegacyMenus } from '@/session/menu-adapter'
 
 describe('adaptLegacyMenus', () => {
   it('falls back to template nav when old menus are empty', () => {
-    expect(adaptLegacyMenus([]).map((item) => item.key)).toEqual(['workspace', 'orders', 'registry', 'settings'])
+    expect(adaptLegacyMenus([]).map((item) => item.key)).toEqual(['workspace', 'orders', 'receipts', 'registry', 'settings'])
   })
 
   it('maps old menu labels and urls into template pages', () => {

@@ -15,6 +15,7 @@ import type { AdminSession, AppPage, SessionNavItem } from '@/session/types'
 
 const Workspace = lazy(() => import('@/pages/Workspace'))
 const OrdersList = lazy(() => import('@/pages/OrdersList'))
+const ReceiptsList = lazy(() => import('@/pages/ReceiptsList'))
 const ResourceRegistry = lazy(() => import('@/pages/ResourceRegistry'))
 const SettingsPage = lazy(() => import('@/pages/Settings'))
 
@@ -239,6 +240,7 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
                   >
                     {currentPage === 'workspace' ? <Workspace /> : null}
                     {currentPage === 'orders' ? <OrdersList /> : null}
+                    {currentPage === 'receipts' ? <ReceiptsList /> : null}
                     {currentPage === 'registry' ? <ResourceRegistry /> : null}
                     {currentPage === 'settings' ? <SettingsPage /> : null}
                   </motion.div>
