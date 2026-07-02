@@ -249,6 +249,7 @@ POST /api/recovery/list
 - `admin-db` 已补齐 `MySqlUserRepository` 第一阶段：同一个 SQLx 仓储同时实现 `AuthUserStore` 和 `UserStore`，覆盖旧 MD5 登录查用户、登录 token 写回 `user.token`、按 token 查询当前用户、用户列表/详情/创建/修改/改密/删除、默认头像和头像元数据更新；用户创建、用户角色、默认头像写入放在同一事务中。真实 MySQL 回归已补充头像元数据事务测试，确认上传更新不会产生重复 `avatar` 行，缺失用户不会写入孤儿头像。
 - `admin-db` 已补齐 `MySqlMenuRepository` 和 `MySqlRoleRepository` 第一阶段：菜单树从 `permission` 拉平后在 Rust 构树，保留 `/menu/tree` 的 `chilren` 和 `/role/:id/menu` 的 `children` 输出差异；角色列表、详情、创建、修改、删除和 `role_permission` 菜单分配均使用参数化 SQL，分配采用事务化先删后插和去重语义。
 - `admin-api` 启动路径已接入真实 SQLx 仓储：生产运行时通过 `DATABASE_URL` 建立 `MySqlPool`，并装配 `CompatAuthService`、`CompatUserService`、`CompatMenuService`、`CompatRoleService`、`CompatCompanyService`、`CompatOrderService`、`CompatReceiptService`、`CompatMemoryService`、`CompatChartService`；测试仍可通过 `AppState::with_services` 注入内存仓储，保证业务测试和生产装配解耦。
+- Docker 静态契约已接入默认门禁：`scripts/test-docker-contract.mjs` 会在不启动 Docker 的情况下锁定 API/Web Dockerfile、compose、nginx `/api` 代理、非 root 运行、`DATABASE_MIGRATE_ON_START` 默认/CI 差异、健康检查、诊断日志和清理策略，防止发布配置被后续重构悄悄破坏。
 - `/api/upload/avatar` 已先落地 multipart 头像上传兼容入口和集成测试，兼容旧字段名 `avatar`、上传成功文案、头像读取 bytes + `Content-Type` 直出。
 - `/api/upload/avatar` 后端已补齐安全校验：缺失 token 返回旧未登录 envelope，非 `avatar` 字段、空文件、非 jpg/png MIME/扩展名和超过 500kb 均返回旧 `{ code: -400 }` 业务错误；前端校验不再是唯一防线。
 - `admin-migration verify-files` 已补齐头像文件完整性阻断门禁：对比旧/新头像目录的相对文件名和 SHA256，缺失、多余或内容变化都会输出 `status=failed` 并以非 0 退出，避免数据库迁移通过但磁盘头像漏迁。

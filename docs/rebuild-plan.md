@@ -963,7 +963,7 @@ scripts/test-e2e.sh
 
 每次接入一个真实 SQLx 仓储后，必须至少完成四层验证：`cargo test --offline -p admin-db` 验证仓储编译和 schema 契约、`cargo test --offline -p admin-api -p admin-db` 验证 API 装配编译、`scripts/check-all.sh` 验证全仓库回归、`RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL=mysql://... scripts/check-all.sh` 验证真实 MySQL repository 事务路径。当前订单仓储已提供 `crates/admin-db/tests/mysql_order_repository.rs`，覆盖真实 MySQL 下订单创建、回单同步更新、弱关联删除清理和 SQL 注入 payload 普通文本化；用户认证仓储已提供 `crates/admin-db/tests/mysql_user_auth_repository.rs`，覆盖旧 MD5 登录升级 Argon2、错误密码不污染旧 hash/token、`user.token` 单点写回、新建/改密 Argon2 写入、头像元数据事务替换和缺失用户孤儿头像阻断。
 
-Docker/容器门禁已作为发布级测试的一部分补齐：`Dockerfile.admin-api` 构建 Rust Axum API 镜像，`Dockerfile.desktop-web` 构建模板前端静态镜像，`docker-compose.ci.yml` 组合 MySQL、API 和 Web，并通过 `DATABASE_MIGRATE_ON_START=true` 在 CI 数据库启动时应用兼容 schema，用于验证镜像能启动并通过 `/api/health` 与首页检查。默认 `scripts/check-all.sh` 只打印 `RUN_DOCKER=true` 跳过提示；发布候选版本必须执行 `RUN_DOCKER=true scripts/check-all.sh`。如果 Docker 构建或 compose 启动失败，`scripts/test-docker.sh` 必须输出 `docker version`、`docker compose version`、commit、镜像 tag、脱敏后的数据库连接、compose ps 和三类服务最近 200 行日志，不能只给出笼统的 “Docker build failed”。
+Docker/容器门禁已作为发布级测试的一部分补齐：`Dockerfile.admin-api` 构建 Rust Axum API 镜像，`Dockerfile.desktop-web` 构建模板前端静态镜像，`docker-compose.ci.yml` 组合 MySQL、API 和 Web，并通过 `DATABASE_MIGRATE_ON_START=true` 在 CI 数据库启动时应用兼容 schema，用于验证镜像能启动并通过 `/api/health` 与首页检查。默认 `scripts/check-all.sh` 会先执行轻量 `scripts/test-docker-contract.mjs`，静态锁定 Dockerfile、compose、nginx `/api` 代理、非 root 运行、迁移开关、健康检查和失败诊断契约；重型镜像构建和 compose smoke 仍需显式设置 `RUN_DOCKER=true`。发布候选版本必须执行 `RUN_DOCKER=true scripts/check-all.sh`。如果 Docker 构建或 compose 启动失败，`scripts/test-docker.sh` 必须输出 `docker version`、`docker compose version`、commit、镜像 tag、脱敏后的数据库连接、compose ps 和三类服务最近 200 行日志，不能只给出笼统的 “Docker build failed”。
 
 Docker 基础镜像允许通过环境变量覆盖：`RUST_IMAGE`、`RUNTIME_IMAGE`、`NODE_IMAGE`、`NGINX_IMAGE`、`MYSQL_IMAGE`。本机或 CI 如果 Docker Hub 直连不稳定，可以先预拉取内部镜像或镜像站版本，再用这些变量执行 `scripts/test-docker.sh`；脚本会在诊断中打印实际使用的基础镜像，便于定位是网络拉取失败、构建失败还是启动失败。
 
@@ -990,7 +990,7 @@ Tauri 打包门禁已封装为 `scripts/test-tauri-build.sh`，并接入 `RUN_TA
 
 | 场景 | 必跑命令 | 证明什么 | 不能证明什么 |
 | --- | --- | --- | --- |
-| 日常提交 | `CARGO_OFFLINE=true scripts/check-all.sh` | Rust 编译/clippy/内存仓储 API、前端 lint/架构/typecheck/Vitest/build、迁移 CLI 基线、Tauri 合同全部通过 | 不代表真实 MySQL、Playwright、Docker、Tauri 安装包和真实迁移已验收 |
+| 日常提交 | `CARGO_OFFLINE=true scripts/check-all.sh` | Rust 编译/clippy/内存仓储 API、前端 lint/架构/typecheck/Vitest/build、迁移 CLI 基线、Tauri 合同、Docker 静态契约全部通过 | 不代表真实 MySQL、Playwright、Docker 镜像构建/compose smoke、Tauri 安装包和真实迁移已验收 |
 | 前端交互变更 | `RUN_E2E=true scripts/test-frontend.sh` | 真实浏览器覆盖登录、导航、列表状态、系统写入、账号设置和模板壳保持 | 默认仍是 mock API，不代表 Rust API + MySQL 全链路 |
 | 前端发布候选 | `cd apps/desktop/web && npm run test:coverage` | Vitest 覆盖率阈值达标，防止组件/API 测试只增不验 | 不替代 Playwright 和人工模板风格验收 |
 | DB 仓储变更 | `RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL=mysql://... scripts/check-all.sh` | SQLx repository 在真实 MySQL 测试库里验证分页、筛选、事务、弱关联和注入 payload | 只允许指向可重建测试库，不能指向旧生产库或新生产库 |

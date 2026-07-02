@@ -33,6 +33,9 @@ else
   echo "SKIP: Tauri workspace 尚未初始化，暂不执行 cargo tauri build。"
 fi
 
+section "Docker contract"
+node "$ROOT_DIR/scripts/test-docker-contract.mjs"
+
 if [[ "${RUN_DOCKER:-false}" == "true" ]]; then
   section "Docker"
   "$ROOT_DIR/scripts/test-docker.sh"
