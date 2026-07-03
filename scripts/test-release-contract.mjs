@@ -110,10 +110,33 @@ assertIncludes(dockerContract, 'RUN_DOCKER_E2E', 'Docker contract must staticall
 assertIncludes(ciWorkflow, 'workflow_dispatch:', 'GitHub Actions must stay manual during active development')
 assert(!ciWorkflow.includes('push:'), 'GitHub Actions must not auto-run on push during active development')
 assert(!ciWorkflow.includes('pull_request:'), 'GitHub Actions must not auto-run on pull_request during active development')
+assertIncludes(ciWorkflow, 'release_candidate:', 'manual workflow must expose an explicit release candidate input')
 assertIncludes(ciWorkflow, 'run_docker:', 'manual workflow must expose Docker release input')
 assertIncludes(ciWorkflow, 'run_tauri:', 'manual workflow must expose Tauri release input')
 assertIncludes(ciWorkflow, 'run_tauri_dmg:', 'manual workflow must expose Tauri DMG release input')
 assertIncludes(ciWorkflow, 'run_tauri_sidecar_smoke:', 'manual workflow must expose bundled Tauri sidecar smoke input')
+assertIncludes(ciWorkflow, 'release-candidate-preflight:', 'manual workflow must include a release candidate preflight job')
+assertIncludes(ciWorkflow, 'RELEASE_CANDIDATE: ${{ inputs.release_candidate }}', 'release candidate preflight must read the release_candidate input')
+assertIncludes(ciWorkflow, 'RUN_DOCKER: ${{ inputs.run_docker }}', 'release candidate preflight must verify the Docker toggle')
+assertIncludes(ciWorkflow, 'RUN_DOCKER_E2E: ${{ inputs.run_docker_e2e }}', 'release candidate preflight must verify the Docker E2E toggle')
+assertIncludes(ciWorkflow, 'RUN_TAURI: ${{ inputs.run_tauri }}', 'release candidate preflight must verify the Tauri toggle')
+assertIncludes(ciWorkflow, 'RUN_TAURI_DMG: ${{ inputs.run_tauri_dmg }}', 'release candidate preflight must verify the Tauri DMG toggle')
+assertIncludes(ciWorkflow, 'RUN_TAURI_SIDECAR_SMOKE: ${{ inputs.run_tauri_sidecar_smoke }}', 'release candidate preflight must verify the sidecar smoke toggle')
+assertIncludes(ciWorkflow, "ADMIN_DB_TEST_DATABASE_URL_SET: ${{ secrets.ADMIN_DB_TEST_DATABASE_URL != '' }}", 'release candidate preflight must verify the real MySQL test secret exists')
+assertIncludes(ciWorkflow, "OLD_DATABASE_URL_SET: ${{ secrets.OLD_DATABASE_URL != '' }}", 'release candidate preflight must verify the old migration DB secret exists')
+assertIncludes(ciWorkflow, "NEW_DATABASE_URL_SET: ${{ secrets.NEW_DATABASE_URL != '' }}", 'release candidate preflight must verify the new migration DB secret exists')
+assertIncludes(ciWorkflow, "NEW_AVATAR_DIR_SET: ${{ secrets.NEW_AVATAR_DIR != '' || vars.NEW_AVATAR_DIR != '' }}", 'release candidate preflight must verify the avatar target secret or variable exists')
+assertIncludes(ciWorkflow, "TAURI_SIDECAR_DATABASE_URL_SET: ${{ secrets.TAURI_SIDECAR_DATABASE_URL != '' || secrets.DATABASE_URL != '' }}", 'release candidate preflight must verify a sidecar database secret exists')
+assertIncludes(ciWorkflow, 'GitHub release candidate preflight passed.', 'release candidate preflight must print an explicit success marker')
+assertIncludes(ciWorkflow, 'needs: release-candidate-preflight', 'all GitHub jobs must depend on the release candidate preflight')
+assertIncludes(ciWorkflow, 'RELEASE_GATE: ${{ inputs.release_candidate }}', 'backend and migration jobs must receive the release gate flag')
+assertIncludes(ciWorkflow, 'RUN_DB_TESTS: ${{ inputs.release_candidate }}', 'backend job must enable real MySQL tests for release candidates')
+assertIncludes(ciWorkflow, 'ADMIN_DB_TEST_DATABASE_URL: ${{ secrets.ADMIN_DB_TEST_DATABASE_URL }}', 'backend job must receive the real MySQL test secret')
+assertIncludes(ciWorkflow, 'if: ${{ inputs.release_candidate }}', 'frontend job must gate coverage on release_candidate')
+assertIncludes(ciWorkflow, 'npm run test:coverage', 'frontend job must run coverage for release candidates')
+assertIncludes(ciWorkflow, 'OLD_DATABASE_URL: ${{ secrets.OLD_DATABASE_URL }}', 'migration job must receive the old database URL')
+assertIncludes(ciWorkflow, 'NEW_DATABASE_URL: ${{ secrets.NEW_DATABASE_URL }}', 'migration job must receive the new database URL')
+assertIncludes(ciWorkflow, 'NEW_AVATAR_DIR: ${{ vars.NEW_AVATAR_DIR || secrets.NEW_AVATAR_DIR }}', 'migration job must receive the avatar verification target')
 assertIncludes(
   ciWorkflow,
   'RUN_TAURI_SIDECAR_SMOKE=${{ inputs.run_tauri_sidecar_smoke }}',
@@ -121,8 +144,8 @@ assertIncludes(
 )
 assertIncludes(
   ciWorkflow,
-  'TAURI_SIDECAR_DATABASE_URL: ${{ secrets.TAURI_SIDECAR_DATABASE_URL }}',
-  'Tauri workflow must pass the sidecar smoke database secret into the build gate',
+  'TAURI_SIDECAR_DATABASE_URL: ${{ secrets.TAURI_SIDECAR_DATABASE_URL || secrets.DATABASE_URL }}',
+  'Tauri workflow must pass a sidecar smoke database secret into the build gate',
 )
 assertIncludes(ciWorkflow, 'name: tauri-macos-app', 'Tauri workflow must upload the macOS app bundle')
 assertIncludes(ciWorkflow, 'name: tauri-macos-dmg', 'Tauri workflow must upload the macOS DMG bundle when requested')
@@ -136,5 +159,7 @@ assertIncludes(databaseMigration, 'verify-files', 'database migration docs must 
 assertIncludes(databaseMigration, 'rollback-plan', 'database migration docs must include rollback planning')
 assertIncludes(apiCompatibility, 'RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL=...', 'API compatibility docs must point release DB gates to real MySQL tests')
 assertIncludes(apiCompatibility, '真实 MySQL HTTP', 'API compatibility docs must document real MySQL HTTP compatibility coverage')
+assertIncludes(rebuildPlan, 'release_candidate=true', 'rebuild plan must document GitHub release candidate preflight')
+assertIncludes(rebuildPlan, 'GitHub 发布候选', 'rebuild plan must include a GitHub release candidate gate row')
 
 console.log('Release contract OK')
