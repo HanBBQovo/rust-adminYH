@@ -11,7 +11,30 @@ const updateReceiptStatusMock = vi.hoisted(() => vi.fn())
 const updateReceiptStatusesMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/api/receipts', () => ({
+  RECEIPT_STATUS_OPTIONS: {
+    recoverystate: ['已回收', '未回收'],
+    issuestate: ['已接收', '已发放', '未发放'],
+    poststate: ['已寄出', '未寄出'],
+  },
+  isReceiptActionComplete: (
+    receipt: { recoverystate: string; issuestate: string; poststate: string },
+    action: 'recovery' | 'issue' | 'post',
+  ) => {
+    if (action === 'recovery') return receipt.recoverystate === '已回收'
+    if (action === 'issue') return receipt.issuestate === '已接收' || receipt.issuestate === '已发放'
+    return receipt.poststate === '已寄出'
+  },
   listReceipts: listReceiptsMock,
+  receiptStatusMessage: (action: 'recovery' | 'issue' | 'post') => {
+    if (action === 'recovery') return '回单回收成功！'
+    if (action === 'issue') return '回单接收成功！'
+    return '回单寄出成功！'
+  },
+  receiptStatusPatch: (action: 'recovery' | 'issue' | 'post') => {
+    if (action === 'recovery') return { recoverystate: '已回收' }
+    if (action === 'issue') return { issuestate: '已接收' }
+    return { poststate: '已寄出' }
+  },
   updateReceiptStatus: updateReceiptStatusMock,
   updateReceiptStatuses: updateReceiptStatusesMock,
 }))
@@ -147,6 +170,27 @@ describe('ReceiptsList', () => {
     })
     expect(showToast).toHaveBeenCalledWith('success', '回单寄出成功！', { translate: false })
     expect(listReceiptsMock).toHaveBeenCalledTimes(4)
+  })
+
+  it('disables receipt action buttons for current and legacy completed status values', async () => {
+    listReceiptsMock.mockResolvedValueOnce({
+      rows: [
+        {
+          ...RECEIPT_ROW,
+          recoverystate: '已回收',
+          issuestate: '已发放',
+          poststate: '已寄出',
+        },
+      ],
+      total: 1,
+    })
+
+    renderReceiptsList()
+
+    await screen.findByText('YD20260101001')
+    expect(screen.getByRole('button', { name: '回收' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '接收' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '寄出' })).toBeDisabled()
   })
 
   it('batch updates selected receipt statuses through the old PATCH route wrapper', async () => {

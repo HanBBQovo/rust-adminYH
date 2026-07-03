@@ -2,14 +2,18 @@ import { RefreshCw, Search, Send, Undo2, Warehouse } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import {
+  RECEIPT_STATUS_OPTIONS,
+  isReceiptActionComplete,
   listReceipts,
+  receiptStatusMessage,
+  receiptStatusPatch,
   updateReceiptStatus,
   updateReceiptStatuses,
   type LegacyReceipt,
   type ReceiptListFilters,
   type ReceiptListMode,
   type ReceiptListParams,
-  type ReceiptStatusPayload,
+  type ReceiptStatusAction,
 } from '@/api/receipts'
 import { DataTableSurface, StickyActionCell, StickyActionHead } from '@/components/layout/DataTableSurface'
 import { FilterBar, FilterField } from '@/components/layout/FilterBar'
@@ -115,18 +119,6 @@ function renderCell(row: LegacyReceipt, column: ReceiptColumn) {
   return value === '' || value == null ? '-' : String(value)
 }
 
-function statePatch(kind: 'recovery' | 'issue' | 'post'): ReceiptStatusPayload {
-  if (kind === 'recovery') return { recoverystate: '已回收' }
-  if (kind === 'issue') return { issuestate: '已接收' }
-  return { poststate: '已寄出' }
-}
-
-function stateMessage(kind: 'recovery' | 'issue' | 'post') {
-  if (kind === 'recovery') return '回单回收成功！'
-  if (kind === 'issue') return '回单接收成功！'
-  return '回单寄出成功！'
-}
-
 export default function ReceiptsList() {
   const { showToast } = useGlobalToast()
   const [mode, setMode] = useState<ReceiptListMode>('all')
@@ -134,7 +126,7 @@ export default function ReceiptsList() {
   const [filters, setFilters] = useState<ReceiptListFilters>({})
   const [page, setPage] = useState(1)
   const [updatingId, setUpdatingId] = useState<number | null>(null)
-  const [batchUpdating, setBatchUpdating] = useState<'recovery' | 'issue' | 'post' | null>(null)
+  const [batchUpdating, setBatchUpdating] = useState<ReceiptStatusAction | null>(null)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
 
   const meta = MODE_META[mode]
@@ -192,11 +184,11 @@ export default function ReceiptsList() {
     })
   }
 
-  const patchStatus = async (row: LegacyReceipt, kind: 'recovery' | 'issue' | 'post') => {
+  const patchStatus = async (row: LegacyReceipt, kind: ReceiptStatusAction) => {
     setUpdatingId(row.id)
     try {
-      await updateReceiptStatus(row.id, statePatch(kind))
-      showToast('success', stateMessage(kind), { translate: false })
+      await updateReceiptStatus(row.id, receiptStatusPatch(kind))
+      showToast('success', receiptStatusMessage(kind), { translate: false })
       refresh()
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : '回单状态更新失败', { translate: false })
@@ -205,7 +197,7 @@ export default function ReceiptsList() {
     }
   }
 
-  const patchSelectedStatuses = async (kind: 'recovery' | 'issue' | 'post') => {
+  const patchSelectedStatuses = async (kind: ReceiptStatusAction) => {
     if (!selectedRows.length) {
       showToast('error', '请先选择回单', { translate: false })
       return
@@ -215,9 +207,9 @@ export default function ReceiptsList() {
     try {
       await updateReceiptStatuses(
         selectedRows.map((row) => row.id),
-        statePatch(kind),
+        receiptStatusPatch(kind),
       )
-      showToast('success', `${stateMessage(kind)}已批量更新 ${selectedRows.length} 条回单。`, { translate: false })
+      showToast('success', `${receiptStatusMessage(kind)}已批量更新 ${selectedRows.length} 条回单。`, { translate: false })
       setSelectedIds([])
       refresh()
     } catch (err) {
@@ -237,7 +229,7 @@ export default function ReceiptsList() {
         variant="ghost"
         size="sm"
         className="gap-1"
-        disabled={updatingId === row.id || row.recoverystate === '已回收'}
+        disabled={updatingId === row.id || isReceiptActionComplete(row, 'recovery')}
         onClick={() => patchStatus(row, 'recovery')}
       >
         <Undo2 className="h-3.5 w-3.5" />
@@ -248,7 +240,7 @@ export default function ReceiptsList() {
         variant="ghost"
         size="sm"
         className="gap-1"
-        disabled={updatingId === row.id || row.issuestate === '已接收' || row.issuestate === '已发放'}
+        disabled={updatingId === row.id || isReceiptActionComplete(row, 'issue')}
         onClick={() => patchStatus(row, 'issue')}
       >
         <Warehouse className="h-3.5 w-3.5" />
@@ -259,7 +251,7 @@ export default function ReceiptsList() {
         variant="ghost"
         size="sm"
         className="gap-1"
-        disabled={updatingId === row.id || row.poststate === '已寄出'}
+        disabled={updatingId === row.id || isReceiptActionComplete(row, 'post')}
         onClick={() => patchStatus(row, 'post')}
       >
         <Send className="h-3.5 w-3.5" />
@@ -313,8 +305,9 @@ export default function ReceiptsList() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ANY_VALUE}>全部</SelectItem>
-              <SelectItem value="已回收">已回收</SelectItem>
-              <SelectItem value="未回收">未回收</SelectItem>
+              {RECEIPT_STATUS_OPTIONS.recoverystate.map((value) => (
+                <SelectItem key={value} value={value}>{value}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </FilterField>
@@ -325,9 +318,9 @@ export default function ReceiptsList() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ANY_VALUE}>全部</SelectItem>
-              <SelectItem value="已接收">已接收</SelectItem>
-              <SelectItem value="已发放">已发放</SelectItem>
-              <SelectItem value="未发放">未发放</SelectItem>
+              {RECEIPT_STATUS_OPTIONS.issuestate.map((value) => (
+                <SelectItem key={value} value={value}>{value}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </FilterField>
@@ -338,8 +331,9 @@ export default function ReceiptsList() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ANY_VALUE}>全部</SelectItem>
-              <SelectItem value="已寄出">已寄出</SelectItem>
-              <SelectItem value="未寄出">未寄出</SelectItem>
+              {RECEIPT_STATUS_OPTIONS.poststate.map((value) => (
+                <SelectItem key={value} value={value}>{value}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </FilterField>

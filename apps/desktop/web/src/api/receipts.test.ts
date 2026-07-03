@@ -1,6 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { buildReceiptListPayload, listReceipts, updateReceiptStatus, updateReceiptStatuses } from '@/api/receipts'
+import {
+  RECEIPT_STATUS,
+  RECEIPT_STATUS_OPTIONS,
+  buildReceiptListPayload,
+  isReceiptActionComplete,
+  listReceipts,
+  receiptStatusMessage,
+  receiptStatusPatch,
+  updateReceiptStatus,
+  updateReceiptStatuses,
+} from '@/api/receipts'
 
 const fetchMock = vi.fn()
 
@@ -123,6 +133,26 @@ describe('receipts api', () => {
         }),
       }),
     )
+  })
+
+  it('centralizes receipt status values, action payloads, and legacy done aliases', () => {
+    expect(RECEIPT_STATUS_OPTIONS).toEqual({
+      recoverystate: [RECEIPT_STATUS.recovery.done, RECEIPT_STATUS.recovery.pending],
+      issuestate: [RECEIPT_STATUS.issue.done, RECEIPT_STATUS.issue.legacyDone, RECEIPT_STATUS.issue.pending],
+      poststate: [RECEIPT_STATUS.post.done, RECEIPT_STATUS.post.pending],
+    })
+
+    expect(receiptStatusPatch('recovery')).toEqual({ recoverystate: '已回收' })
+    expect(receiptStatusPatch('issue')).toEqual({ issuestate: '已接收' })
+    expect(receiptStatusPatch('post')).toEqual({ poststate: '已寄出' })
+    expect(receiptStatusMessage('issue')).toBe('回单接收成功！')
+
+    expect(
+      isReceiptActionComplete(
+        { recoverystate: '未回收', issuestate: '已发放', poststate: '未寄出' },
+        'issue',
+      ),
+    ).toBe(true)
   })
 
   it('batch patches selected receipt statuses through the same old receipt route wrapper', async () => {

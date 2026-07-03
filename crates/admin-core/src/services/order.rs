@@ -17,6 +17,16 @@ use crate::{
 
 pub type ServiceFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
+const RECEIPT_STATUS_UNRECOVERED: &str = "未回收";
+const RECEIPT_STATUS_RECOVERED: &str = "已回收";
+const RECEIPT_STATUS_ISSUE_PENDING: &str = "未发放";
+const RECEIPT_STATUS_ISSUE_LEGACY_DONE: &str = "已发放";
+const RECEIPT_STATUS_POST_PENDING: &str = "未寄出";
+const RECEIPT_STATUS_POST_DONE: &str = "已寄出";
+const RECEIPT_MESSAGE_RECOVERY: &str = "回单回收成功！";
+const RECEIPT_MESSAGE_ISSUE: &str = "回单发放成功！";
+const RECEIPT_MESSAGE_POST: &str = "回单寄出成功！";
+
 pub trait OrderService: Send + Sync {
     fn list<'a>(
         &'a self,
@@ -247,7 +257,7 @@ impl ReceiptService for CompatReceiptService {
     ) -> ServiceFuture<'a, AppResult<ReceiptListResponse>> {
         let store = Arc::clone(&self.store);
         Box::pin(async move {
-            input.recoverystate = Some("未回收".to_owned());
+            input.recoverystate = Some(RECEIPT_STATUS_UNRECOVERED.to_owned());
             receipt_list_response(store.as_ref(), input).await
         })
     }
@@ -258,7 +268,7 @@ impl ReceiptService for CompatReceiptService {
     ) -> ServiceFuture<'a, AppResult<ReceiptListResponse>> {
         let store = Arc::clone(&self.store);
         Box::pin(async move {
-            input.recoverystate = Some("已回收".to_owned());
+            input.recoverystate = Some(RECEIPT_STATUS_RECOVERED.to_owned());
             receipt_list_response(store.as_ref(), input).await
         })
     }
@@ -429,9 +439,9 @@ impl InMemoryOrderStore {
                     1,
                     "YD20260101001",
                     1_767_225_600_000,
-                    "未回收",
-                    "未发放",
-                    "未寄出",
+                    RECEIPT_STATUS_UNRECOVERED,
+                    RECEIPT_STATUS_ISSUE_PENDING,
+                    RECEIPT_STATUS_POST_PENDING,
                     1,
                     "李四",
                     "张三",
@@ -442,9 +452,9 @@ impl InMemoryOrderStore {
                     2,
                     "YD20251231001",
                     1_767_139_200_000,
-                    "已回收",
-                    "已发放",
-                    "已寄出",
+                    RECEIPT_STATUS_RECOVERED,
+                    RECEIPT_STATUS_ISSUE_LEGACY_DONE,
+                    RECEIPT_STATUS_POST_DONE,
                     2,
                     "赵六",
                     "王五",
@@ -756,9 +766,9 @@ impl InMemoryOrderStore {
             *next_receipt_id,
             input.oddnumber.clone(),
             input.billing_at,
-            "未回收",
-            "未发放",
-            "未寄出",
+            RECEIPT_STATUS_UNRECOVERED,
+            RECEIPT_STATUS_ISSUE_PENDING,
+            RECEIPT_STATUS_POST_PENDING,
             input.receiptnum,
             input.consignor.clone(),
             input.consignee.clone(),
@@ -862,13 +872,16 @@ fn normalize_receipt_status(
     input: ReceiptStatusRequest,
 ) -> AppResult<(ReceiptStatusChange, &'static str)> {
     if let Some(value) = input.recoverystate.filter(|value| !value.trim().is_empty()) {
-        return Ok((ReceiptStatusChange::Recovery(value), "回单回收成功！"));
+        return Ok((
+            ReceiptStatusChange::Recovery(value),
+            RECEIPT_MESSAGE_RECOVERY,
+        ));
     }
     if let Some(value) = input.issuestate.filter(|value| !value.trim().is_empty()) {
-        return Ok((ReceiptStatusChange::Issue(value), "回单发放成功！"));
+        return Ok((ReceiptStatusChange::Issue(value), RECEIPT_MESSAGE_ISSUE));
     }
     if let Some(value) = input.poststate.filter(|value| !value.trim().is_empty()) {
-        return Ok((ReceiptStatusChange::Post(value), "回单寄出成功！"));
+        return Ok((ReceiptStatusChange::Post(value), RECEIPT_MESSAGE_POST));
     }
     Err(AppError::Validation("回单状态不能为空".to_owned()))
 }
