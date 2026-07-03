@@ -16,6 +16,7 @@ interface DataTableSurfaceProps {
   emptyTitle: string
   emptyDescription?: string
   emptyActions?: ReactNode
+  actions?: ReactNode
   isEmpty: boolean
   onRetry?: () => void
   pagination?: PaginationProps
@@ -30,6 +31,7 @@ export function DataTableSurface({
   emptyTitle,
   emptyDescription,
   emptyActions,
+  actions,
   isEmpty,
   onRetry,
   pagination,
@@ -38,7 +40,7 @@ export function DataTableSurface({
   const footer = pagination ? <Pagination {...pagination} /> : null
 
   return (
-    <PageSurface title={title} description={description} footer={footer} bodyClassName="p-0">
+    <PageSurface title={title} description={description} actions={actions} footer={footer} bodyClassName="p-0">
       {error ? (
         <div className="p-5">
           <ErrorState message={error} onRetry={onRetry} />

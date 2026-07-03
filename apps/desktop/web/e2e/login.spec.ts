@@ -313,6 +313,6 @@ test('navigates core business pages with compatible API contracts', async ({ pag
   await expect(page.getByText('已回收').first()).toBeVisible()
 
   await page.getByRole('tab', { name: '全部回单' }).click()
-  await page.getByRole('button', { name: '回收' }).click()
+  await page.getByRole('button', { name: '回收', exact: true }).click()
   await expect(page.getByText('回单回收成功！')).toBeVisible()
 })

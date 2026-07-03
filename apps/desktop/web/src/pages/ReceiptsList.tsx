@@ -1,9 +1,10 @@
 import { RefreshCw, Search, Send, Undo2, Warehouse } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import {
   listReceipts,
   updateReceiptStatus,
+  updateReceiptStatuses,
   type LegacyReceipt,
   type ReceiptListFilters,
   type ReceiptListMode,
@@ -15,6 +16,7 @@ import { FilterBar, FilterField } from '@/components/layout/FilterBar'
 import { PageShell } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
 import { Input } from '@/components/ui/input'
 import {
@@ -47,6 +49,7 @@ interface ReceiptColumn {
 
 const PAGE_SIZE = 10
 const ANY_VALUE = '__any__'
+const EMPTY_ROWS: LegacyReceipt[] = []
 
 const MODE_META: Record<ReceiptListMode, { title: string; description: string }> = {
   all: {
@@ -131,12 +134,23 @@ export default function ReceiptsList() {
   const [filters, setFilters] = useState<ReceiptListFilters>({})
   const [page, setPage] = useState(1)
   const [updatingId, setUpdatingId] = useState<number | null>(null)
+  const [batchUpdating, setBatchUpdating] = useState<'recovery' | 'issue' | 'post' | null>(null)
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
 
   const meta = MODE_META[mode]
   const query = useMemo<ReceiptListParams>(() => ({ mode, page, pageSize: PAGE_SIZE, ...filters }), [filters, mode, page])
   const { data, loading, error, refresh } = useResource(() => listReceipts(query), [query])
-  const rows = data?.rows ?? []
+  const rows = data?.rows ?? EMPTY_ROWS
   const total = data?.total ?? 0
+  const visibleIds = useMemo(() => rows.map((row) => row.id), [rows])
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
+  const selectedRows = useMemo(() => rows.filter((row) => selectedSet.has(row.id)), [rows, selectedSet])
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedSet.has(id))
+  const someVisibleSelected = visibleIds.some((id) => selectedSet.has(id))
+
+  useEffect(() => {
+    setSelectedIds((current) => current.filter((id) => visibleIds.includes(id)))
+  }, [visibleIds])
 
   const updateDraft = <K extends keyof ReceiptFilterDraft>(key: K, value: ReceiptFilterDraft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -151,11 +165,31 @@ export default function ReceiptsList() {
     setDraft(emptyFilters())
     setPage(1)
     setFilters({})
+    setSelectedIds([])
   }
 
   const switchMode = (nextMode: string) => {
     setMode(nextMode as ReceiptListMode)
     setPage(1)
+    setSelectedIds([])
+  }
+
+  const toggleRow = (rowId: number, checked: boolean) => {
+    setSelectedIds((current) => {
+      if (checked) return Array.from(new Set([...current, rowId]))
+      return current.filter((id) => id !== rowId)
+    })
+  }
+
+  const toggleVisibleRows = (checked: boolean) => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      visibleIds.forEach((id) => {
+        if (checked) next.add(id)
+        else next.delete(id)
+      })
+      return Array.from(next)
+    })
   }
 
   const patchStatus = async (row: LegacyReceipt, kind: 'recovery' | 'issue' | 'post') => {
@@ -170,6 +204,31 @@ export default function ReceiptsList() {
       setUpdatingId(null)
     }
   }
+
+  const patchSelectedStatuses = async (kind: 'recovery' | 'issue' | 'post') => {
+    if (!selectedRows.length) {
+      showToast('error', '请先选择回单', { translate: false })
+      return
+    }
+
+    setBatchUpdating(kind)
+    try {
+      await updateReceiptStatuses(
+        selectedRows.map((row) => row.id),
+        statePatch(kind),
+      )
+      showToast('success', `${stateMessage(kind)}已批量更新 ${selectedRows.length} 条回单。`, { translate: false })
+      setSelectedIds([])
+      refresh()
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : '批量回单状态更新失败', { translate: false })
+      refresh()
+    } finally {
+      setBatchUpdating(null)
+    }
+  }
+
+  const batchDisabled = loading || batchUpdating !== null || selectedRows.length === 0
 
   const renderStateActions = (row: LegacyReceipt) => (
     <div className="flex items-center gap-1">
@@ -292,6 +351,23 @@ export default function ReceiptsList() {
       <DataTableSurface
         title={meta.title}
         description={meta.description}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">已选 {selectedRows.length} 条</span>
+            <Button type="button" variant="outline" size="sm" className="gap-2" disabled={batchDisabled} onClick={() => patchSelectedStatuses('recovery')}>
+              <Undo2 className="h-4 w-4" />
+              批量回收
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="gap-2" disabled={batchDisabled} onClick={() => patchSelectedStatuses('issue')}>
+              <Warehouse className="h-4 w-4" />
+              批量接收
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="gap-2" disabled={batchDisabled} onClick={() => patchSelectedStatuses('post')}>
+              <Send className="h-4 w-4" />
+              批量寄出
+            </Button>
+          </div>
+        }
         error={error}
         loading={loading && !data}
         isEmpty={!rows.length}
@@ -303,6 +379,13 @@ export default function ReceiptsList() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-12">
+                <Checkbox
+                  checked={allVisibleSelected || (someVisibleSelected ? 'indeterminate' : false)}
+                  aria-label="选择当前页回单"
+                  onCheckedChange={(value) => toggleVisibleRows(Boolean(value))}
+                />
+              </TableHead>
               <TableHead className="w-14 text-right">序号</TableHead>
               <StickyActionHead className="min-w-[220px]">状态操作</StickyActionHead>
               {RECEIPT_COLUMNS.map((column) => (
@@ -313,6 +396,13 @@ export default function ReceiptsList() {
           <TableBody>
             {rows.map((row, index) => (
               <TableRow key={row.id}>
+                <TableCell>
+                  <Checkbox
+                    checked={selectedSet.has(row.id)}
+                    aria-label={`选择回单 ${row.oddnumber}`}
+                    onCheckedChange={(value) => toggleRow(row.id, Boolean(value))}
+                  />
+                </TableCell>
                 <TableCell className="text-right font-mono text-xs text-muted-foreground">{(page - 1) * PAGE_SIZE + index + 1}</TableCell>
                 <StickyActionCell>{renderStateActions(row)}</StickyActionCell>
                 {RECEIPT_COLUMNS.map((column) => (

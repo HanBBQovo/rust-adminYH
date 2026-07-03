@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { buildReceiptListPayload, listReceipts, updateReceiptStatus } from '@/api/receipts'
+import { buildReceiptListPayload, listReceipts, updateReceiptStatus, updateReceiptStatuses } from '@/api/receipts'
 
 const fetchMock = vi.fn()
 
@@ -121,6 +121,31 @@ describe('receipts api', () => {
           issuestate: '已接收',
           poststate: '已寄出',
         }),
+      }),
+    )
+  })
+
+  it('batch patches selected receipt statuses through the same old receipt route wrapper', async () => {
+    fetchMock
+      .mockImplementationOnce(() => jsonResponse({}))
+      .mockImplementationOnce(() => jsonResponse({}))
+
+    await expect(updateReceiptStatuses([7, 8], { issuestate: '已接收' })).resolves.toBeUndefined()
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/receipt/7',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ issuestate: '已接收' }),
+      }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/receipt/8',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ issuestate: '已接收' }),
       }),
     )
   })

@@ -101,3 +101,7 @@ export async function updateReceiptStatus(receiptId: number, payload: ReceiptSta
     body: JSON.stringify(payload),
   })
 }
+
+export async function updateReceiptStatuses(receiptIds: number[], payload: ReceiptStatusPayload): Promise<void> {
+  await Promise.all(receiptIds.map((receiptId) => updateReceiptStatus(receiptId, payload)))
+}
