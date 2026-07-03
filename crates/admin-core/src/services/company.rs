@@ -384,6 +384,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn company_duplicate_names_are_rejected_while_self_update_is_allowed() {
+        let service = development_company_service();
+
+        let create_error = service
+            .create(CompanyMutationRequest {
+                name: "顺丰速运".to_owned(),
+            })
+            .await
+            .expect_err("duplicate create should fail");
+        assert_eq!(create_error.legacy_code(), -400);
+        assert_eq!(create_error.to_string(), "请求参数错误: 发货公司已存在");
+
+        let update_error = service
+            .update(
+                2,
+                CompanyMutationRequest {
+                    name: "顺丰速运".to_owned(),
+                },
+            )
+            .await
+            .expect_err("duplicate update should fail");
+        assert_eq!(update_error.legacy_code(), -400);
+        assert_eq!(update_error.to_string(), "请求参数错误: 发货公司已存在");
+        assert_eq!(service.detail(2).await.unwrap()[0].name, "德邦物流");
+
+        service
+            .update(
+                1,
+                CompanyMutationRequest {
+                    name: "顺丰速运".to_owned(),
+                },
+            )
+            .await
+            .expect("self update with unchanged company name should pass");
+    }
+
+    #[tokio::test]
     async fn company_name_is_required() {
         let service = development_company_service();
 

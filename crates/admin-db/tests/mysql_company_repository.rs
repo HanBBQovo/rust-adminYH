@@ -86,6 +86,15 @@ async fn mysql_company_service_create_update_and_remove_use_real_repository() {
     assert_eq!(created_detail[0].name, created_name);
     assert_eq!(created_detail[0].count_order, 0);
 
+    let duplicate_create = service
+        .create(CompanyMutationRequest {
+            name: created_name.clone(),
+        })
+        .await
+        .expect_err("duplicate company name should be rejected");
+    assert!(matches!(duplicate_create, AppError::Validation(_)));
+    assert_eq!(duplicate_create.to_string(), "请求参数错误: 发货公司已存在");
+
     let updated_name = scope.name("改名公司");
     service
         .update(
@@ -100,6 +109,24 @@ async fn mysql_company_service_create_update_and_remove_use_real_repository() {
     assert_eq!(
         scope.company_id_by_name(&updated_name).await,
         Some(created_id)
+    );
+
+    let conflict_company = scope.seed_company("冲突公司").await;
+    let duplicate_update = service
+        .update(
+            created_id,
+            CompanyMutationRequest {
+                name: conflict_company.name.clone(),
+            },
+        )
+        .await
+        .expect_err("renaming to another company name should be rejected");
+    assert!(matches!(duplicate_update, AppError::Validation(_)));
+    assert_eq!(duplicate_update.to_string(), "请求参数错误: 发货公司已存在");
+    assert_eq!(
+        scope.company_id_by_name(&updated_name).await,
+        Some(created_id),
+        "failed duplicate rename must keep the original company name"
     );
 
     service

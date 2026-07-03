@@ -183,6 +183,39 @@ async fn admin_can_create_update_and_delete_company() {
 }
 
 #[tokio::test]
+async fn company_writes_reject_duplicate_names_with_legacy_error() {
+    let app = build_router(admin_state());
+    let token = login_token(app.clone(), "admin").await;
+
+    let (create_status, create_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/company",
+        Some(&token),
+        r#"{"name":"顺丰速运"}"#,
+    )
+    .await;
+    assert_eq!(create_status, StatusCode::BAD_REQUEST);
+    assert_eq!(create_json["code"], -400);
+    assert_eq!(create_json["message"], "请求参数错误: 发货公司已存在");
+
+    let (update_status, update_json) = json_request(
+        app.clone(),
+        "PATCH",
+        "/api/company/2",
+        Some(&token),
+        r#"{"name":"顺丰速运"}"#,
+    )
+    .await;
+    assert_eq!(update_status, StatusCode::BAD_REQUEST);
+    assert_eq!(update_json["code"], -400);
+    assert_eq!(update_json["message"], "请求参数错误: 发货公司已存在");
+
+    let (_, detail) = json_request(app, "GET", "/api/company/2", Some(&token), "").await;
+    assert_eq!(detail["data"][0]["name"], "德邦物流");
+}
+
+#[tokio::test]
 async fn company_write_rejects_empty_name() {
     let app = build_router(admin_state());
     let token = login_token(app.clone(), "admin").await;

@@ -85,6 +85,7 @@ impl CompanyStore for MySqlCompanyRepository {
 
     fn create<'a>(&'a self, name: &'a str) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
+            ensure_unique_name(&self.pool, name, None).await?;
             sqlx::query("INSERT INTO `company` (`name`) VALUES (?)")
                 .bind(name)
                 .execute(&self.pool)
@@ -96,6 +97,7 @@ impl CompanyStore for MySqlCompanyRepository {
 
     fn update<'a>(&'a self, company_id: i64, name: &'a str) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
+            ensure_unique_name(&self.pool, name, Some(company_id)).await?;
             let result = sqlx::query("UPDATE `company` SET `name` = ? WHERE `id` = ?")
                 .bind(name)
                 .bind(company_id)
@@ -122,6 +124,34 @@ impl CompanyStore for MySqlCompanyRepository {
             Ok(())
         })
     }
+}
+
+async fn ensure_unique_name(
+    pool: &MySqlPool,
+    name: &str,
+    ignore_company_id: Option<i64>,
+) -> AppResult<()> {
+    let duplicate = if let Some(company_id) = ignore_company_id {
+        sqlx::query("SELECT `id` FROM `company` WHERE `name` = ? AND `id` <> ? LIMIT 1")
+            .bind(name)
+            .bind(company_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_error)?
+            .is_some()
+    } else {
+        sqlx::query("SELECT `id` FROM `company` WHERE `name` = ? LIMIT 1")
+            .bind(name)
+            .fetch_optional(pool)
+            .await
+            .map_err(db_error)?
+            .is_some()
+    };
+
+    if duplicate {
+        return Err(AppError::Validation("发货公司已存在".to_owned()));
+    }
+    Ok(())
 }
 
 fn company_from_row(row: sqlx::mysql::MySqlRow) -> Company {

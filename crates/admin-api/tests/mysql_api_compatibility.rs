@@ -517,7 +517,33 @@ async fn mysql_api_compatibility_uses_real_database_services() {
     assert_eq!(company_create_json["code"], 0);
     assert_eq!(company_create_json["message"], "创建发货公司成功！");
 
+    let (company_duplicate_create_status, company_duplicate_create_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/company",
+        Some(&admin_token),
+        &format!(r#"{{"name":"{}"}}"#, scope.company_order_name()),
+    )
+    .await;
+    assert_eq!(company_duplicate_create_status, StatusCode::BAD_REQUEST);
+    assert_eq!(company_duplicate_create_json["code"], -400);
+    assert_eq!(
+        company_duplicate_create_json["message"],
+        "请求参数错误: 发货公司已存在"
+    );
+
     let company_id = scope.company_id_by_name(&scope.company_order_name()).await;
+    let conflict_company = format!("{}-发货公司-冲突", scope.prefix);
+    let (conflict_create_status, conflict_create_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/company",
+        Some(&admin_token),
+        &format!(r#"{{"name":"{conflict_company}"}}"#),
+    )
+    .await;
+    assert_eq!(conflict_create_status, StatusCode::OK);
+    assert_eq!(conflict_create_json["code"], 0);
     let company_list_size = scope.table_count("company").await + 10;
     let (company_list_status, company_list_json) = json_request(
         app.clone(),
@@ -559,6 +585,21 @@ async fn mysql_api_compatibility_uses_real_database_services() {
     assert_eq!(company_detail_json["data"][0]["Countorder"], 1);
 
     let renamed_company = format!("{}-发货公司-改名", scope.prefix);
+    let (company_duplicate_update_status, company_duplicate_update_json) = json_request(
+        app.clone(),
+        "PATCH",
+        &format!("/api/company/{company_id}"),
+        Some(&admin_token),
+        &format!(r#"{{"name":"{conflict_company}"}}"#),
+    )
+    .await;
+    assert_eq!(company_duplicate_update_status, StatusCode::BAD_REQUEST);
+    assert_eq!(company_duplicate_update_json["code"], -400);
+    assert_eq!(
+        company_duplicate_update_json["message"],
+        "请求参数错误: 发货公司已存在"
+    );
+
     let (company_update_status, company_update_json) = json_request(
         app.clone(),
         "PATCH",
