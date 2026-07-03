@@ -251,7 +251,7 @@ scripts/test-migration.sh
 
 如目标影子库不是空库，必须人工确认后额外设置 `MIGRATION_ALLOW_NON_EMPTY_TARGET=true`；生产切换前不建议开启该选项。
 
-可重建迁移 smoke 使用专用 Docker MySQL 和固定 fixture，独立创建 `admin_yh_smoke_old` / `admin_yh_smoke_new` 两个本机测试库，先导入旧库 fixture，再串行执行 `rollback-plan`、`inspect-old`、`migrate --dry-run`、真实 `migrate`、`verify` 和 `verify-files`，并把每一步 JSON 报告保存到 `MIGRATION_SMOKE_REPORT_DIR`。该 smoke 只允许写入 `127.0.0.1:<MYSQL_PORT>` 上的本机 compose 测试库，默认端口 `33318`，每次都会 drop/create smoke 数据库和重建头像目录，避免误写生产库或复用脏状态：
+可重建迁移 smoke 使用专用 Docker MySQL 和固定 fixture，独立创建 `admin_yh_smoke_old` / `admin_yh_smoke_new` 两个本机测试库，先导入旧库 fixture，再串行执行 `rollback-plan`、`inspect-old`、`migrate --dry-run`、真实 `migrate`、`verify` 和 `verify-files`，并把每一步 JSON 报告保存到 `MIGRATION_SMOKE_REPORT_DIR`。如果设置了 `RELEASE_ARTIFACT_DIR` 且没有显式设置 `MIGRATION_SMOKE_REPORT_DIR`，报告会写入 `RELEASE_ARTIFACT_DIR/migration-smoke`，并额外生成 `manifest.txt` 记录 commit、compose project、测试库名和脱敏连接串，供 GitHub `release-gate-migration` artifact 留档。该 smoke 只允许写入 `127.0.0.1:<MYSQL_PORT>` 上的本机 compose 测试库，默认端口 `33318`，每次都会 drop/create smoke 数据库和重建头像目录，避免误写生产库或复用脏状态：
 
 ```bash
 RUN_MIGRATION_SMOKE=true scripts/test-migration.sh

@@ -214,6 +214,7 @@ jobs:
       OLD_DATABASE_URL: ${{ secrets.OLD_DATABASE_URL }}
       NEW_DATABASE_URL: ${{ secrets.NEW_DATABASE_URL }}
       NEW_AVATAR_DIR: ${{ vars.NEW_AVATAR_DIR || secrets.NEW_AVATAR_DIR }}
+      RELEASE_ARTIFACT_DIR: tmp/release-gate
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -226,6 +227,13 @@ jobs:
             . -> target
       - name: Run migration gates
         run: CARGO_OFFLINE=false scripts/test-migration.sh
+      - name: Upload migration release reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate-migration
+          path: tmp/release-gate
+          if-no-files-found: ignore
 
   tauri-app:
     name: Tauri app bundle
@@ -255,6 +263,7 @@ jobs:
       - name: Build Tauri app bundle
         env:
           TAURI_SIDECAR_DATABASE_URL: ${{ secrets.TAURI_SIDECAR_DATABASE_URL || secrets.DATABASE_URL }}
+          RELEASE_ARTIFACT_DIR: tmp/release-gate
         run: CARGO_NET_OFFLINE=false RUN_TAURI=true RUN_TAURI_DMG=${{ inputs.run_tauri_dmg }} RUN_TAURI_SIDECAR_SMOKE=${{ inputs.run_tauri_sidecar_smoke }} scripts/test-tauri-build.sh
       - name: Upload macOS app bundle
         uses: actions/upload-artifact@v4
@@ -262,6 +271,13 @@ jobs:
           name: tauri-macos-app
           path: apps/desktop/src-tauri/target/release/bundle/macos/*.app
           if-no-files-found: error
+      - name: Upload Tauri release reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate-tauri
+          path: tmp/release-gate
+          if-no-files-found: ignore
       - name: Upload macOS DMG bundle
         if: ${{ inputs.run_tauri_dmg }}
         uses: actions/upload-artifact@v4
@@ -292,4 +308,11 @@ jobs:
         if: ${{ inputs.run_docker_e2e }}
         run: npx --prefix apps/desktop/web playwright install --with-deps chromium
       - name: Build Docker images and run compose gate
-        run: RUN_DOCKER_E2E=${{ inputs.run_docker_e2e }} scripts/test-docker.sh
+        run: RELEASE_ARTIFACT_DIR=tmp/release-gate RUN_DOCKER_E2E=${{ inputs.run_docker_e2e }} scripts/test-docker.sh
+      - name: Upload Docker release reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate-docker
+          path: tmp/release-gate
+          if-no-files-found: ignore

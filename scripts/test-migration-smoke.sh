@@ -15,7 +15,13 @@ MYSQL_USER="${MYSQL_USER:-admin_yh}"
 MYSQL_PASSWORD="${MYSQL_PASSWORD:-admin_yh}"
 CARGO_OFFLINE="${CARGO_OFFLINE:-true}"
 MIGRATION_SMOKE_KEEP_COMPOSE="${MIGRATION_SMOKE_KEEP_COMPOSE:-false}"
-MIGRATION_SMOKE_REPORT_DIR="${MIGRATION_SMOKE_REPORT_DIR:-$(mktemp -d -t rust-adminyh-migration-smoke.XXXXXX)}"
+if [[ -n "${MIGRATION_SMOKE_REPORT_DIR:-}" ]]; then
+  MIGRATION_SMOKE_REPORT_DIR="$MIGRATION_SMOKE_REPORT_DIR"
+elif [[ -n "${RELEASE_ARTIFACT_DIR:-}" ]]; then
+  MIGRATION_SMOKE_REPORT_DIR="$RELEASE_ARTIFACT_DIR/migration-smoke"
+else
+  MIGRATION_SMOKE_REPORT_DIR="$(mktemp -d -t rust-adminyh-migration-smoke.XXXXXX)"
+fi
 OLD_AVATAR_DIR="${OLD_AVATAR_DIR:-$MIGRATION_SMOKE_REPORT_DIR/old-avatar}"
 NEW_AVATAR_DIR="${NEW_AVATAR_DIR:-$MIGRATION_SMOKE_REPORT_DIR/new-avatar}"
 OLD_DATABASE_URL="mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@127.0.0.1:${MYSQL_PORT}/${OLD_DATABASE_NAME}"
@@ -132,6 +138,7 @@ cleanup() {
 require_command docker
 require_command cargo
 require_docker_daemon
+mkdir -p "$MIGRATION_SMOKE_REPORT_DIR"
 
 if [[ ! -f "$SCHEMA_SQL" ]]; then
   echo "ERROR: 缺少兼容 schema：$SCHEMA_SQL"
@@ -221,6 +228,19 @@ run_migration_json verify-files verify-files --old-avatar-dir "$OLD_AVATAR_DIR" 
 
 section "Smoke reports"
 ls -1 "$MIGRATION_SMOKE_REPORT_DIR"/*.json
+cat >"$MIGRATION_SMOKE_REPORT_DIR/manifest.txt" <<EOF
+commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+compose_project=${COMPOSE_PROJECT_NAME}
+mysql_image=${MYSQL_IMAGE}
+mysql_port=${MYSQL_PORT}
+old_database=${OLD_DATABASE_NAME}
+new_database=${NEW_DATABASE_NAME}
+old_database_url=$(printf '%s' "$OLD_DATABASE_URL" | redact_url)
+new_database_url=$(printf '%s' "$NEW_DATABASE_URL" | redact_url)
+old_avatar_dir=${OLD_AVATAR_DIR}
+new_avatar_dir=${NEW_AVATAR_DIR}
+EOF
+echo "manifest=$MIGRATION_SMOKE_REPORT_DIR/manifest.txt"
 
 section "Migration smoke cleanup"
 cleanup

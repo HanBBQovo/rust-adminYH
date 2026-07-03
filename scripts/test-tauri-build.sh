@@ -10,6 +10,10 @@ SIDECAR_SMOKE_PID=""
 SIDECAR_SMOKE_LOG_DIR=""
 SIDECAR_SMOKE_PORT="${SIDECAR_SMOKE_PORT:-16824}"
 SIDECAR_SMOKE_URL="${SIDECAR_SMOKE_URL:-http://127.0.0.1:${SIDECAR_SMOKE_PORT}/api/health}"
+TAURI_REPORT_DIR=""
+if [[ -n "${RELEASE_ARTIFACT_DIR:-}" ]]; then
+  TAURI_REPORT_DIR="$RELEASE_ARTIFACT_DIR/tauri"
+fi
 
 section() {
   printf '\n==> %s\n' "$1"
@@ -64,6 +68,9 @@ diagnostics() {
 }
 
 trap diagnostics ERR
+if [[ -n "$TAURI_REPORT_DIR" ]]; then
+  mkdir -p "$TAURI_REPORT_DIR"
+fi
 
 section "Tauri sidecar runtime smoke"
 (cd "$TAURI_DIR" && cargo test --lib)
@@ -97,6 +104,23 @@ if [[ ! -x "$SIDECAR_RESOURCE" ]]; then
   exit 1
 fi
 ls -lh "$SIDECAR_RESOURCE"
+if [[ -n "$TAURI_REPORT_DIR" ]]; then
+  find "$TAURI_DIR/target/release/bundle" -maxdepth 4 \( -type f -o -type d \) | sort >"$TAURI_REPORT_DIR/bundle-files.txt"
+  shasum -a 256 "$SIDECAR_RESOURCE" >"$TAURI_REPORT_DIR/sidecar.sha256"
+  cat >"$TAURI_REPORT_DIR/manifest.txt" <<EOF
+commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+tauri_dir=${TAURI_DIR}
+web_dir=${WEB_DIR}
+app_bundle=${APP_BUNDLE}
+sidecar_resource=${SIDECAR_RESOURCE}
+run_tauri_dmg=${RUN_TAURI_DMG:-false}
+run_tauri_sidecar_smoke=${RUN_TAURI_SIDECAR_SMOKE:-false}
+sidecar_smoke_port=${SIDECAR_SMOKE_PORT}
+sidecar_smoke_url=${SIDECAR_SMOKE_URL}
+sidecar_database_url=$(printf '%s' "${TAURI_SIDECAR_DATABASE_URL:-${DATABASE_URL:-}}" | redact_url)
+EOF
+  echo "tauri_report_dir=${TAURI_REPORT_DIR}"
+fi
 
 if [[ "${RUN_TAURI_SIDECAR_SMOKE:-false}" == "true" ]]; then
   section "Bundled sidecar runtime smoke"
@@ -127,6 +151,11 @@ if [[ "${RUN_TAURI_SIDECAR_SMOKE:-false}" == "true" ]]; then
   for _ in $(seq 1 60); do
     if curl --fail --silent --show-error "$SIDECAR_SMOKE_URL" >"$SIDECAR_SMOKE_LOG_DIR/health.json"; then
       cat "$SIDECAR_SMOKE_LOG_DIR/health.json"
+      if [[ -n "$TAURI_REPORT_DIR" ]]; then
+        cp "$SIDECAR_SMOKE_LOG_DIR/health.json" "$TAURI_REPORT_DIR/sidecar-health.json"
+        cp "$SIDECAR_SMOKE_LOG_DIR/stdout.log" "$TAURI_REPORT_DIR/sidecar-stdout.log"
+        cp "$SIDECAR_SMOKE_LOG_DIR/stderr.log" "$TAURI_REPORT_DIR/sidecar-stderr.log"
+      fi
       echo
       cleanup_sidecar_smoke
       SIDECAR_SMOKE_PID=""

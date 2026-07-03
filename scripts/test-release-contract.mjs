@@ -126,6 +126,8 @@ assertIncludes(migrationSmoke, 'migrate --old "$OLD_DATABASE_URL" --new "$NEW_DA
 assertIncludes(migrationSmoke, 'verify --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL"', 'migration smoke must execute database verification')
 assertIncludes(migrationSmoke, 'verify-files --old-avatar-dir "$OLD_AVATAR_DIR" --new-avatar-dir "$NEW_AVATAR_DIR"', 'migration smoke must execute avatar file verification')
 assertIncludes(migrationSmoke, 'MIGRATION_SMOKE_REPORT_DIR', 'migration smoke must save JSON reports for auditability')
+assertIncludes(migrationSmoke, 'RELEASE_ARTIFACT_DIR', 'migration smoke must write reports under the shared release artifact directory when provided')
+assertIncludes(migrationSmoke, 'manifest.txt', 'migration smoke must write a manifest beside JSON reports')
 assertIncludes(migrationFixture, 'MIG-SMOKE-0001', 'migration fixture must seed a stable order with receipt')
 assertIncludes(migrationFixture, 'MIG-SMOKE-0002', 'migration fixture must seed a stable order without receipt')
 assertIncludes(migrationFixture, '已接收', 'migration fixture must preserve legacy received receipt status')
@@ -133,6 +135,11 @@ assertIncludes(migrationFixture, '已接收', 'migration fixture must preserve l
 assertIncludes(dockerGate, 'RUN_DOCKER_E2E="${RUN_DOCKER_E2E:-false}"', 'Docker gate must keep real browser E2E opt-in')
 assertIncludes(dockerGate, 'PLAYWRIGHT_BASE_URL="${WEB_URL%/}" REAL_API_E2E=true npm run e2e -- e2e/real-api.spec.ts', 'Docker gate must run browser E2E against compose nginx web URL')
 assertIncludes(dockerGate, 'scripts/seed-docker-e2e.sql', 'Docker gate must seed MySQL before real API E2E')
+assertIncludes(dockerGate, 'RELEASE_ARTIFACT_DIR', 'Docker gate must support shared release artifact reporting')
+assertIncludes(dockerGate, 'api-health.json', 'Docker gate must save API health JSON for release audit')
+assertIncludes(dockerGate, 'web-api-health.json', 'Docker gate must save nginx proxied API health JSON for release audit')
+assertIncludes(dockerGate, 'image-inspect.json', 'Docker gate must save Docker image inspect metadata for release audit')
+assertIncludes(dockerGate, 'compose-ps.json', 'Docker gate must save compose status metadata for release audit')
 assertIncludes(frontendGate, 'scripts/install-frontend-deps.sh', 'frontend gate must install missing dependencies through the shared npm ci wrapper')
 assertIncludes(frontendDepsInstaller, 'NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmjs.org}"', 'shared frontend installer must pin the default npm registry')
 assertIncludes(frontendDepsInstaller, 'npm ci --prefix "$WEB_DIR"', 'shared frontend installer must install the web package through --prefix')
@@ -152,6 +159,10 @@ assertIncludes(tauriGate, 'APP_HTTP__PORT="$SIDECAR_SMOKE_PORT"', 'Tauri gate mu
 assertIncludes(tauriGate, 'sidecar_smoke_port=${SIDECAR_SMOKE_PORT}', 'Tauri gate diagnostics must print the selected smoke port')
 assertIncludes(tauriGate, 'RUN_TAURI_DMG', 'Tauri gate must keep DMG validation explicit')
 assertIncludes(tauriGate, 'if [[ "${RUN_TAURI_DMG:-false}" == "true" ]]; then', 'Tauri gate must keep DMG generation as an explicit opt-in branch')
+assertIncludes(tauriGate, 'RELEASE_ARTIFACT_DIR', 'Tauri gate must support shared release artifact reporting')
+assertIncludes(tauriGate, 'bundle-files.txt', 'Tauri gate must save bundle file inventory for release audit')
+assertIncludes(tauriGate, 'sidecar.sha256', 'Tauri gate must save bundled sidecar hash for release audit')
+assertIncludes(tauriGate, 'sidecar-health.json', 'Tauri gate must save bundled sidecar health JSON for release audit')
 assertIncludes(tauriContract, 'RUN_TAURI_SIDECAR_SMOKE', 'Tauri contract must statically lock sidecar smoke coverage')
 
 assertIncludes(dockerContract, 'RUN_DOCKER_E2E', 'Docker contract must statically lock Docker real E2E requirements')
@@ -194,6 +205,8 @@ assertIncludes(ciWorkflow, 'NEW_DATABASE_URL: ${{ secrets.NEW_DATABASE_URL }}', 
 assertIncludes(ciWorkflow, 'MIGRATION_APPLY: ${{ inputs.release_candidate }}', 'migration job must force real apply for release candidates')
 assertIncludes(ciWorkflow, 'RUN_MIGRATION_SMOKE: ${{ inputs.release_candidate }}', 'migration job must force reproducible migration smoke for release candidates')
 assertIncludes(ciWorkflow, 'NEW_AVATAR_DIR: ${{ vars.NEW_AVATAR_DIR || secrets.NEW_AVATAR_DIR }}', 'migration job must receive the avatar verification target')
+assertIncludes(ciWorkflow, 'RELEASE_ARTIFACT_DIR: tmp/release-gate', 'migration job must write release reports into a shared artifact directory')
+assertIncludes(ciWorkflow, 'name: release-gate-migration', 'GitHub workflow must upload migration release reports')
 assertIncludes(
   ciWorkflow,
   'RUN_TAURI_SIDECAR_SMOKE=${{ inputs.run_tauri_sidecar_smoke }}',
@@ -204,13 +217,21 @@ assertIncludes(
   'TAURI_SIDECAR_DATABASE_URL: ${{ secrets.TAURI_SIDECAR_DATABASE_URL || secrets.DATABASE_URL }}',
   'Tauri workflow must pass a sidecar smoke database secret into the build gate',
 )
+assertIncludes(
+  ciWorkflow,
+  'RELEASE_ARTIFACT_DIR: tmp/release-gate',
+  'Tauri workflow must pass the shared artifact directory into the build gate',
+)
 assertIncludes(ciWorkflow, 'name: tauri-macos-app', 'Tauri workflow must upload the macOS app bundle')
+assertIncludes(ciWorkflow, 'name: release-gate-tauri', 'Tauri workflow must upload release audit reports')
 assertIncludes(ciWorkflow, 'name: tauri-macos-dmg', 'Tauri workflow must upload the macOS DMG bundle when requested')
 assertIncludes(
   ciWorkflow,
   'if: ${{ inputs.run_tauri_dmg }}',
   'Tauri workflow must only require a DMG artifact when the DMG input is enabled',
 )
+assertIncludes(ciWorkflow, 'RELEASE_ARTIFACT_DIR=tmp/release-gate RUN_DOCKER_E2E=${{ inputs.run_docker_e2e }} scripts/test-docker.sh', 'Docker workflow must pass the shared artifact directory into the Docker gate')
+assertIncludes(ciWorkflow, 'name: release-gate-docker', 'Docker workflow must upload release audit reports')
 
 assertIncludes(databaseMigration, 'verify-files', 'database migration docs must include avatar file verification')
 assertIncludes(databaseMigration, 'rollback-plan', 'database migration docs must include rollback planning')

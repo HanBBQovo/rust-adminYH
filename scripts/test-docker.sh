@@ -33,6 +33,10 @@ WEB_API_URL="${WEB_API_URL:-http://127.0.0.1:${WEB_PORT}/api/health}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-rust-adminyh-ci}"
 RUN_DOCKER_E2E="${RUN_DOCKER_E2E:-false}"
 DOCKER_DAEMON_READY=false
+DOCKER_REPORT_DIR=""
+if [[ -n "${RELEASE_ARTIFACT_DIR:-}" ]]; then
+  DOCKER_REPORT_DIR="$RELEASE_ARTIFACT_DIR/docker"
+fi
 
 section() {
   printf '\n==> %s\n' "$1"
@@ -126,6 +130,9 @@ diagnostics() {
 
 require_command docker
 require_docker_daemon
+if [[ -n "$DOCKER_REPORT_DIR" ]]; then
+  mkdir -p "$DOCKER_REPORT_DIR"
+fi
 
 trap diagnostics ERR
 
@@ -144,6 +151,9 @@ echo "npm_registry=${NPM_REGISTRY}"
 echo "api_port=${API_PORT}"
 echo "web_port=${WEB_PORT}"
 echo "mysql_port=${MYSQL_PORT}"
+if [[ -n "$DOCKER_REPORT_DIR" ]]; then
+  echo "report_dir=${DOCKER_REPORT_DIR}"
+fi
 
 section "Docker cleanup before run"
 docker_compose down --volumes --remove-orphans || true
@@ -193,6 +203,31 @@ echo "asset_ok=${ASSET_PATH}"
 curl --fail --silent --show-error "$WEB_API_URL" >/tmp/rust-adminyh-web-api-health.json
 cat /tmp/rust-adminyh-web-api-health.json
 echo
+
+if [[ -n "$DOCKER_REPORT_DIR" ]]; then
+  cp /tmp/rust-adminyh-api-health.json "$DOCKER_REPORT_DIR/api-health.json"
+  cp /tmp/rust-adminyh-web-health.html "$DOCKER_REPORT_DIR/web-health.html"
+  cp /tmp/rust-adminyh-web-api-health.json "$DOCKER_REPORT_DIR/web-api-health.json"
+  docker image inspect "$API_IMAGE" "$WEB_IMAGE" >"$DOCKER_REPORT_DIR/image-inspect.json"
+  docker_compose ps --format json >"$DOCKER_REPORT_DIR/compose-ps.json" || docker_compose ps >"$DOCKER_REPORT_DIR/compose-ps.txt"
+  cat >"$DOCKER_REPORT_DIR/manifest.txt" <<EOF
+commit=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+compose_project=${COMPOSE_PROJECT_NAME}
+compose_file=${COMPOSE_FILE}
+api_image=${API_IMAGE}
+web_image=${WEB_IMAGE}
+rust_base=${RUST_IMAGE}
+runtime_base=${RUNTIME_IMAGE}
+node_base=${NODE_IMAGE}
+nginx_base=${NGINX_IMAGE}
+mysql_base=${MYSQL_IMAGE}
+api_url=${API_URL}
+web_url=${WEB_URL}
+web_api_url=${WEB_API_URL}
+run_docker_e2e=${RUN_DOCKER_E2E}
+EOF
+  echo "docker_report_dir=${DOCKER_REPORT_DIR}"
+fi
 
 if [[ "$RUN_DOCKER_E2E" == "true" ]]; then
   section "Seed Docker E2E database"
