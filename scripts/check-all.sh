@@ -25,6 +25,10 @@ if [[ "$RELEASE_GATE" == "true" ]]; then
     echo "FAIL: RELEASE_GATE=true 需要 OLD_DATABASE_URL 和 NEW_DATABASE_URL，发布候选必须执行真实迁移 dry-run/verify。"
     exit 1
   fi
+  if [[ "${MIGRATION_APPLY:-false}" != "true" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要 MIGRATION_APPLY=true，发布候选必须从旧库真实 apply 到 fresh 新库并复验。"
+    exit 1
+  fi
   if [[ -z "${NEW_AVATAR_DIR:-}" ]]; then
     echo "FAIL: RELEASE_GATE=true 需要 NEW_AVATAR_DIR，发布候选必须执行头像文件迁移校验。"
     exit 1

@@ -20,6 +20,7 @@ const passingToggles = {
   ADMIN_DB_TEST_DATABASE_URL: 'mysql://release:test@127.0.0.1/admin_yh_release_test',
   OLD_DATABASE_URL: 'mysql://release:test@127.0.0.1/admin_yh_old_shadow',
   NEW_DATABASE_URL: 'mysql://release:test@127.0.0.1/admin_yh_new_shadow',
+  MIGRATION_APPLY: 'true',
   NEW_AVATAR_DIR: '/tmp/admin-yh-release-avatar',
   RUN_E2E: 'true',
   RUN_COVERAGE: 'true',
@@ -77,12 +78,23 @@ const cases = [
     tokens: ['FAIL: RELEASE_GATE=true', 'OLD_DATABASE_URL', 'NEW_DATABASE_URL'],
   },
   {
+    name: 'missing MIGRATION_APPLY',
+    env: {
+      RUN_DB_TESTS: 'true',
+      ADMIN_DB_TEST_DATABASE_URL: passingToggles.ADMIN_DB_TEST_DATABASE_URL,
+      OLD_DATABASE_URL: passingToggles.OLD_DATABASE_URL,
+      NEW_DATABASE_URL: passingToggles.NEW_DATABASE_URL,
+    },
+    tokens: ['FAIL: RELEASE_GATE=true', 'MIGRATION_APPLY=true'],
+  },
+  {
     name: 'missing NEW_AVATAR_DIR',
     env: {
       RUN_DB_TESTS: 'true',
       ADMIN_DB_TEST_DATABASE_URL: passingToggles.ADMIN_DB_TEST_DATABASE_URL,
       OLD_DATABASE_URL: passingToggles.OLD_DATABASE_URL,
       NEW_DATABASE_URL: passingToggles.NEW_DATABASE_URL,
+      MIGRATION_APPLY: passingToggles.MIGRATION_APPLY,
     },
     tokens: ['FAIL: RELEASE_GATE=true', 'NEW_AVATAR_DIR'],
   },

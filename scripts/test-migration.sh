@@ -37,6 +37,11 @@ require_url_pair_for_apply() {
     echo "FAIL: RELEASE_GATE=true 需要 NEW_AVATAR_DIR，发布候选必须执行 verify-files 头像迁移校验。"
     exit 1
   fi
+
+  if [[ "$RELEASE_GATE" == "true" && "$MIGRATION_APPLY" != "true" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要 MIGRATION_APPLY=true，发布候选必须真实执行 migrate apply。"
+    exit 1
+  fi
 }
 
 section "Migration documentation lint"
