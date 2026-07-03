@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 function read(path) {
@@ -11,6 +11,26 @@ function listMysqlTests(dir) {
     return readdirSync(dir)
       .filter((file) => /^mysql_.*\.rs$/.test(file))
       .map((file) => join(dir, file))
+      .sort()
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      return []
+    }
+    throw error
+  }
+}
+
+function listFilesRecursive(dir, predicate) {
+  try {
+    return readdirSync(dir)
+      .flatMap((entry) => {
+        const path = join(dir, entry)
+        const stats = statSync(path)
+        if (stats.isDirectory()) {
+          return listFilesRecursive(path, predicate)
+        }
+        return predicate(path) ? [path] : []
+      })
       .sort()
   } catch (error) {
     if (error && error.code === 'ENOENT') {
@@ -36,6 +56,8 @@ const checkAll = read('scripts/check-all.sh')
 const releaseContract = read('scripts/test-release-contract.mjs')
 const rebuildPlan = read('docs/rebuild-plan.md')
 const apiCompatibility = read('docs/api-compatibility.md')
+const transactionHelper = read('crates/admin-db/src/transaction.rs')
+const repositoryFiles = listFilesRecursive('crates/admin-db/src/repositories', (file) => file.endsWith('.rs'))
 
 const testFiles = [
   ...listMysqlTests('crates/admin-db/tests'),
@@ -81,5 +103,46 @@ assertIncludes(
   'scripts/test-backend-mysql-contract.mjs',
   'rebuild plan must document the backend MySQL coverage contract',
 )
+assertIncludes(
+  transactionHelper,
+  'pub type MySqlTransaction',
+  'admin-db must expose a shared MySQL transaction type alias',
+)
+assertIncludes(
+  transactionHelper,
+  'begin_mysql_transaction',
+  'admin-db must expose a shared MySQL transaction begin helper',
+)
+assertIncludes(
+  transactionHelper,
+  'commit_mysql_transaction',
+  'admin-db must expose a shared MySQL transaction commit helper',
+)
+assertIncludes(
+  transactionHelper,
+  'transaction {scope} {phase} failed',
+  'transaction helper errors must include the repository scope and transaction phase',
+)
+assertIncludes(
+  rebuildPlan,
+  'admin-db::transaction',
+  'rebuild plan must document the shared admin-db transaction helper requirement',
+)
+
+for (const file of repositoryFiles) {
+  const content = read(file)
+  assert(
+    !content.includes('.begin().await'),
+    `${file} must use begin_mysql_transaction instead of direct pool.begin() calls`,
+  )
+  assert(
+    !content.includes('.commit().await'),
+    `${file} must use commit_mysql_transaction instead of direct tx.commit() calls`,
+  )
+  assert(
+    !/Transaction<'_,\s*MySql>/.test(content),
+    `${file} must use MySqlTransaction<'_> instead of raw sqlx Transaction aliases`,
+  )
+}
 
 console.log('Backend MySQL contract OK')

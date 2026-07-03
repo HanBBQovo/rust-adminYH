@@ -9,7 +9,9 @@ use admin_core::{
     },
     AppError, AppResult,
 };
-use sqlx::{MySql, MySqlPool, QueryBuilder, Row, Transaction};
+use sqlx::{MySql, MySqlPool, QueryBuilder, Row};
+
+use crate::transaction::{begin_mysql_transaction, commit_mysql_transaction, MySqlTransaction};
 
 const RECEIPT_STATUS_ISSUE_DONE: &str = "已接收";
 const RECEIPT_STATUS_ISSUE_LEGACY_DONE: &str = "已发放";
@@ -70,7 +72,7 @@ impl OrderStore for MySqlOrderRepository {
 
     fn create_order<'a>(&'a self, input: NormalizedOrderInput) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let mut tx = self.pool.begin().await.map_err(db_error)?;
+            let mut tx = begin_mysql_transaction(&self.pool, "order.create").await?;
             let order_id = insert_order(&mut tx, &input).await?;
             insert_company_order(&mut tx, &input.company, order_id).await?;
             if input.receiptnum > 0 {
@@ -78,7 +80,7 @@ impl OrderStore for MySqlOrderRepository {
             }
             insert_memory_if_missing(&mut tx, &input.consignee).await?;
             insert_memory_if_missing(&mut tx, &input.consignor).await?;
-            tx.commit().await.map_err(db_error)
+            commit_mysql_transaction(tx, "order.create").await
         })
     }
 
@@ -88,7 +90,7 @@ impl OrderStore for MySqlOrderRepository {
         input: NormalizedOrderInput,
     ) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let mut tx = self.pool.begin().await.map_err(db_error)?;
+            let mut tx = begin_mysql_transaction(&self.pool, "order.update").await?;
             let previous_order =
                 sqlx::query("SELECT * FROM `order_list` WHERE `id` = ? FOR UPDATE")
                     .bind(order_id)
@@ -102,13 +104,13 @@ impl OrderStore for MySqlOrderRepository {
             reconcile_receipt_after_order_update(&mut tx, &previous_order, &input).await?;
             insert_memory_if_missing(&mut tx, &input.consignee).await?;
             insert_memory_if_missing(&mut tx, &input.consignor).await?;
-            tx.commit().await.map_err(db_error)
+            commit_mysql_transaction(tx, "order.update").await
         })
     }
 
     fn remove_order<'a>(&'a self, order_id: i64) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let mut tx = self.pool.begin().await.map_err(db_error)?;
+            let mut tx = begin_mysql_transaction(&self.pool, "order.remove").await?;
             let oddnumber = sqlx::query("SELECT `oddnumber` FROM `order_list` WHERE `id` = ?")
                 .bind(order_id)
                 .fetch_optional(tx.as_mut())
@@ -148,7 +150,7 @@ impl OrderStore for MySqlOrderRepository {
                 .await
                 .map_err(db_error)?;
 
-            tx.commit().await.map_err(db_error)
+            commit_mysql_transaction(tx, "order.remove").await
         })
     }
 
@@ -211,7 +213,7 @@ impl OrderStore for MySqlOrderRepository {
     ) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
             let (column, value) = receipt_status_column_value(input);
-            let mut tx = self.pool.begin().await.map_err(db_error)?;
+            let mut tx = begin_mysql_transaction(&self.pool, "receipt.batch_status").await?;
             let existing_ids = fetch_existing_receipt_ids(&mut tx, &receipt_ids).await?;
             if let Some(missing_id) = receipt_ids
                 .iter()
@@ -220,7 +222,7 @@ impl OrderStore for MySqlOrderRepository {
                 return Err(AppError::NotFound(format!("receipt {missing_id}")));
             }
             update_receipt_status_rows(&mut tx, &receipt_ids, column, value).await?;
-            tx.commit().await.map_err(db_error)
+            commit_mysql_transaction(tx, "receipt.batch_status").await
         })
     }
 
@@ -246,7 +248,7 @@ fn receipt_status_column_value(input: ReceiptStatusChange) -> (&'static str, Str
 }
 
 async fn fetch_existing_receipt_ids(
-    tx: &mut Transaction<'_, MySql>,
+    tx: &mut MySqlTransaction<'_>,
     receipt_ids: &[i64],
 ) -> AppResult<HashSet<i64>> {
     if receipt_ids.is_empty() {
@@ -271,7 +273,7 @@ async fn fetch_existing_receipt_ids(
 }
 
 async fn update_receipt_status_rows(
-    tx: &mut Transaction<'_, MySql>,
+    tx: &mut MySqlTransaction<'_>,
     receipt_ids: &[i64],
     column: &str,
     value: String,
@@ -510,7 +512,7 @@ async fn fetch_count(mut query: QueryBuilder<'_, MySql>, pool: &MySqlPool) -> Ap
 }
 
 async fn insert_order(
-    tx: &mut Transaction<'_, MySql>,
+    tx: &mut MySqlTransaction<'_>,
     input: &NormalizedOrderInput,
 ) -> AppResult<i64> {
     let result = sqlx::query(
@@ -531,7 +533,7 @@ async fn insert_order(
 }
 
 async fn update_order_row(
-    tx: &mut Transaction<'_, MySql>,
+    tx: &mut MySqlTransaction<'_>,
     order_id: i64,
     input: &NormalizedOrderInput,
 ) -> AppResult<()> {
@@ -601,7 +603,7 @@ impl<'q> BindOrder<'q> for sqlx::query::Query<'q, MySql, sqlx::mysql::MySqlArgum
 }
 
 async fn insert_company_order(
-    tx: &mut Transaction<'_, MySql>,
+    tx: &mut MySqlTransaction<'_>,
     company: &str,
     order_id: i64,
 ) -> AppResult<()> {
@@ -615,7 +617,7 @@ async fn insert_company_order(
 }
 
 async fn upsert_company_order(
-    tx: &mut Transaction<'_, MySql>,
+    tx: &mut MySqlTransaction<'_>,
     company: &str,
     order_id: i64,
 ) -> AppResult<()> {
@@ -632,7 +634,7 @@ async fn upsert_company_order(
 }
 
 async fn insert_receipt_from_order(
-    tx: &mut Transaction<'_, MySql>,
+    tx: &mut MySqlTransaction<'_>,
     input: &NormalizedOrderInput,
 ) -> AppResult<()> {
     sqlx::query(
@@ -657,7 +659,7 @@ async fn insert_receipt_from_order(
 }
 
 async fn upsert_receipt_from_order(
-    tx: &mut Transaction<'_, MySql>,
+    tx: &mut MySqlTransaction<'_>,
     input: &NormalizedOrderInput,
     previous_oddnumber: Option<&str>,
 ) -> AppResult<()> {
@@ -688,7 +690,7 @@ async fn upsert_receipt_from_order(
 }
 
 async fn reconcile_receipt_after_order_update(
-    tx: &mut Transaction<'_, MySql>,
+    tx: &mut MySqlTransaction<'_>,
     previous_order: &OrderRecord,
     input: &NormalizedOrderInput,
 ) -> AppResult<()> {
@@ -712,7 +714,7 @@ async fn reconcile_receipt_after_order_update(
 }
 
 async fn delete_receipt_if_no_positive_need(
-    tx: &mut Transaction<'_, MySql>,
+    tx: &mut MySqlTransaction<'_>,
     oddnumber: &str,
 ) -> AppResult<()> {
     if oddnumber_has_positive_receipt_need(tx, oddnumber).await? {
@@ -727,7 +729,7 @@ async fn delete_receipt_if_no_positive_need(
 }
 
 async fn oddnumber_has_positive_receipt_need(
-    tx: &mut Transaction<'_, MySql>,
+    tx: &mut MySqlTransaction<'_>,
     oddnumber: &str,
 ) -> AppResult<bool> {
     let count = sqlx::query(
@@ -742,7 +744,7 @@ async fn oddnumber_has_positive_receipt_need(
     Ok(count > 0)
 }
 
-async fn insert_memory_if_missing(tx: &mut Transaction<'_, MySql>, name: &str) -> AppResult<()> {
+async fn insert_memory_if_missing(tx: &mut MySqlTransaction<'_>, name: &str) -> AppResult<()> {
     if name.trim().is_empty() {
         return Ok(());
     }

@@ -5,7 +5,9 @@ use admin_core::{
     services::role::{RoleStore, ServiceFuture},
     AppError, AppResult,
 };
-use sqlx::{MySql, MySqlPool, QueryBuilder, Row, Transaction};
+use sqlx::{MySql, MySqlPool, QueryBuilder, Row};
+
+use crate::transaction::{begin_mysql_transaction, commit_mysql_transaction, MySqlTransaction};
 
 #[derive(Debug, Clone)]
 pub struct MySqlRoleRepository {
@@ -92,7 +94,7 @@ impl RoleStore for MySqlRoleRepository {
 
     fn remove<'a>(&'a self, role_id: i64) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let mut tx = self.pool.begin().await.map_err(db_error)?;
+            let mut tx = begin_mysql_transaction(&self.pool, "role.remove").await?;
             ensure_role_not_assigned_to_users(&mut tx, role_id).await?;
             let result = sqlx::query("DELETE FROM `role` WHERE `id` = ?")
                 .bind(role_id)
@@ -107,7 +109,7 @@ impl RoleStore for MySqlRoleRepository {
                 .execute(&mut *tx)
                 .await
                 .map_err(db_error)?;
-            tx.commit().await.map_err(db_error)
+            commit_mysql_transaction(tx, "role.remove").await
         })
     }
 
@@ -117,7 +119,7 @@ impl RoleStore for MySqlRoleRepository {
         menu_ids: Vec<i64>,
     ) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let mut tx = self.pool.begin().await.map_err(db_error)?;
+            let mut tx = begin_mysql_transaction(&self.pool, "role.replace_menu_ids").await?;
             ensure_role_exists(&mut tx, role_id).await?;
             sqlx::query("DELETE FROM `role_permission` WHERE `role_id` = ?")
                 .bind(role_id)
@@ -135,7 +137,7 @@ impl RoleStore for MySqlRoleRepository {
                 .await
                 .map_err(db_error)?;
             }
-            tx.commit().await.map_err(db_error)
+            commit_mysql_transaction(tx, "role.replace_menu_ids").await
         })
     }
 
@@ -245,7 +247,7 @@ async fn fetch_count(mut query: QueryBuilder<'_, MySql>, pool: &MySqlPool) -> Ap
         .map_err(db_error)
 }
 
-async fn ensure_role_exists(tx: &mut Transaction<'_, MySql>, role_id: i64) -> AppResult<()> {
+async fn ensure_role_exists(tx: &mut MySqlTransaction<'_>, role_id: i64) -> AppResult<()> {
     let exists = sqlx::query("SELECT `id` FROM `role` WHERE `id` = ?")
         .bind(role_id)
         .fetch_optional(&mut **tx)
@@ -259,7 +261,7 @@ async fn ensure_role_exists(tx: &mut Transaction<'_, MySql>, role_id: i64) -> Ap
 }
 
 async fn ensure_role_not_assigned_to_users(
-    tx: &mut Transaction<'_, MySql>,
+    tx: &mut MySqlTransaction<'_>,
     role_id: i64,
 ) -> AppResult<()> {
     let user_count = sqlx::query("SELECT COUNT(*) AS total FROM `user_role` WHERE `role_id` = ?")

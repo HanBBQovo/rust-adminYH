@@ -7,6 +7,8 @@ use admin_core::{
 };
 use sqlx::{MySqlPool, Row};
 
+use crate::transaction::{begin_mysql_transaction, commit_mysql_transaction};
+
 #[derive(Debug, Clone)]
 pub struct MySqlMenuRepository {
     pool: MySqlPool,
@@ -139,7 +141,7 @@ impl MenuStore for MySqlMenuRepository {
 
     fn remove<'a>(&'a self, menu_id: i64) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let mut tx = self.pool.begin().await.map_err(db_error)?;
+            let mut tx = begin_mysql_transaction(&self.pool, "menu.remove").await?;
             let child_count: i64 =
                 sqlx::query("SELECT COUNT(*) AS total FROM `permission` WHERE `pid` = ?")
                     .bind(menu_id)
@@ -165,7 +167,7 @@ impl MenuStore for MySqlMenuRepository {
             if result.rows_affected() == 0 {
                 return Err(AppError::NotFound(format!("menu {menu_id}")));
             }
-            tx.commit().await.map_err(db_error)
+            commit_mysql_transaction(tx, "menu.remove").await
         })
     }
 
