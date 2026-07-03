@@ -3,7 +3,11 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { APP_PREFERENCES_CHANGED_EVENT, appPreferencesStorageKey, type AppPreferences } from '@/api/settings'
 import { ThemeProvider } from '@/components/theme'
+import { ConfirmDialogProvider } from '@/components/ui/confirm-dialog'
+import { GlobalToastProvider } from '@/components/ui/global-toast'
+import { I18nProvider } from '@/i18n'
 import Dashboard from '@/pages/Dashboard'
+import { lastPageStorageKey } from '@/session/session-store'
 import type { AdminSession } from '@/session/types'
 
 vi.mock('@/api/dashboard', () => ({
@@ -23,7 +27,13 @@ vi.mock('@/api/auth', () => ({
 function renderDashboard(session: AdminSession) {
   return render(
     <ThemeProvider>
-      <Dashboard session={session} onLogout={vi.fn()} />
+      <I18nProvider>
+        <GlobalToastProvider>
+          <ConfirmDialogProvider>
+            <Dashboard session={session} onLogout={vi.fn()} />
+          </ConfirmDialogProvider>
+        </GlobalToastProvider>
+      </I18nProvider>
     </ThemeProvider>,
   )
 }
@@ -71,6 +81,22 @@ describe('Dashboard', () => {
 
     expect(screen.getByRole('button', { name: '系统概览' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '工作台' })).toBeInTheDocument()
+    await expect(screen.findByRole('heading', { level: 1, name: '系统概览' }, { timeout: 5000 })).resolves.toBeInTheDocument()
+  })
+
+  it('restores the last page through the session store wrapper', async () => {
+    window.localStorage.setItem(lastPageStorageKey(), 'overview')
+
+    renderDashboard({
+      token: 'token-123',
+      user: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] },
+      menus: [
+        { id: 1, name: '工作台', url: '/main/workbench' },
+        { id: 2, name: '系统概览', url: '/main/analysis/overview' },
+      ],
+    })
+
+    expect(screen.getByRole('button', { name: '系统概览' })).toHaveAttribute('data-active', 'true')
     await expect(screen.findByRole('heading', { level: 1, name: '系统概览' }, { timeout: 5000 })).resolves.toBeInTheDocument()
   })
 

@@ -1,9 +1,10 @@
 import { clearAuthToken, getAuthToken, setAuthToken } from '@/api/client'
 import { nsKey } from '@/config'
-import type { AdminSession } from '@/session/types'
+import type { AdminSession, AppPage, SessionNavItem } from '@/session/types'
 
 const SESSION_STORAGE_KEY = nsKey('session')
 const REMEMBERED_LOGIN_NAME_KEY = nsKey('remembered-login-name')
+const LAST_PAGE_STORAGE_KEY = nsKey('last-page')
 
 function isSession(value: unknown): value is AdminSession {
   if (!value || typeof value !== 'object') return false
@@ -59,4 +60,23 @@ export function saveRememberedLoginName(name: string): void {
 
 export function clearRememberedLoginName(): void {
   window.localStorage.removeItem(REMEMBERED_LOGIN_NAME_KEY)
+}
+
+function isAvailablePage(value: string | null, navItems: SessionNavItem[]): value is AppPage {
+  return navItems.some((item) => item.key === value)
+}
+
+export function readStoredPage(navItems: SessionNavItem[]): AppPage {
+  if (typeof window === 'undefined') return 'workspace'
+  const value = window.localStorage.getItem(LAST_PAGE_STORAGE_KEY)
+  return isAvailablePage(value, navItems) ? value : navItems[0]?.key || 'workspace'
+}
+
+export function saveStoredPage(page: AppPage): void {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(LAST_PAGE_STORAGE_KEY, page)
+}
+
+export function lastPageStorageKey(): string {
+  return LAST_PAGE_STORAGE_KEY
 }

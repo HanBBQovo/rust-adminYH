@@ -17,10 +17,11 @@ import { ThemeToggleButton } from '@/components/theme'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { BRAND_NAME, nsKey } from '@/config'
+import { BRAND_NAME } from '@/config'
 import { AnimatePresence, motion } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 import { adaptLegacyMenus } from '@/session/menu-adapter'
+import { readStoredPage, saveStoredPage } from '@/session/session-store'
 import type { AdminSession, AppPage, SessionNavItem } from '@/session/types'
 
 const Workspace = lazy(() => import('@/pages/Workspace'))
@@ -42,18 +43,7 @@ const SettingsPage = lazy(() => import('@/pages/Settings'))
  * 真要做深链接/多级路由时,把 `currentPage` 状态换成 router 即可,其余结构不动。
  */
 
-const PAGE_STORAGE_KEY = nsKey('last-page')
 const INSTANT_TRANSITION = { duration: 0 }
-
-function isPage(value: string | null, navItems: SessionNavItem[]): value is AppPage {
-  return navItems.some((item) => item.key === value)
-}
-
-function readStoredPage(navItems: SessionNavItem[]): AppPage {
-  if (typeof window === 'undefined') return 'workspace'
-  const value = window.localStorage.getItem(PAGE_STORAGE_KEY)
-  return isPage(value, navItems) ? value : navItems[0]?.key || 'workspace'
-}
 
 interface DashboardProps {
   session: AdminSession
@@ -86,7 +76,7 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
   useEffect(() => {
     const title = currentItem?.label ?? '暂无可用菜单'
     document.title = `${title} - ${BRAND_NAME}`
-    if (currentItem) window.localStorage.setItem(PAGE_STORAGE_KEY, currentPage)
+    if (currentItem) saveStoredPage(currentPage)
   }, [currentItem, currentPage])
 
   useEffect(() => {

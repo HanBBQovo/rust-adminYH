@@ -13,9 +13,7 @@ const allowedStorageFiles = new Set([
   'src/lib/font-loading.ts',
   'src/lib/logger.ts',
   'src/main.tsx',
-  'src/pages/Dashboard.tsx',
   'src/session/session-store.ts',
-  'src/session/storage.ts',
 ])
 const allowedStyleFiles = new Set([
   'src/components/layout/FormScaffold.tsx',
