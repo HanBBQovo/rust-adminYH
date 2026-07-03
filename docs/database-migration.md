@@ -90,7 +90,7 @@ dry-run 只读旧库和新库，输出：
 
 - 数据库连接使用 SQLx MySQL 动态查询，报告只读旧库，不写入生产旧库或新库。
 - `inspect-old --old <OLD_DATABASE_URL> --old-avatar-dir <OLD_AVATAR_DIR> --format json` 输出每表行数、ID 边界、重复数据、孤儿关系、回单状态枚举、日期边界、头像文件 SHA256 和 DB/磁盘差异。
-- `migrate --dry-run --old <OLD_DATABASE_URL> --new <NEW_DATABASE_URL> --old-avatar-dir <OLD_AVATAR_DIR> --format json` 复用同一套旧库审计，并明确标记 `dry-run only`，禁止真实写入。
+- `migrate --dry-run --old <OLD_DATABASE_URL> --new <NEW_DATABASE_URL> --old-avatar-dir <OLD_AVATAR_DIR> --format json` 复用同一套旧库审计，同时连接目标库做 `targetPreflight`：确认 11 张兼容表可查询、目标库是否为空，并在报告中列出非空表；该模式明确标记 `dry-run only`，禁止真实写入。
 - `verify-files --old-avatar-dir <OLD_AVATAR_DIR> --new-avatar-dir <NEW_AVATAR_DIR> --format json` 对比头像文件相对路径和 SHA256，用于迁移后的文件完整性检查；缺失、多余或 hash 变化都会输出 `status=failed` 并以非 0 退出，不能把文件差异当成普通 warning 放过。
 - `migrate --old <OLD_DATABASE_URL> --new <NEW_DATABASE_URL> --old-avatar-dir <OLD_AVATAR_DIR> --new-avatar-dir <NEW_AVATAR_DIR> --format json` 已支持真实 apply；默认拒绝写入非空目标库，只有影子库明确需要增量/复跑时才允许加 `--allow-non-empty-target`。
 - 真实 apply 按白名单字段复制 11 张兼容表，保留旧 `id`、MD5 密码、`user.token`、中文回单状态、毫秒 `billingAt`、`company_order.com_name` 和 `receipt.oddnumber`，每张表复制后立即校验行数与 ID 边界，并设置 `AUTO_INCREMENT = MAX(id)+1`。

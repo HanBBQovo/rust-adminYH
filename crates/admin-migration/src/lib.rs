@@ -439,6 +439,7 @@ pub async fn inspect_old(old_url: &str, old_avatar_dir: Option<&Path>) -> Result
         date_bounds,
         avatar_files,
         avatar_diff,
+        target_preflight: None,
         copy_summaries: Vec::new(),
         avatar_file_copy: None,
         warnings,
@@ -464,6 +465,26 @@ pub async fn migrate_database(
     });
 
     if dry_run {
+        let new_pool = MySqlPool::connect(new_url)
+            .await
+            .with_context(|| "failed to connect to target database for dry-run preflight")?;
+        let target_preflight = inspect_target_preflight(&new_pool).await?;
+        if !target_preflight.is_empty {
+            report.warnings.push(format!(
+                "dry-run target preflight: target database is not empty: {}",
+                target_preflight
+                    .populated_tables
+                    .iter()
+                    .map(|table| format!("{}={}", table.name, table.row_count))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        } else {
+            report
+                .warnings
+                .push("dry-run target preflight: target schema is reachable and empty".to_owned());
+        }
+        report.target_preflight = Some(target_preflight);
         report
             .warnings
             .push("dry-run only: no rows or files were written".to_owned());
@@ -684,20 +705,39 @@ pub async fn verify_files(
 }
 
 async fn ensure_target_empty(pool: &MySqlPool) -> Result<()> {
-    let summaries = inspect_tables(pool).await?;
-    let populated = summaries
-        .into_iter()
-        .filter(|table| table.row_count > 0)
-        .map(|table| format!("{}={}", table.name, table.row_count))
-        .collect::<Vec<_>>();
+    let preflight = inspect_target_preflight(pool).await?;
 
-    if populated.is_empty() {
+    if preflight.is_empty {
         Ok(())
     } else {
         Err(anyhow!(
             "target database is not empty; refusing apply without --allow-non-empty-target: {}",
-            populated.join(", ")
+            preflight
+                .populated_tables
+                .iter()
+                .map(|table| format!("{}={}", table.name, table.row_count))
+                .collect::<Vec<_>>()
+                .join(", ")
         ))
+    }
+}
+
+async fn inspect_target_preflight(pool: &MySqlPool) -> Result<TargetPreflight> {
+    let tables = inspect_tables(pool).await?;
+    Ok(build_target_preflight(tables))
+}
+
+fn build_target_preflight(tables: Vec<TableSummary>) -> TargetPreflight {
+    let populated_tables = tables
+        .iter()
+        .filter(|table| table.row_count > 0)
+        .cloned()
+        .collect::<Vec<_>>();
+
+    TargetPreflight {
+        is_empty: populated_tables.is_empty(),
+        populated_tables,
+        tables,
     }
 }
 
@@ -1514,6 +1554,17 @@ impl TextReport for MigrationReport {
             ));
         }
 
+        if let Some(preflight) = &self.target_preflight {
+            output.push(format!(
+                "target_preflight: is_empty={} populated_tables={}",
+                preflight.is_empty,
+                preflight.populated_tables.len()
+            ));
+            for table in &preflight.populated_tables {
+                output.push(format!("- {} rows={}", table.name, table.row_count));
+            }
+        }
+
         output.push("duplicates:".to_owned());
         for duplicate in &self.duplicates {
             output.push(format!(
@@ -1636,6 +1687,8 @@ pub struct MigrationReport {
     pub avatar_files: Option<AvatarFileInventory>,
     #[serde(rename = "avatarDiff", skip_serializing_if = "Option::is_none")]
     pub avatar_diff: Option<AvatarDiff>,
+    #[serde(rename = "targetPreflight", skip_serializing_if = "Option::is_none")]
+    pub target_preflight: Option<TargetPreflight>,
     #[serde(rename = "copySummaries", skip_serializing_if = "Vec::is_empty")]
     pub copy_summaries: Vec<TableCopySummary>,
     #[serde(rename = "avatarFileCopy", skip_serializing_if = "Option::is_none")]
@@ -1699,7 +1752,7 @@ pub struct DatabaseRef {
     pub url_masked: String,
 }
 
-#[derive(Debug, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct TableSummary {
     pub name: String,
     #[serde(rename = "rowCount")]
@@ -1708,6 +1761,15 @@ pub struct TableSummary {
     pub min_id: Option<i64>,
     #[serde(rename = "maxId")]
     pub max_id: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TargetPreflight {
+    #[serde(rename = "isEmpty")]
+    pub is_empty: bool,
+    #[serde(rename = "populatedTables")]
+    pub populated_tables: Vec<TableSummary>,
+    pub tables: Vec<TableSummary>,
 }
 
 #[derive(Debug, Serialize)]
@@ -1922,6 +1984,42 @@ mod tests {
         assert!(text.contains("verify-files"));
         assert!(text.contains("legacy-compatible login"));
         assert!(text.contains("classify the failure"));
+    }
+
+    #[test]
+    fn target_preflight_marks_populated_tables_for_dry_run_reports() {
+        let preflight = build_target_preflight(vec![
+            TableSummary {
+                name: "user".to_owned(),
+                row_count: 0,
+                min_id: None,
+                max_id: None,
+            },
+            TableSummary {
+                name: "order_list".to_owned(),
+                row_count: 3,
+                min_id: Some(1),
+                max_id: Some(3),
+            },
+        ]);
+
+        assert!(!preflight.is_empty);
+        assert_eq!(preflight.populated_tables.len(), 1);
+        assert_eq!(preflight.populated_tables[0].name, "order_list");
+        assert_eq!(preflight.populated_tables[0].row_count, 3);
+    }
+
+    #[test]
+    fn target_preflight_marks_empty_schema_for_dry_run_reports() {
+        let preflight = build_target_preflight(vec![TableSummary {
+            name: "user".to_owned(),
+            row_count: 0,
+            min_id: None,
+            max_id: None,
+        }]);
+
+        assert!(preflight.is_empty);
+        assert!(preflight.populated_tables.is_empty());
     }
 
     #[test]
