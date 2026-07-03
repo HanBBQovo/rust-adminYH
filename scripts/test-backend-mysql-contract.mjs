@@ -57,6 +57,7 @@ const releaseContract = read('scripts/test-release-contract.mjs')
 const rebuildPlan = read('docs/rebuild-plan.md')
 const apiCompatibility = read('docs/api-compatibility.md')
 const transactionHelper = read('crates/admin-db/src/transaction.rs')
+const menuRepository = read('crates/admin-db/src/repositories/menu.rs')
 const orderRepository = read('crates/admin-db/src/repositories/order.rs')
 const roleRepository = read('crates/admin-db/src/repositories/role.rs')
 const repositoryFiles = listFilesRecursive('crates/admin-db/src/repositories', (file) => file.endsWith('.rs'))
@@ -202,6 +203,30 @@ assertIncludes(
   roleRepository,
   'transaction_sql_error(scope, "delete_role_permissions"',
   'role.remove must include scoped SQL error context for permission cleanup',
+)
+assertIncludes(
+  menuRepository,
+  'with_mysql_transaction(&self.pool, "menu.remove"',
+  'menu.remove must use the shared transaction runner',
+)
+assert(
+  !menuRepository.includes('begin_mysql_transaction(&self.pool, "menu.remove"'),
+  'menu.remove must not hand-roll begin/commit after runner migration',
+)
+assertIncludes(
+  menuRepository,
+  'transaction_sql_error(scope, "count_menu_children"',
+  'menu.remove must include scoped SQL error context for child guard',
+)
+assertIncludes(
+  menuRepository,
+  'transaction_sql_error(scope, "delete_menu_permissions"',
+  'menu.remove must include scoped SQL error context for permission cleanup',
+)
+assertIncludes(
+  menuRepository,
+  'transaction_sql_error(scope, "delete_menu"',
+  'menu.remove must include scoped SQL error context for menu delete',
 )
 assertIncludes(
   orderRepository,

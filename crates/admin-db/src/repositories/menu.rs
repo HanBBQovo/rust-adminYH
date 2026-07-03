@@ -7,7 +7,7 @@ use admin_core::{
 };
 use sqlx::{MySqlPool, Row};
 
-use crate::transaction::{begin_mysql_transaction, commit_mysql_transaction};
+use crate::transaction::{transaction_sql_error, with_mysql_transaction};
 
 #[derive(Debug, Clone)]
 pub struct MySqlMenuRepository {
@@ -141,33 +141,44 @@ impl MenuStore for MySqlMenuRepository {
 
     fn remove<'a>(&'a self, menu_id: i64) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let mut tx = begin_mysql_transaction(&self.pool, "menu.remove").await?;
-            let child_count: i64 =
-                sqlx::query("SELECT COUNT(*) AS total FROM `permission` WHERE `pid` = ?")
-                    .bind(menu_id)
-                    .fetch_one(tx.as_mut())
-                    .await
-                    .map_err(db_error)?
-                    .try_get("total")
-                    .map_err(db_error)?;
-            if child_count > 0 {
-                return Err(AppError::Validation("存在子菜单，不能删除".to_owned()));
-            }
+            with_mysql_transaction(&self.pool, "menu.remove", |tx| {
+                Box::pin(async move {
+                    let scope = tx.scope();
+                    let child_count: i64 =
+                        sqlx::query("SELECT COUNT(*) AS total FROM `permission` WHERE `pid` = ?")
+                            .bind(menu_id)
+                            .fetch_one(tx.as_mut())
+                            .await
+                            .map_err(|error| {
+                                transaction_sql_error(scope, "count_menu_children", error)
+                            })?
+                            .try_get("total")
+                            .map_err(|error| {
+                                transaction_sql_error(scope, "count_menu_children", error)
+                            })?;
+                    if child_count > 0 {
+                        return Err(AppError::Validation("存在子菜单，不能删除".to_owned()));
+                    }
 
-            sqlx::query("DELETE FROM `role_permission` WHERE `permission_id` = ?")
-                .bind(menu_id)
-                .execute(tx.as_mut())
-                .await
-                .map_err(db_error)?;
-            let result = sqlx::query("DELETE FROM `permission` WHERE `id` = ?")
-                .bind(menu_id)
-                .execute(tx.as_mut())
-                .await
-                .map_err(db_error)?;
-            if result.rows_affected() == 0 {
-                return Err(AppError::NotFound(format!("menu {menu_id}")));
-            }
-            commit_mysql_transaction(tx).await
+                    sqlx::query("DELETE FROM `role_permission` WHERE `permission_id` = ?")
+                        .bind(menu_id)
+                        .execute(tx.as_mut())
+                        .await
+                        .map_err(|error| {
+                            transaction_sql_error(scope, "delete_menu_permissions", error)
+                        })?;
+                    let result = sqlx::query("DELETE FROM `permission` WHERE `id` = ?")
+                        .bind(menu_id)
+                        .execute(tx.as_mut())
+                        .await
+                        .map_err(|error| transaction_sql_error(scope, "delete_menu", error))?;
+                    if result.rows_affected() == 0 {
+                        return Err(AppError::NotFound(format!("menu {menu_id}")));
+                    }
+                    Ok(())
+                })
+            })
+            .await
         })
     }
 
