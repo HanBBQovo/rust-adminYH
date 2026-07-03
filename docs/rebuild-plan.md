@@ -1049,11 +1049,13 @@ Tauri 打包门禁已封装为 `scripts/test-tauri-build.sh`，并接入 `RUN_TA
 
 ## 13. 近期下一步
 
-建议下一步按这个顺序执行：
+截至当前开发阶段，Rust workspace、Tauri 桌面壳、`frontend-template` 派生前端、旧 API 兼容层、SQLx MySQL 仓储、迁移 CLI、默认质量门禁、Docker/Tauri 发布契约和手动 GitHub Actions workflow 已经建立。后续不再按“初始化骨架”推进，而是按发布候选缺口逐项收敛：
 
-1. 导出旧 MySQL schema，补齐真实字段类型和索引。
-2. 创建 `docs/database-migration.md`，列出每张表字段、类型、迁移规则、校验 SQL。
-3. 初始化 Rust workspace + Tauri + frontend-template 派生前端。
-4. 先实现 `/api/health`、登录、当前用户、菜单树。
-5. 跑通一个完整闭环：旧用户登录 → 菜单展示 → 用户列表读取。
-6. 同步建立 `check-all` 测试脚本，确保从第一条接口开始就纳入自动化测试。
+1. 用真实旧库或脱敏影子旧库重新导出 `mysqldump --no-data` 和 `information_schema`，复核 `docs/database-migration.md` 中表结构、索引、弱关联和状态枚举，确认文档没有只停留在代码反推。
+2. 准备可重建的 MySQL 测试库和头像影子目录，执行 `RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL=... scripts/check-all.sh`，再执行 `OLD_DATABASE_URL=... NEW_DATABASE_URL=... NEW_AVATAR_DIR=... MIGRATION_APPLY=true scripts/test-migration.sh`，证明真实仓储、迁移 apply、verify 和头像文件校验闭环通过。
+3. 对前端进入发布级验收：执行 `RUN_E2E=true scripts/test-frontend.sh` 和 `RUN_COVERAGE=true scripts/test-frontend.sh`，重点复核登录、恢复登录态菜单、订单/回单/系统写入、账号设置和模板壳样式没有偏离 `frontend-template`。
+4. 对 Docker 进入发布级验收：执行 `RUN_DOCKER=true RUN_DOCKER_E2E=true scripts/check-all.sh`，保存镜像构建、compose health、nginx `/api` 代理、MySQL seed 和真实浏览器 E2E 日志；本机 Docker Hub 或端口不稳定时，只能通过脚本支持的镜像源和端口变量覆盖，不能跳过验证。
+5. 对 Tauri 进入发布级验收：执行 `RUN_TAURI=true RUN_TAURI_SIDECAR_SMOKE=true TAURI_SIDECAR_DATABASE_URL=... scripts/check-all.sh`，再执行 `RUN_TAURI=true RUN_TAURI_DMG=true scripts/check-all.sh`；如果默认 sidecar smoke 端口被占用，用 `SIDECAR_SMOKE_PORT=<free-port>` 复验打包后的二进制；如果 DMG 因本机 GUI/Finder/hdiutil 环境失败，必须记录原因并保留 `.app` 替代验证证据。
+6. 在本地组合执行一次完整 `RELEASE_GATE=true scripts/check-all.sh`，证明发布候选不会跳过真实 MySQL、迁移 apply/verify、头像校验、E2E、coverage、Docker、Tauri、DMG 和 bundled sidecar smoke；缺少任一环境变量或开关时 preflight 失败是正确阻断。
+7. 确认 GitHub Actions billing/runner 配额正常，配置真实 DB、迁移、头像和 sidecar smoke secrets/variables 后，手动触发 `CI` workflow；发布候选必须勾选 `release_candidate=true`、`run_docker=true`、`run_docker_e2e=true`、`run_tauri=true`、`run_tauri_dmg=true`、`run_tauri_sidecar_smoke=true`。
+8. 进入最终切换前，按发布门禁矩阵保存所有命令、commit、脱敏环境变量、迁移报告、rollback-plan、Docker/Tauri artifacts 和手工业务验收记录；任何一步失败都要按单功能修复、补测试、提交 `[skip ci]`，不得把跳过项当作通过。
