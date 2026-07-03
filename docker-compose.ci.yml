@@ -15,7 +15,7 @@ services:
       timeout: 3s
       retries: 20
     ports:
-      - "33306:3306"
+      - "${MYSQL_PORT:-33306}:3306"
 
   admin-api:
     build:
@@ -24,7 +24,7 @@ services:
       args:
         RUST_IMAGE: ${RUST_IMAGE:-rust:1.88-bookworm}
         RUNTIME_IMAGE: ${RUNTIME_IMAGE:-debian:bookworm-slim}
-    image: rust-adminyh/admin-api:ci
+    image: ${API_IMAGE:-rust-adminyh/admin-api:ci}
     depends_on:
       mysql:
         condition: service_healthy
@@ -32,7 +32,7 @@ services:
       APP_ENV: ci
       APP_HTTP__HOST: 0.0.0.0
       APP_HTTP__PORT: 16824
-      APP_HTTP__CORS_ORIGINS: http://127.0.0.1:18080,http://localhost:18080
+      APP_HTTP__CORS_ORIGINS: http://127.0.0.1:${WEB_PORT:-18080},http://localhost:${WEB_PORT:-18080}
       APP_LOGGING__JSON_LOGS: "true"
       APP_STORAGE__AVATAR_DIR: /app/uploads/avatar
       DATABASE_URL: mysql://admin_yh:admin_yh@mysql:3306/admin_yh
@@ -41,18 +41,18 @@ services:
       DATABASE_CONNECT_TIMEOUT_SECONDS: 10
       DATABASE_MIGRATE_ON_START: "true"
     ports:
-      - "16824:16824"
+      - "${API_PORT:-16824}:16824"
 
   desktop-web:
     build:
       context: .
       dockerfile: Dockerfile.desktop-web
       args:
-        NODE_IMAGE: ${NODE_IMAGE:-node:20-slim}
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-slim}
         NGINX_IMAGE: ${NGINX_IMAGE:-nginx:1.27-alpine}
         NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
         VITE_API_BASE_URL: /api
-    image: rust-adminyh/desktop-web:ci
+    image: ${WEB_IMAGE:-rust-adminyh/desktop-web:ci}
     depends_on:
       - admin-api
     healthcheck:

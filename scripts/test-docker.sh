@@ -7,18 +7,32 @@ cd "$ROOT_DIR"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.ci.yml}"
 API_IMAGE="${API_IMAGE:-rust-adminyh/admin-api:ci}"
 WEB_IMAGE="${WEB_IMAGE:-rust-adminyh/desktop-web:ci}"
-RUST_IMAGE="${RUST_IMAGE:-rust:1.88-bookworm}"
-RUNTIME_IMAGE="${RUNTIME_IMAGE:-debian:bookworm-slim}"
-NODE_IMAGE="${NODE_IMAGE:-node:20-slim}"
-NGINX_IMAGE="${NGINX_IMAGE:-nginx:1.27-alpine}"
-MYSQL_IMAGE="${MYSQL_IMAGE:-mysql:8.0}"
+DOCKER_REGISTRY_PREFIX="${DOCKER_REGISTRY_PREFIX:-}"
+
+library_image() {
+  local image="$1"
+  local prefix="$DOCKER_REGISTRY_PREFIX"
+  if [[ -n "$prefix" && "$prefix" != */ ]]; then
+    prefix="${prefix}/"
+  fi
+  printf '%s%s' "$prefix" "$image"
+}
+
+RUST_IMAGE="${RUST_IMAGE:-$(library_image "rust:1.88-bookworm")}"
+RUNTIME_IMAGE="${RUNTIME_IMAGE:-$(library_image "debian:bookworm-slim")}"
+NODE_IMAGE="${NODE_IMAGE:-$(library_image "node:22-slim")}"
+NGINX_IMAGE="${NGINX_IMAGE:-$(library_image "nginx:1.27-alpine")}"
+MYSQL_IMAGE="${MYSQL_IMAGE:-$(library_image "mysql:8.0")}"
 NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmjs.org}"
-API_URL="${API_URL:-http://127.0.0.1:16824/api/health}"
-WEB_URL="${WEB_URL:-http://127.0.0.1:18080/}"
-WEB_API_URL="${WEB_API_URL:-http://127.0.0.1:18080/api/health}"
+API_PORT="${API_PORT:-16824}"
 WEB_PORT="${WEB_PORT:-18080}"
+MYSQL_PORT="${MYSQL_PORT:-33306}"
+API_URL="${API_URL:-http://127.0.0.1:${API_PORT}/api/health}"
+WEB_URL="${WEB_URL:-http://127.0.0.1:${WEB_PORT}/}"
+WEB_API_URL="${WEB_API_URL:-http://127.0.0.1:${WEB_PORT}/api/health}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-rust-adminyh-ci}"
 RUN_DOCKER_E2E="${RUN_DOCKER_E2E:-false}"
+DOCKER_DAEMON_READY=false
 
 section() {
   printf '\n==> %s\n' "$1"
@@ -30,6 +44,41 @@ require_command() {
     echo "ERROR: 需要安装 $name 才能执行 Docker 门禁。"
     exit 127
   fi
+}
+
+require_docker_daemon() {
+  if docker info >/dev/null 2>&1; then
+    DOCKER_DAEMON_READY=true
+    return 0
+  fi
+
+  local context
+  local endpoint
+  context="$(docker context show 2>/dev/null || echo unknown)"
+  endpoint="$(docker context inspect "$context" --format '{{json .Endpoints.docker.Host}}' 2>/dev/null | tr -d '"' || true)"
+
+  echo "ERROR: Docker daemon 不可用，无法执行 Docker 打包门禁。"
+  echo "当前 Docker context: ${context}"
+  if [[ -n "$endpoint" ]]; then
+    echo "当前 Docker endpoint: ${endpoint}"
+  fi
+  echo "请先启动 Docker Desktop 或 OrbStack，确认 docker info 可以正常连接后再重跑 scripts/test-docker.sh。"
+  exit 125
+}
+
+docker_compose() {
+  RUST_IMAGE="$RUST_IMAGE" \
+  RUNTIME_IMAGE="$RUNTIME_IMAGE" \
+  NODE_IMAGE="$NODE_IMAGE" \
+  NGINX_IMAGE="$NGINX_IMAGE" \
+  MYSQL_IMAGE="$MYSQL_IMAGE" \
+  NPM_REGISTRY="$NPM_REGISTRY" \
+  API_IMAGE="$API_IMAGE" \
+  WEB_IMAGE="$WEB_IMAGE" \
+  API_PORT="$API_PORT" \
+  WEB_PORT="$WEB_PORT" \
+  MYSQL_PORT="$MYSQL_PORT" \
+  docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
 }
 
 redact_url() {
@@ -50,26 +99,35 @@ diagnostics() {
   echo "web_image=${WEB_IMAGE}"
   echo "rust_base=${RUST_IMAGE}"
   echo "runtime_base=${RUNTIME_IMAGE}"
-echo "node_base=${NODE_IMAGE}"
-echo "nginx_base=${NGINX_IMAGE}"
-echo "mysql_base=${MYSQL_IMAGE}"
-echo "npm_registry=${NPM_REGISTRY}"
-echo "api_url=${API_URL}"
+  echo "node_base=${NODE_IMAGE}"
+  echo "nginx_base=${NGINX_IMAGE}"
+  echo "mysql_base=${MYSQL_IMAGE}"
+  echo "docker_registry_prefix=${DOCKER_REGISTRY_PREFIX:-<none>}"
+  echo "npm_registry=${NPM_REGISTRY}"
+  echo "api_url=${API_URL}"
   echo "web_url=${WEB_URL}"
-echo "web_api_url=${WEB_API_URL}"
-echo "web_port=${WEB_PORT}"
-echo "run_docker_e2e=${RUN_DOCKER_E2E}"
-echo "database_url=$(printf '%s' "${DATABASE_URL:-mysql://admin_yh:admin_yh@mysql:3306/admin_yh}" | redact_url)"
+  echo "web_api_url=${WEB_API_URL}"
+  echo "api_port=${API_PORT}"
+  echo "web_port=${WEB_PORT}"
+  echo "mysql_port=${MYSQL_PORT}"
+  echo "run_docker_e2e=${RUN_DOCKER_E2E}"
+  echo "docker_daemon_ready=${DOCKER_DAEMON_READY}"
+  echo "database_url=$(printf '%s' "${DATABASE_URL:-mysql://admin_yh:admin_yh@mysql:3306/admin_yh}" | redact_url)"
   echo
-  docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" ps || true
-  echo
-  docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" logs --tail=200 mysql admin-api desktop-web || true
+  if [[ "$DOCKER_DAEMON_READY" == "true" ]]; then
+    docker_compose ps || true
+    echo
+    docker_compose logs --tail=200 mysql admin-api desktop-web || true
+  else
+    echo "Docker compose diagnostics skipped because the Docker daemon is unavailable."
+  fi
   exit "$exit_code"
 }
 
-trap diagnostics ERR
-
 require_command docker
+require_docker_daemon
+
+trap diagnostics ERR
 
 section "Docker environment"
 docker version
@@ -81,10 +139,14 @@ echo "runtime_base=${RUNTIME_IMAGE}"
 echo "node_base=${NODE_IMAGE}"
 echo "nginx_base=${NGINX_IMAGE}"
 echo "mysql_base=${MYSQL_IMAGE}"
+echo "docker_registry_prefix=${DOCKER_REGISTRY_PREFIX:-<none>}"
 echo "npm_registry=${NPM_REGISTRY}"
+echo "api_port=${API_PORT}"
+echo "web_port=${WEB_PORT}"
+echo "mysql_port=${MYSQL_PORT}"
 
 section "Docker cleanup before run"
-docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" down --volumes --remove-orphans || true
+docker_compose down --volumes --remove-orphans || true
 
 section "Docker build admin-api"
 docker build \
@@ -104,18 +166,11 @@ docker build \
   .
 
 section "Docker compose up"
-RUST_IMAGE="$RUST_IMAGE" \
-RUNTIME_IMAGE="$RUNTIME_IMAGE" \
-NODE_IMAGE="$NODE_IMAGE" \
-NGINX_IMAGE="$NGINX_IMAGE" \
-MYSQL_IMAGE="$MYSQL_IMAGE" \
-NPM_REGISTRY="$NPM_REGISTRY" \
-WEB_PORT="$WEB_PORT" \
-docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" up -d mysql admin-api desktop-web
+docker_compose up -d mysql admin-api desktop-web
 
 section "Health checks"
 for _ in $(seq 1 60); do
-  if curl --fail --silent --show-error "$API_URL" >/tmp/rust-adminyh-api-health.json; then
+  if curl --fail --silent --show-error "$API_URL" >/tmp/rust-adminyh-api-health.json 2>/tmp/rust-adminyh-api-health.err; then
     cat /tmp/rust-adminyh-api-health.json
     echo
     break
@@ -141,7 +196,7 @@ echo
 
 if [[ "$RUN_DOCKER_E2E" == "true" ]]; then
   section "Seed Docker E2E database"
-  docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" exec -T mysql \
+  docker_compose exec -T mysql \
     mysql -uadmin_yh -padmin_yh admin_yh < "$ROOT_DIR/scripts/seed-docker-e2e.sql"
 
   section "Real API browser E2E"
@@ -154,10 +209,10 @@ else
 fi
 
 section "Docker compose status"
-docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" ps
+docker_compose ps
 
 section "Docker cleanup"
-docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" down --volumes --remove-orphans
+docker_compose down --volumes --remove-orphans
 trap - ERR
 
 echo
