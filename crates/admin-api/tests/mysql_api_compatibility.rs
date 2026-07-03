@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, path::PathBuf};
 
 use admin_api::{build_router, AppConfig, AppServices, AppState};
 use admin_core::{auth::legacy_md5_hex, services::StaticHealthService};
@@ -19,7 +19,16 @@ async fn mysql_api_compatibility_uses_real_database_services() {
     let scope = TestScope::new(&pool).await;
     scope.seed_roles_and_users().await;
 
-    let app = build_router(test_state(pool.clone()));
+    let avatar_root = env::temp_dir().join(format!("rust-adminyh-avatar-{}", scope.prefix));
+    let avatar_dir = avatar_root.join("avatars");
+    tokio::fs::create_dir_all(&avatar_dir)
+        .await
+        .expect("avatar dir should be created");
+    tokio::fs::write(avatar_dir.join("default.jpg"), b"DEFAULT_AVATAR")
+        .await
+        .expect("default avatar should be written");
+
+    let app = build_router(test_state(pool.clone(), Some(avatar_dir.clone())));
 
     let (health_status, health_json) =
         json_request(app.clone(), "GET", "/api/health", None, "").await;
@@ -311,6 +320,107 @@ async fn mysql_api_compatibility_uses_real_database_services() {
         .expect("deleted company detail should remain old array shape")
         .is_empty());
 
+    let boundary = "admin-yh-real-mysql-avatar-boundary";
+    let avatar_body = format!(
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"avatar.png\"\r\nContent-Type: image/png\r\n\r\nMYSQLPNG\r\n--{boundary}--\r\n"
+    );
+    let avatar_upload_response = raw_request(
+        app.clone(),
+        "POST",
+        "/api/upload/avatar",
+        Some(&admin_token),
+        Some(&format!("multipart/form-data; boundary={boundary}")),
+        Body::from(avatar_body),
+    )
+    .await;
+    let avatar_upload_status = avatar_upload_response.status();
+    let avatar_upload_body = axum::body::to_bytes(avatar_upload_response.into_body(), usize::MAX)
+        .await
+        .expect("avatar upload body should be readable");
+    let avatar_upload_json: Value =
+        serde_json::from_slice(&avatar_upload_body).expect("avatar upload should return JSON");
+    assert_eq!(avatar_upload_status, StatusCode::OK);
+    assert_eq!(avatar_upload_json["code"], 0);
+    assert_eq!(avatar_upload_json["message"], "上传头像成功！");
+
+    let avatar_row = scope.admin_avatar_row().await;
+    let avatar_filename = avatar_row.filename;
+    assert!(avatar_filename.ends_with(".png"));
+    assert_eq!(avatar_row.mimetype, "image/png");
+    assert_eq!(avatar_row.size, 8);
+    assert_eq!(
+        avatar_row.avatar_url,
+        format!("/users/{}/avatar", scope.admin_user_id)
+    );
+    assert_eq!(
+        tokio::fs::read(avatar_dir.join(&avatar_filename))
+            .await
+            .expect("uploaded avatar file should exist"),
+        b"MYSQLPNG"
+    );
+
+    let avatar_response = raw_request(
+        app.clone(),
+        "GET",
+        &format!("/api/users/{}/avatar", scope.admin_user_id),
+        None,
+        None,
+        Body::empty(),
+    )
+    .await;
+    assert_eq!(avatar_response.status(), StatusCode::OK);
+    assert_eq!(
+        avatar_response.headers().get("content-type").unwrap(),
+        "image/png"
+    );
+    let avatar_bytes = axum::body::to_bytes(avatar_response.into_body(), usize::MAX)
+        .await
+        .expect("avatar response body should be readable");
+    assert_eq!(&avatar_bytes[..], b"MYSQLPNG");
+
+    tokio::fs::remove_file(avatar_dir.join(&avatar_filename))
+        .await
+        .expect("uploaded avatar fixture should be removable");
+    let fallback_response = raw_request(
+        app.clone(),
+        "GET",
+        &format!("/api/users/{}/avatar", scope.admin_user_id),
+        None,
+        None,
+        Body::empty(),
+    )
+    .await;
+    assert_eq!(fallback_response.status(), StatusCode::OK);
+    let fallback_bytes = axum::body::to_bytes(fallback_response.into_body(), usize::MAX)
+        .await
+        .expect("fallback avatar body should be readable");
+    assert_eq!(&fallback_bytes[..], b"DEFAULT_AVATAR");
+
+    let bad_field_boundary = "admin-yh-real-mysql-avatar-bad-field";
+    let bad_field_body = format!(
+        "--{bad_field_boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"avatar.png\"\r\nContent-Type: image/png\r\n\r\nPNGDATA\r\n--{bad_field_boundary}--\r\n"
+    );
+    let bad_field_response = raw_request(
+        app.clone(),
+        "POST",
+        "/api/upload/avatar",
+        Some(&admin_token),
+        Some(&format!(
+            "multipart/form-data; boundary={bad_field_boundary}"
+        )),
+        Body::from(bad_field_body),
+    )
+    .await;
+    let bad_field_status = bad_field_response.status();
+    let bad_field_body = axum::body::to_bytes(bad_field_response.into_body(), usize::MAX)
+        .await
+        .expect("bad field body should be readable");
+    let bad_field_json: Value =
+        serde_json::from_slice(&bad_field_body).expect("bad field should return JSON");
+    assert_eq!(bad_field_status, StatusCode::BAD_REQUEST);
+    assert_eq!(bad_field_json["code"], -400);
+    assert_eq!(bad_field_json["message"], "请求参数错误: 缺少头像文件");
+
     let (resources_status, resources_json) =
         json_request(app, "GET", "/api/admin/resources", Some(&admin_token), "").await;
     assert_eq!(resources_status, StatusCode::OK);
@@ -353,12 +463,16 @@ async fn mysql_api_compatibility_uses_real_database_services() {
     );
 
     scope.cleanup().await;
+    let _ = tokio::fs::remove_dir_all(avatar_root).await;
 }
 
-fn test_state(pool: MySqlPool) -> AppState {
+fn test_state(pool: MySqlPool, avatar_dir: Option<PathBuf>) -> AppState {
     let mut config = AppConfig::from_env().expect("config should load");
     config.database.url = env::var("ADMIN_DB_TEST_DATABASE_URL")
         .expect("RUN_DB_TESTS=true requires ADMIN_DB_TEST_DATABASE_URL");
+    if let Some(avatar_dir) = avatar_dir {
+        config.storage.avatar_dir = avatar_dir.to_string_lossy().into_owned();
+    }
     let health_service = StaticHealthService::new("rust-adminYH", env!("CARGO_PKG_VERSION"));
     AppState::with_services(config, AppServices::database(pool, health_service))
 }
@@ -410,6 +524,34 @@ async fn json_request(
         .unwrap_or_else(|err| panic!("{method} {uri} should return JSON: {err}"));
 
     (status, json)
+}
+
+async fn raw_request(
+    app: axum::Router,
+    method: &str,
+    uri: &str,
+    token: Option<&str>,
+    content_type: Option<&str>,
+    body: Body,
+) -> axum::response::Response {
+    let mut builder = Request::builder().method(method).uri(uri);
+    if let Some(content_type) = content_type {
+        builder = builder.header(CONTENT_TYPE, content_type);
+    }
+    if let Some(token) = token {
+        builder = builder.header("authorization", format!("Bearer {token}"));
+    }
+
+    app.oneshot(builder.body(body).expect("request should build"))
+        .await
+        .expect("request should succeed")
+}
+
+struct AvatarRow {
+    filename: String,
+    mimetype: String,
+    size: i64,
+    avatar_url: String,
 }
 
 struct TestScope<'a> {
@@ -586,6 +728,38 @@ impl<'a> TestScope<'a> {
             .expect("password should exist")
     }
 
+    async fn admin_avatar_row(&self) -> AvatarRow {
+        let row = sqlx::query(
+            r#"
+            SELECT
+                a.`filename`,
+                a.`mimetype`,
+                a.`size`,
+                u.`avatar_url`,
+                COUNT(*) OVER (PARTITION BY a.`user_id`) AS avatar_count
+            FROM `avatar` a
+            INNER JOIN `user` u ON u.`id` = a.`user_id`
+            WHERE a.`user_id` = ?
+            "#,
+        )
+        .bind(self.admin_user_id)
+        .fetch_one(self.pool)
+        .await
+        .expect("admin avatar row should load");
+        assert_eq!(
+            row.try_get::<i64, _>("avatar_count")
+                .expect("avatar count should exist"),
+            1,
+            "avatar upload must replace metadata instead of leaking duplicate avatar rows"
+        );
+        AvatarRow {
+            filename: row.try_get("filename").expect("filename should exist"),
+            mimetype: row.try_get("mimetype").expect("mimetype should exist"),
+            size: row.try_get("size").expect("size should exist"),
+            avatar_url: row.try_get("avatar_url").expect("avatar_url should exist"),
+        }
+    }
+
     async fn count_company_order(&self, order_id: i64) -> i64 {
         sqlx::query("SELECT COUNT(*) AS total FROM `company_order` WHERE `order_id` = ?")
             .bind(order_id)
@@ -690,6 +864,12 @@ impl<'a> TestScope<'a> {
             .execute(self.pool)
             .await
             .expect("user role cleanup should run");
+        sqlx::query("DELETE FROM `avatar` WHERE `user_id` IN (?, ?)")
+            .bind(self.admin_user_id)
+            .bind(self.operator_user_id)
+            .execute(self.pool)
+            .await
+            .expect("avatar cleanup should run");
         sqlx::query("DELETE FROM `role_permission` WHERE `permission_id` IN (?, ?)")
             .bind(self.menu_root_id)
             .bind(self.menu_child_id)

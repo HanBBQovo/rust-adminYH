@@ -107,7 +107,7 @@ dry-run 只读旧库和新库，输出：
 - 真实 MySQL 回归已覆盖图表仓储：首页 header 指标增量、公司订单数、公司运费和回单汇总继续按旧 `company_order`、`order_list`、`receipt` 弱关联口径聚合，避免迁移时误改统计口径。
 - 真实 MySQL 回归已覆盖角色/菜单仓储：角色筛选/增删改、菜单树旧 `children/chilren` 双形状、菜单新增旧 `partentId` 兼容、角色菜单 ID 汇总、权限分配去重替换和失败校验不污染既有 `role_permission`。
 - `MySqlChartRepository` 已实现旧图表 snapshot 查询，继续保留旧口径差异：公司订单数来自 `company_order.com_name`，运费和回单数来自 `order_list.company/sumfreight/receiptnum`，回单总数来自 `receipt`。
-- `MySqlUserRepository` 已实现旧用户和认证 SQLx 仓储，登录 token 继续写回 `user.token`，用户创建在事务内写入 `user`、`user_role`、默认 `avatar`，头像更新在事务内同步 `avatar` 和 `user.avatar_url`。真实 MySQL 回归已覆盖头像元数据更新：更新后只保留当前用户一条 `avatar` 记录，`user.avatar_url` 继续指向 `/users/:id/avatar`，缺失用户不会插入孤儿头像。
+- `MySqlUserRepository` 已实现旧用户和认证 SQLx 仓储，登录 token 继续写回 `user.token`，用户创建在事务内写入 `user`、`user_role`、默认 `avatar`，头像更新在事务内同步 `avatar` 和 `user.avatar_url`。真实 MySQL 回归已覆盖头像元数据更新：更新后只保留当前用户一条 `avatar` 记录，`user.avatar_url` 继续指向 `/users/:id/avatar`，缺失用户不会插入孤儿头像。真实 MySQL HTTP 回归已进一步覆盖 `/api/upload/avatar` multipart 上传到临时头像目录、文件 bytes 落盘、公开头像读取返回 DB MIME、缺失上传文件回退 `default.jpg`，以及错误字段名返回旧 `{ code: -400 }` envelope，防止迁移后出现“数据库头像记录正确但磁盘文件不可读”的发布风险。
 - SQLx 动态筛选已补充真实 MySQL 空筛选回归：用户、角色、订单和回单的 list/count 在无筛选项时不会拼接悬空 `WHERE`，文本筛选为空字符串时跳过条件，避免迁移后旧前端默认列表请求触发 SQL 语法错误或全表 `LIKE '%%'` 伪筛选。
 - 密码安全升级已接入：`CompatPasswordVerifier` 支持旧 MD5 与 Argon2；认证成功且原密码为 MD5 时会回写 Argon2，用户创建和改密也会写入 Argon2。真实 MySQL 回归已纳入 `mysql_user_auth_repository` 发布级 gate，验证旧 MD5 首登升级、错误密码不污染旧 hash/token、`user.token` 单点登录写回、新建/改密 Argon2 写入。生产切换前必须确认旧 Node 服务不会继续并行读取同一写库，否则升级后的用户无法再由旧服务登录。
 - 生产 token 策略已从开发态 `dev-{user_id}-{uuid}` 切换为 32 字节随机 opaque token，仍保留写回 `user.token` 的旧单用户单 token 语义；旧库已有 token 只作为迁移数据保留，新系统新登录会覆盖为新格式。
