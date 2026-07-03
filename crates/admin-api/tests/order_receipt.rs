@@ -375,6 +375,25 @@ async fn operator_cannot_delete_order() {
 }
 
 #[tokio::test]
+async fn receipt_status_updates_require_admin_role() {
+    let app = build_router(operator_state());
+    let token = login_token(app.clone(), "operator").await;
+
+    let (status, json) = json_request(
+        app,
+        "PATCH",
+        "/api/receipt/1",
+        Some(&token),
+        r#"{"issuestate":"已接收"}"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(json["code"], -403);
+    assert_eq!(json["message"], "没有权限执行该操作");
+}
+
+#[tokio::test]
 async fn deleting_missing_order_returns_not_found() {
     let app = build_router(admin_state());
     let token = login_token(app.clone(), "admin").await;

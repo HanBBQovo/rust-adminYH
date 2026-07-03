@@ -36,7 +36,7 @@
 
 - 旧系统多数业务接口依赖 `verifyAuth`，管理员写操作额外依赖 `verifyRole`。
 - 旧管理员判断依赖 `user_role.role_id == 1`，新系统应集中到权限服务，第一阶段可兼容超级管理员角色 ID。
-- 普通用户必须不能调用用户、角色、菜单、公司、订单的管理写接口。
+- 普通用户必须不能调用用户、角色、菜单、公司、订单和回单状态流转的管理写接口。
 - `/users/:userId/avatar` 旧系统无鉴权，新系统可保留公开读取，但必须限制路径穿越和 MIME。
 
 ## 3. 路由矩阵
@@ -76,6 +76,10 @@
 | Order | PATCH | `/order/:orderId` | `/api/order/:orderId` | 管理员 | 修改订单，同步 `company_order/receipt/memory` |
 | Order | GET | `/order/:orderId` | `/api/order/:orderId` | 登录 | 订单详情 |
 | Order | POST | `/order/list` | `/api/order/list` | 登录 | 订单分页筛选 |
+| Receipt | POST | `/receipt/list` | `/api/receipt/list` | 登录 | 全部回单分页筛选 |
+| Receipt | POST | `/notrecovery/list` | `/api/notrecovery/list` | 登录 | 未回收回单分页筛选 |
+| Receipt | POST | `/recovery/list` | `/api/recovery/list` | 登录 | 已回收回单分页筛选 |
+| Receipt | PATCH | `/receipt/:receiptId` | `/api/receipt/:receiptId` | 管理员 | 回收、发放、寄出状态流转；普通用户禁止写 |
 | Receipt | POST | `/receipt/list` | `/api/receipt/list` | 登录 | 全部回单 |
 | Receipt | PATCH | `/receipt/:receiptId` | `/api/receipt/:receiptId` | 登录 | 更新回收/发放/寄出状态 |
 | Receipt | POST | `/notrecovery/list` | `/api/notrecovery/list` | 登录 | 未回收列表 |

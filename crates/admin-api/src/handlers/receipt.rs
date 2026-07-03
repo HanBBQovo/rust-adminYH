@@ -6,7 +6,7 @@ use axum::{
 };
 
 use crate::{
-    middleware::auth::require_auth,
+    middleware::auth::{require_admin, require_auth},
     response::{ErrorResponse, JsonResponse, MessageResponse},
     AppState,
 };
@@ -59,7 +59,7 @@ pub async fn update_status(
     headers: HeaderMap,
     Json(input): Json<ReceiptStatusRequest>,
 ) -> Result<MessageResponse, ErrorResponse> {
-    require_auth(&state, &headers).await?;
+    require_admin(&state, &headers).await?;
     state
         .receipt_service
         .update_status(receipt_id, input)

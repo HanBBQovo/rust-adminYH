@@ -132,7 +132,6 @@ async fn read_routes_require_login_but_allow_operator_sessions() {
         ("POST", "/api/receipt/list", r#"{"offset":0,"size":10}"#),
         ("POST", "/api/notrecovery/list", r#"{"offset":0,"size":10}"#),
         ("POST", "/api/recovery/list", r#"{"offset":0,"size":10}"#),
-        ("PATCH", "/api/receipt/1", r#"{"issuestate":"已接收"}"#),
     ] {
         let (missing_status, missing_json) =
             json_request(app.clone(), method, uri, None, body).await;
@@ -175,6 +174,7 @@ async fn admin_write_routes_reject_operator_with_legacy_forbidden_shape() {
             "/api/menu",
             r#"{"name":"新菜单","type":1,"url":"/main/new","parentId":0}"#,
         ),
+        ("PATCH", "/api/receipt/1", r#"{"issuestate":"已接收"}"#),
     ] {
         let (status, json) = json_request(app.clone(), method, uri, Some(&token), body).await;
         assert_eq!(status, StatusCode::FORBIDDEN, "{uri}");

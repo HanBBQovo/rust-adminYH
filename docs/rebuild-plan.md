@@ -127,6 +127,7 @@
 - 管理权限硬编码为 `user_role.role_id == 1`，不是完整 RBAC policy。
 - RBAC 分配角色菜单时只插入 `role_permission`，没有先删除旧关系，可能重复或残留。
 - 旧系统删除订单只删 `order_list`，新系统已明确改为事务级联清理 `company_order` 和安全匹配的 `receipt`，防止新数据继续产生孤儿关系。
+- 回单状态流转会改变业务凭证状态，新系统已收口为管理员写权限；普通登录用户只能读取回单列表。
 - 文件上传直接 `fs.unlinkSync` 删除旧头像，缺少文件存在判断。
 - 用户 ID `58` 被硬编码为不可删除管理员。
 - token 写入 `user.token`，多人登录会使旧 token 失效；新系统第一阶段已决策保留该单用户单 token 语义，但新登录 token 已改为生产级随机 opaque token。
