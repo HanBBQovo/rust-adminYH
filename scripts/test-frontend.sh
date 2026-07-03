@@ -32,7 +32,7 @@ cd "$WEB_DIR"
 
 if [[ ! -d node_modules ]]; then
   section "Install frontend dependencies"
-  npm ci
+  bash "$ROOT_DIR/scripts/install-frontend-deps.sh"
 fi
 
 run_required_script() {
