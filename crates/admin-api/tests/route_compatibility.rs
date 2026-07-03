@@ -248,6 +248,14 @@ const DOCUMENTED_ROUTES: &[RouteSpec] = &[
         api_route_path: "/api/receipt/{receipt_id}",
     },
     RouteSpec {
+        label: "receipt batch status update",
+        method: "PATCH",
+        legacy_doc_path: "/receipt/batch/status",
+        api_doc_path: "/api/receipt/batch/status",
+        legacy_route_path: "/receipt/batch/status",
+        api_route_path: "/api/receipt/batch/status",
+    },
+    RouteSpec {
         label: "not recovery",
         method: "POST",
         legacy_doc_path: "/notrecovery/list",
@@ -401,6 +409,13 @@ const AUTH_PARITY_CASES: &[AuthParityCase] = &[
         legacy_uri: "/receipt/1",
         api_uri: "/api/receipt/1",
         body: r#"{"recoverystate":"已回收"}"#,
+    },
+    AuthParityCase {
+        label: "receipt batch status update",
+        method: "PATCH",
+        legacy_uri: "/receipt/batch/status",
+        api_uri: "/api/receipt/batch/status",
+        body: r#"{"receiptIds":[1],"recoverystate":"已回收"}"#,
     },
     AuthParityCase {
         label: "memory list",

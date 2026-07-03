@@ -183,7 +183,7 @@ test.describe('business list E2E state matrix', () => {
 
   test('receipts page keeps template shell across loading, loaded, empty, and error states', async ({ page }) => {
     let receiptState: 'loaded' | 'empty' | 'error' = 'loaded'
-    const receiptPatchPayloads: unknown[] = []
+    const receiptBatchPayloads: unknown[] = []
 
     await page.route('**/api/receipt/list', async (route) => {
       const request = route.request()
@@ -214,11 +214,11 @@ test.describe('business list E2E state matrix', () => {
       })
     })
 
-    await page.route(/\/api\/receipt\/\d+$/, async (route) => {
+    await page.route('**/api/receipt/batch/status', async (route) => {
       const request = route.request()
       expect(request.method()).toBe('PATCH')
       expect(request.headers().authorization).toBe(`Bearer ${e2eToken}`)
-      receiptPatchPayloads.push(request.postDataJSON())
+      receiptBatchPayloads.push(request.postDataJSON())
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({ code: 0, data: null, message: '修改回单状态成功！' }),
@@ -234,8 +234,8 @@ test.describe('business list E2E state matrix', () => {
     await expect(page.getByText('未回收').first()).toBeVisible()
     await page.getByLabel(`选择回单 ${receiptFixture.oddnumber}`).click()
     await page.getByRole('button', { name: '批量接收' }).click()
-    await expect.poll(() => receiptPatchPayloads.length).toBe(1)
-    expect(receiptPatchPayloads[0]).toEqual({ issuestate: '已接收' })
+    await expect.poll(() => receiptBatchPayloads.length).toBe(1)
+    expect(receiptBatchPayloads[0]).toEqual({ receiptIds: [201], issuestate: '已接收' })
     await expect(page.getByText('回单接收成功！已批量更新 1 条回单。')).toBeVisible()
 
     receiptState = 'empty'

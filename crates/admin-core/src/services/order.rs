@@ -9,8 +9,8 @@ use crate::{
     domain::{OrderRecord, ReceiptRecord},
     dto::{
         LegacyDateInput, LegacyOrderRecord, LegacyReceiptRecord, MemoryRecord, OrderListRequest,
-        OrderListResponse, OrderMutationRequest, ReceiptListRequest, ReceiptListResponse,
-        ReceiptStatusRequest,
+        OrderListResponse, OrderMutationRequest, ReceiptBatchStatusRequest, ReceiptListRequest,
+        ReceiptListResponse, ReceiptStatusRequest,
     },
     AppError, AppResult,
 };
@@ -71,6 +71,11 @@ pub trait ReceiptService: Send + Sync {
         receipt_id: i64,
         input: ReceiptStatusRequest,
     ) -> ServiceFuture<'a, AppResult<&'static str>>;
+
+    fn update_statuses<'a>(
+        &'a self,
+        input: ReceiptBatchStatusRequest,
+    ) -> ServiceFuture<'a, AppResult<&'static str>>;
 }
 
 pub trait MemoryService: Send + Sync {
@@ -111,6 +116,12 @@ pub trait OrderStore: Send + Sync {
     fn update_receipt_status<'a>(
         &'a self,
         receipt_id: i64,
+        input: ReceiptStatusChange,
+    ) -> ServiceFuture<'a, AppResult<()>>;
+
+    fn update_receipt_statuses<'a>(
+        &'a self,
+        receipt_ids: Vec<i64>,
         input: ReceiptStatusChange,
     ) -> ServiceFuture<'a, AppResult<()>>;
 
@@ -286,6 +297,18 @@ impl ReceiptService for CompatReceiptService {
             Ok(message)
         })
     }
+
+    fn update_statuses<'a>(
+        &'a self,
+        input: ReceiptBatchStatusRequest,
+    ) -> ServiceFuture<'a, AppResult<&'static str>> {
+        let store = Arc::clone(&self.store);
+        Box::pin(async move {
+            let (receipt_ids, change, message) = normalize_receipt_batch_status(input)?;
+            store.update_receipt_statuses(receipt_ids, change).await?;
+            Ok(message)
+        })
+    }
 }
 
 async fn receipt_list_response(
@@ -382,6 +405,15 @@ impl ReceiptService for DisabledReceiptService {
         &'a self,
         _receipt_id: i64,
         _input: ReceiptStatusRequest,
+    ) -> ServiceFuture<'a, AppResult<&'static str>> {
+        Box::pin(async {
+            Err(AppError::Database("回单服务尚未连接数据库仓储".to_owned()))
+        })
+    }
+
+    fn update_statuses<'a>(
+        &'a self,
+        _input: ReceiptBatchStatusRequest,
     ) -> ServiceFuture<'a, AppResult<&'static str>> {
         Box::pin(async {
             Err(AppError::Database("回单服务尚未连接数据库仓储".to_owned()))
@@ -695,6 +727,45 @@ impl OrderStore for InMemoryOrderStore {
         })
     }
 
+    fn update_receipt_statuses<'a>(
+        &'a self,
+        receipt_ids: Vec<i64>,
+        input: ReceiptStatusChange,
+    ) -> ServiceFuture<'a, AppResult<()>> {
+        Box::pin(async move {
+            let mut receipts = self.receipts.lock().map_err(|_| AppError::Internal)?;
+            let existing_ids: HashSet<i64> = receipts
+                .iter()
+                .filter(|receipt| receipt_ids.contains(&receipt.id))
+                .map(|receipt| receipt.id)
+                .collect();
+            if let Some(missing_id) = receipt_ids
+                .iter()
+                .find(|receipt_id| !existing_ids.contains(receipt_id))
+            {
+                return Err(AppError::NotFound(format!("receipt {missing_id}")));
+            }
+
+            for receipt in receipts
+                .iter_mut()
+                .filter(|receipt| existing_ids.contains(&receipt.id))
+            {
+                match &input {
+                    ReceiptStatusChange::Recovery(value) => {
+                        receipt.recoverystate = value.to_owned();
+                    }
+                    ReceiptStatusChange::Issue(value) => {
+                        receipt.issuestate = value.to_owned();
+                    }
+                    ReceiptStatusChange::Post(value) => {
+                        receipt.poststate = value.to_owned();
+                    }
+                }
+            }
+            Ok(())
+        })
+    }
+
     fn list_memories<'a>(&'a self) -> ServiceFuture<'a, AppResult<Vec<MemoryRecord>>> {
         Box::pin(async move {
             let mut list: Vec<_> = self
@@ -887,6 +958,58 @@ fn normalize_receipt_status(
     Err(AppError::Validation("回单状态不能为空".to_owned()))
 }
 
+fn normalize_receipt_batch_status(
+    input: ReceiptBatchStatusRequest,
+) -> AppResult<(Vec<i64>, ReceiptStatusChange, &'static str)> {
+    if input.receipt_ids.is_empty() {
+        return Err(AppError::Validation("请选择回单".to_owned()));
+    }
+
+    let mut seen_ids = HashSet::new();
+    for receipt_id in &input.receipt_ids {
+        if *receipt_id <= 0 {
+            return Err(AppError::Validation("回单 ID 无效".to_owned()));
+        }
+        if !seen_ids.insert(*receipt_id) {
+            return Err(AppError::Validation("回单 ID 不能重复".to_owned()));
+        }
+    }
+
+    let (change, message) =
+        normalize_receipt_status_strict(input.recoverystate, input.issuestate, input.poststate)?;
+    Ok((input.receipt_ids, change, message))
+}
+
+fn normalize_receipt_status_strict(
+    recoverystate: Option<String>,
+    issuestate: Option<String>,
+    poststate: Option<String>,
+) -> AppResult<(ReceiptStatusChange, &'static str)> {
+    let mut selected: Option<(ReceiptStatusChange, &'static str)> = None;
+    let mut selected_count = 0;
+
+    if let Some(value) = recoverystate.filter(|value| !value.trim().is_empty()) {
+        selected = Some((
+            ReceiptStatusChange::Recovery(value),
+            RECEIPT_MESSAGE_RECOVERY,
+        ));
+        selected_count += 1;
+    }
+    if let Some(value) = issuestate.filter(|value| !value.trim().is_empty()) {
+        selected = Some((ReceiptStatusChange::Issue(value), RECEIPT_MESSAGE_ISSUE));
+        selected_count += 1;
+    }
+    if let Some(value) = poststate.filter(|value| !value.trim().is_empty()) {
+        selected = Some((ReceiptStatusChange::Post(value), RECEIPT_MESSAGE_POST));
+        selected_count += 1;
+    }
+
+    if selected_count > 1 {
+        return Err(AppError::Validation("每次只能更新一种回单状态".to_owned()));
+    }
+    selected.ok_or_else(|| AppError::Validation("回单状态不能为空".to_owned()))
+}
+
 fn order_from_input(id: i64, input: &NormalizedOrderInput) -> OrderRecord {
     OrderRecord::new(
         id,
@@ -1049,8 +1172,8 @@ fn in_range(value: i64, range: Option<(i64, i64)>) -> bool {
 mod tests {
     use crate::{
         dto::{
-            LegacyDateInput, OrderListRequest, OrderMutationRequest, ReceiptListRequest,
-            ReceiptStatusRequest,
+            LegacyDateInput, OrderListRequest, OrderMutationRequest, ReceiptBatchStatusRequest,
+            ReceiptListRequest, ReceiptStatusRequest,
         },
         services::{development_order_services, MemoryService, OrderService, ReceiptService},
     };
@@ -1206,6 +1329,98 @@ mod tests {
             .await
             .expect("recovery list should load");
         assert_eq!(list.total_count, 1);
+    }
+
+    #[tokio::test]
+    async fn receipt_batch_status_update_changes_all_selected_receipts() {
+        let (_, receipts, _) = development_order_services();
+        let message = receipts
+            .update_statuses(ReceiptBatchStatusRequest {
+                receipt_ids: vec![1, 2],
+                recoverystate: None,
+                issuestate: None,
+                poststate: Some("已寄出".to_owned()),
+            })
+            .await
+            .expect("batch status should update");
+
+        assert_eq!(message, "回单寄出成功！");
+        let list = receipts
+            .list(ReceiptListRequest {
+                offset: 0,
+                size: 10,
+                oddnumber: None,
+                consignee: None,
+                consignor: None,
+                recoverystate: None,
+                issuestate: None,
+                poststate: Some("已寄出".to_owned()),
+                create_at: None,
+            })
+            .await
+            .expect("receipt list should load");
+        assert_eq!(list.total_count, 2);
+    }
+
+    #[tokio::test]
+    async fn receipt_batch_status_update_rejects_missing_id_without_partial_update() {
+        let (_, receipts, _) = development_order_services();
+        let result = receipts
+            .update_statuses(ReceiptBatchStatusRequest {
+                receipt_ids: vec![1, 999],
+                recoverystate: Some("已回收".to_owned()),
+                issuestate: None,
+                poststate: None,
+            })
+            .await;
+
+        assert!(
+            matches!(result, Err(crate::AppError::NotFound(message)) if message == "receipt 999")
+        );
+        let list = receipts
+            .not_recovery(ReceiptListRequest {
+                offset: 0,
+                size: 10,
+                oddnumber: Some("YD20260101001".to_owned()),
+                consignee: None,
+                consignor: None,
+                recoverystate: None,
+                issuestate: None,
+                poststate: None,
+                create_at: None,
+            })
+            .await
+            .expect("not recovery list should load");
+        assert_eq!(list.total_count, 1);
+        assert_eq!(list.list[0].recoverystate, "未回收");
+    }
+
+    #[tokio::test]
+    async fn receipt_batch_status_update_validates_ids_and_single_status_field() {
+        let (_, receipts, _) = development_order_services();
+        let duplicate = receipts
+            .update_statuses(ReceiptBatchStatusRequest {
+                receipt_ids: vec![1, 1],
+                recoverystate: Some("已回收".to_owned()),
+                issuestate: None,
+                poststate: None,
+            })
+            .await;
+        assert!(
+            matches!(duplicate, Err(crate::AppError::Validation(message)) if message == "回单 ID 不能重复")
+        );
+
+        let multiple_status_fields = receipts
+            .update_statuses(ReceiptBatchStatusRequest {
+                receipt_ids: vec![1],
+                recoverystate: Some("已回收".to_owned()),
+                issuestate: Some("已接收".to_owned()),
+                poststate: None,
+            })
+            .await;
+        assert!(
+            matches!(multiple_status_fields, Err(crate::AppError::Validation(message)) if message == "每次只能更新一种回单状态")
+        );
     }
 
     #[tokio::test]

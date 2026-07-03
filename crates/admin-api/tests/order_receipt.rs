@@ -394,6 +394,25 @@ async fn receipt_status_updates_require_admin_role() {
 }
 
 #[tokio::test]
+async fn receipt_batch_status_updates_require_admin_role() {
+    let app = build_router(operator_state());
+    let token = login_token(app.clone(), "operator").await;
+
+    let (status, json) = json_request(
+        app,
+        "PATCH",
+        "/api/receipt/batch/status",
+        Some(&token),
+        r#"{"receiptIds":[1],"issuestate":"已接收"}"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(json["code"], -403);
+    assert_eq!(json["message"], "没有权限执行该操作");
+}
+
+#[tokio::test]
 async fn deleting_missing_order_returns_not_found() {
     let app = build_router(admin_state());
     let token = login_token(app.clone(), "admin").await;
@@ -403,6 +422,63 @@ async fn deleting_missing_order_returns_not_found() {
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(json["code"], -404);
     assert_eq!(json["message"], "资源不存在: order 999");
+}
+
+#[tokio::test]
+async fn receipt_batch_status_update_commits_all_selected_receipts() {
+    let app = build_router(admin_state());
+    let token = login_token(app.clone(), "admin").await;
+
+    let (status, updated) = json_request(
+        app.clone(),
+        "PATCH",
+        "/api/receipt/batch/status",
+        Some(&token),
+        r#"{"receiptIds":[1,2],"poststate":"已寄出"}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(updated["code"], 0);
+    assert_eq!(updated["message"], "回单寄出成功！");
+
+    let (_, receipt_list) = json_request(
+        app,
+        "POST",
+        "/api/receipt/list",
+        Some(&token),
+        r#"{"offset":0,"size":10,"poststate":"已寄出"}"#,
+    )
+    .await;
+    assert_eq!(receipt_list["data"]["totalCount"], 2);
+}
+
+#[tokio::test]
+async fn receipt_batch_status_update_rejects_missing_id_without_partial_update() {
+    let app = build_router(admin_state());
+    let token = login_token(app.clone(), "admin").await;
+
+    let (status, json) = json_request(
+        app.clone(),
+        "PATCH",
+        "/api/receipt/batch/status",
+        Some(&token),
+        r#"{"receiptIds":[1,999],"recoverystate":"已回收"}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(json["code"], -404);
+    assert_eq!(json["message"], "资源不存在: receipt 999");
+
+    let (_, not_recovery) = json_request(
+        app,
+        "POST",
+        "/api/notrecovery/list",
+        Some(&token),
+        r#"{"offset":0,"size":10,"oddnumber":"YD20260101001"}"#,
+    )
+    .await;
+    assert_eq!(not_recovery["data"]["totalCount"], 1);
+    assert_eq!(not_recovery["data"]["list"][0]["recoverystate"], "未回收");
 }
 
 #[tokio::test]

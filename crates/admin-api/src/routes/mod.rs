@@ -134,6 +134,14 @@ pub fn build_router(state: AppState) -> Router {
         .route("/receipt/list", post(receipt::list))
         .route("/api/receipt/list", post(receipt::list))
         .route(
+            "/receipt/batch/status",
+            axum::routing::patch(receipt::update_statuses),
+        )
+        .route(
+            "/api/receipt/batch/status",
+            axum::routing::patch(receipt::update_statuses),
+        )
+        .route(
             "/receipt/{receipt_id}",
             axum::routing::patch(receipt::update_status),
         )

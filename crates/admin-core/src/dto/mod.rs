@@ -19,8 +19,8 @@ pub use health::HealthResponse;
 pub use menu::{LegacyMenuNode, MenuMutationRequest, RoleMenuIdsResponse};
 pub use order::{
     LegacyDateInput, LegacyOrderRecord, LegacyReceiptRecord, MemoryRecord, OrderListRequest,
-    OrderListResponse, OrderMutationRequest, ReceiptListRequest, ReceiptListResponse,
-    ReceiptStatusRequest,
+    OrderListResponse, OrderMutationRequest, ReceiptBatchStatusRequest, ReceiptListRequest,
+    ReceiptListResponse, ReceiptStatusRequest,
 };
 pub use resource::ResourceSummary;
 pub use role::{

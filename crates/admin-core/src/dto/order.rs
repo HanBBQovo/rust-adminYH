@@ -185,6 +185,18 @@ pub struct ReceiptStatusRequest {
     pub poststate: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct ReceiptBatchStatusRequest {
+    #[serde(rename = "receiptIds", default)]
+    pub receipt_ids: Vec<i64>,
+    #[serde(default)]
+    pub recoverystate: Option<String>,
+    #[serde(default)]
+    pub issuestate: Option<String>,
+    #[serde(default)]
+    pub poststate: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct LegacyReceiptRecord {
     pub id: i64,

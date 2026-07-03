@@ -80,6 +80,7 @@
 | Receipt | POST | `/notrecovery/list` | `/api/notrecovery/list` | 登录 | 未回收回单分页筛选 |
 | Receipt | POST | `/recovery/list` | `/api/recovery/list` | 登录 | 已回收回单分页筛选 |
 | Receipt | PATCH | `/receipt/:receiptId` | `/api/receipt/:receiptId` | 管理员 | 回收、发放、寄出状态流转；普通用户禁止写 |
+| Receipt | PATCH | `/receipt/batch/status` | `/api/receipt/batch/status` | 管理员 | 批量回收、发放、寄出状态流转；后端事务提交，任一 ID 不存在时不半更新 |
 | Upload | POST | `/upload/avatar` | `/api/upload/avatar` | 登录 | 上传头像 |
 | Memory | POST | `/memory/list` | `/api/memory/list` | 登录 | 旧响应不带 code，新系统需兼容或前端统一适配 |
 
@@ -157,7 +158,7 @@
 - 发放：`未发放`、`已发放`
 - 寄出：`未寄出`、`已寄出`
 
-旧前端批量“回单接收”实际提交 `issuestate='已接收'`，而搜索枚举使用 `已发放/未发放`；新系统第一阶段必须同时接受 `已接收` 和 `已发放`。写入时保留请求原值，查询时把 `已接收` 与 `已发放` 视为同一完成态，前端筛选 payload 不做归一化，后端负责别名匹配；迁移 dry-run 必须继续报告历史枚举分布。
+旧前端批量“回单接收”实际提交 `issuestate='已接收'`，而搜索枚举使用 `已发放/未发放`；新系统第一阶段必须同时接受 `已接收` 和 `已发放`。写入时保留请求原值，查询时把 `已接收` 与 `已发放` 视为同一完成态，前端筛选 payload 不做归一化，后端负责别名匹配；批量状态流转必须走 `/api/receipt/batch/status` 的事务接口，迁移 dry-run 必须继续报告历史枚举分布。
 
 ## 5. 必测兼容场景
 
@@ -228,7 +229,7 @@ POST /api/recovery/list
 - `/api/company/list`、`/api/company/:companyId`、`POST/PATCH/DELETE /api/company` 已先落地内存公司仓储和集成测试，兼容旧 `Countorder`、`totalCount`、详情数组和中文成功文案。
 - `/api/users/list`、`/api/users/:userId`、`POST/PATCH/DELETE /api/users`、`/api/users/:userId/password`、`/api/users/:userId/avatar` 已先落地内存用户仓储和集成测试，兼容旧 `avatarUrl`、`roleId`、角色对象、用户 58 删除保护、对象/裸字符串改密和公开头像读取。
 - `/api/role/list`、`/api/role/:roleId`、`POST/PATCH/DELETE /api/role`、`/api/role/assign` 已先落地内存角色仓储和集成测试，兼容旧 `totalCount`、角色详情、中文成功文案和菜单分配幂等替换。
-- `/api/order/list`、`/api/order/:orderId`、`POST/PATCH/DELETE /api/order`、`/api/receipt/list`、`PATCH /api/receipt/:receiptId`、`/api/notrecovery/list`、`/api/recovery/list` 已先落地内存订单/回单仓储和集成测试，兼容旧运单字段、`billingAt` 日期格式、回单状态文案、订单创建联动 `company_order/receipt/memory`；订单删除已升级为事务级联清理 `company_order` 和安全匹配的 `receipt`，不再延续旧系统只删主表导致孤儿数据的行为。
+- `/api/order/list`、`/api/order/:orderId`、`POST/PATCH/DELETE /api/order`、`/api/receipt/list`、`PATCH /api/receipt/:receiptId`、`PATCH /api/receipt/batch/status`、`/api/notrecovery/list`、`/api/recovery/list` 已先落地内存订单/回单仓储和集成测试，兼容旧运单字段、`billingAt` 日期格式、回单状态文案、订单创建联动 `company_order/receipt/memory`；订单删除已升级为事务级联清理 `company_order` 和安全匹配的 `receipt`，批量回单状态已升级为事务提交，不再延续旧系统只删主表或前端逐条 PATCH 导致孤儿/半更新数据的行为。
 - `/api/memory/list` 已先落地内存记忆词条仓储和集成测试，兼容旧 `{ data: [{ value }] }` 这种不带 `code/message` 的响应结构，并复用订单创建副作用写入的 memory 数据。
 - `/api/chart/headerList`、`/api/chart/company/order/count`、`/api/chart/company/order/sumfreight`、`/api/chart/company/receipt/sumreceipt` 已先落地内存图表统计仓储和集成测试，兼容旧顶部统计标题、公司维度字段名 `ordercount/sumfreight/sumReceipt`、登录鉴权要求。
 - 前端登录页已通过 `src/api/auth.ts` 封装接入旧 `/api/code` 验证码展示和刷新，SVG 使用 data URL 渲染，不在页面层直接 `fetch` 或注入 HTML；登录 payload 仅在用户填写时携带可选 `code` 字段，继续保持旧系统“展示验证码但不强制校验”的兼容语义。
@@ -237,14 +238,14 @@ POST /api/recovery/list
 - 前端 Dashboard 导航只把旧 `type=2` 页面菜单映射成可点击入口；旧 `type=1` 目录仅用于递归子菜单，避免父级“订单管理/系统管理/回单管理”在缺少对应页面权限时误授新模板页面。缺失 `type` 的旧 mock/兼容数据继续按页面候选处理。
 - 前端订单模块已在 `src/api/orders.ts` 和 `OrdersList` 页面补齐列表 + CRUD 第一阶段：通过封装层请求 `/api/order/list`、`GET /api/order/:id`、`POST /api/order`、`PATCH /api/order/:id`、`DELETE /api/order/:id`，保留旧订单字段、搜索条件、分页、当前筛选结果完整 CSV 导出、旧弹窗必填校验、查看只读、编辑保存和删除确认；配套 API/页面测试覆盖 payload、请求路径、字段渲染、筛选、分页、导出二次拉取当前已应用筛选、必填校验、toast、confirm 和刷新行为，`order-export` 单测覆盖旧中文列顺序、BOM、CSV 转义、文件名和 object URL 下载封装。
 - 前端订单弹窗已通过 `src/api/memory.ts` 接入旧 `/api/memory/list` 记忆词条，收货人/发货人字段使用统一 `AutocompleteInput` 模板控件实现“可自由输入 + 可选历史记忆值”；业务页面不直接调用旧接口或自写弹层，提交 payload 仍保持旧订单字段不变，页面测试和 Playwright E2E 覆盖记忆词条加载、选择和表单值回填。
-- 前端回单模块已在 `src/api/receipts.ts` 和 `ReceiptsList` 页面补齐列表 + 状态流转第一阶段：通过封装层请求 `/api/receipt/list`、`/api/notrecovery/list`、`/api/recovery/list`、`PATCH /api/receipt/:id`，复用一个页面承载全部回单/未回收/已回收三个旧入口，保留旧回单字段、搜索条件、分页、回收/接收/寄出按钮和 `issuestate='已接收'` 兼容值；配套 API/页面测试覆盖三类列表路径、旧 payload、状态 PATCH、筛选、分页、toast、空态和刷新行为。
-- 前端业务列表 E2E 已补充 `apps/desktop/web/e2e/business-list-states.spec.ts`：订单列表和回单管理在真实浏览器中覆盖登录后进入页面、旧接口分页 payload、Bearer token、成功列表、订单筛选结果完整 CSV 下载、回单批量接收旧 PATCH payload、空态、错误态，以及错误时仍保留模板侧栏/顶栏、不退回登录页。
+- 前端回单模块已在 `src/api/receipts.ts` 和 `ReceiptsList` 页面补齐列表 + 状态流转第一阶段：通过封装层请求 `/api/receipt/list`、`/api/notrecovery/list`、`/api/recovery/list`、`PATCH /api/receipt/:id` 和 `PATCH /api/receipt/batch/status`，复用一个页面承载全部回单/未回收/已回收三个旧入口，保留旧回单字段、搜索条件、分页、回收/接收/寄出按钮和 `issuestate='已接收'` 兼容值；配套 API/页面测试覆盖三类列表路径、旧 payload、单条状态 PATCH、批量事务 PATCH、筛选、分页、toast、空态和刷新行为。
+- 前端业务列表 E2E 已补充 `apps/desktop/web/e2e/business-list-states.spec.ts`：订单列表和回单管理在真实浏览器中覆盖登录后进入页面、旧接口分页 payload、Bearer token、成功列表、订单筛选结果完整 CSV 下载、回单批量接收事务 payload、空态、错误态，以及错误时仍保留模板侧栏/顶栏、不退回登录页。
 - 前端系统管理 E2E 已补充 `apps/desktop/web/e2e/system-list-states.spec.ts`：发货公司、用户管理、角色权限、菜单管理在真实浏览器中覆盖登录后进入页面、旧接口 payload/header、成功列表、空态、错误态，以及错误时仍保留模板侧栏/顶栏、不退回登录页。
 - 前端 E2E 公共封装已抽到 `apps/desktop/web/e2e/support/*`：`admin-session` 统一 mock 登录、会话、菜单、工作台图表和模板壳断言，`legacy-responses` 统一旧列表响应形状；后续 Playwright 用例必须复用这些 helpers，避免每个页面重复造 token、菜单和旧响应结构。
 - 前端系统写入 E2E 已补充 `apps/desktop/web/e2e/system-write-flows.spec.ts`：真实浏览器中覆盖角色权限分配 `/api/role/assign` 的 `{ roleId, menuList }` 旧 payload、菜单创建 `/api/menu` 的 numeric `type/sort/parentId` payload、创建后刷新菜单树，以及页面注册表不再把已实现订单模块标成建设中。
 - 前端架构门禁已接入 `scripts/test-frontend-architecture.mjs` 和 `scripts/test-frontend.sh`：默认提交门禁会阻断页面/业务组件直接 `fetch`、引入 `axios`、绕过 `src/api/*` 调用 `apiRequest`、业务层直接使用 Radix 原语和散写 inline style；菜单/角色树缩进已抽到 `TreeIndent` 模板布局封装，避免业务页面为了层级样式继续扩散自定义写法。
 - 前端发货公司模块已在 `src/api/companies.ts` 和 `CompaniesList` 页面补齐列表 + CRUD 第一阶段：通过封装层请求 `/api/company/list`、`GET /api/company/:id`、`POST /api/company`、`PATCH /api/company/:id`、`DELETE /api/company/:id`，保留旧 `Countorder`、`totalCount`、详情数组、分页、查看只读、旧弹窗必填校验、编辑保存和删除确认；配套 API/页面测试覆盖旧 payload、请求路径、详情数组解包、字段渲染、分页、必填校验、toast、confirm、空态和刷新行为。
-- 前端回单管理模块已补齐旧 `page-content` 多选批量流转能力：`ReceiptsList` 通过模板 `Checkbox/Button` 实现当前页全选、单行选择和“批量回收/批量接收/批量寄出”，业务页只调用 `src/api/receipts.ts` 的 `updateReceiptStatuses` 封装，继续逐条走旧 `/api/receipt/:id` PATCH 语义并保留 `issuestate: "已接收"`；配套 API/组件/E2E 测试覆盖批量请求体、成功清空选择、失败保留选择和模板壳不回退。
+- 前端回单管理模块已补齐旧 `page-content` 多选批量流转能力：`ReceiptsList` 通过模板 `Checkbox/Button` 实现当前页全选、单行选择和“批量回收/批量接收/批量寄出”，业务页只调用 `src/api/receipts.ts` 的 `updateReceiptStatuses` 封装，并由封装层一次提交到 `/api/receipt/batch/status`，后端事务处理全部 ID，保留 `issuestate: "已接收"`；配套 API/组件/E2E 测试覆盖批量请求体、成功清空选择、失败保留选择和模板壳不回退。
 - 前端用户模块已在 `src/api/users.ts`、`src/api/roles.ts` 和 `UsersList` 页面补齐用户管理第一阶段：通过封装层请求 `/api/users/list`、`GET /api/users/:id`、`POST /api/users`、`PATCH /api/users/:id`、`PATCH /api/users/:id/password`、`DELETE /api/users/:id`，并以只读 `/api/role/list` 分页加载完整角色源作为角色下拉；保留旧 `avatarUrl`、`roleId`、`enable`、`totalCount`、新建密码必填、编辑隐藏密码、独立改密、用户 58 删除保护和启用状态只展示/筛选语义；配套 API/页面测试覆盖旧 payload、请求路径、自定义角色筛选/创建、字段渲染、筛选、分页、必填校验、toast、confirm、空态和刷新行为。
 - 前端账号设置模块已在 `AccountPreferences` 和 `Settings` 页面补齐当前用户改密 + 头像上传入口：通过封装层请求 `/api/users/:id/password` 和 multipart `/api/upload/avatar`，保留旧顶栏“修改密码/修改头像”能力、旧头像字段名 `avatar`、jpg/png 与 500kb 前端校验、头像 URL cache bust；配套 API/组件测试覆盖 FormData 请求头、上传字段、URL 解析、改密校验、非法头像拦截和上传成功刷新，`apps/desktop/web/e2e/account-settings.spec.ts` 进一步用真实浏览器覆盖系统设置入口、改密、头像上传和模板壳保持。
 - 前端系统偏好已在 `src/api/settings.ts` 和 `Settings` 页面落地封装，不再保留模板“假保存”：通用/外观偏好只保存站点展示、负责团队、能力开关和界面偏好等非敏感本地配置，存储键统一走 `nsKey('settings-preferences')`；配套 `settings.test.ts` 和 `Settings.test.tsx` 覆盖默认值、异常 payload 归一化、确认保存、取消不落盘、恢复默认和不写入 password 等敏感字段。

@@ -496,6 +496,7 @@ async fn mysql_api_compatibility_uses_real_database_services() {
     let receipt_id = receipt_json["data"]["list"][0]["id"]
         .as_i64()
         .expect("created receipt id should be numeric");
+    let initial_receipt_id = receipt_id;
 
     let (receipt_forbidden_status, receipt_forbidden_json) = json_request(
         app.clone(),
@@ -508,6 +509,21 @@ async fn mysql_api_compatibility_uses_real_database_services() {
     assert_eq!(receipt_forbidden_status, StatusCode::FORBIDDEN);
     assert_eq!(receipt_forbidden_json["code"], -403);
     assert_eq!(receipt_forbidden_json["message"], "没有权限执行该操作");
+
+    let (receipt_batch_forbidden_status, receipt_batch_forbidden_json) = json_request(
+        app.clone(),
+        "PATCH",
+        "/api/receipt/batch/status",
+        Some(&operator_token),
+        &format!(r#"{{"receiptIds":[{initial_receipt_id}],"issuestate":"已接收"}}"#),
+    )
+    .await;
+    assert_eq!(receipt_batch_forbidden_status, StatusCode::FORBIDDEN);
+    assert_eq!(receipt_batch_forbidden_json["code"], -403);
+    assert_eq!(
+        receipt_batch_forbidden_json["message"],
+        "没有权限执行该操作"
+    );
 
     let (memory_status, memory_json) = json_request(
         app.clone(),
@@ -921,6 +937,32 @@ async fn mysql_api_order_patch_delete_reconciles_legacy_side_effects_through_htt
         .expect("created receipt id should be numeric");
     assert_eq!(receipt_json["data"]["list"][0]["recoverynumber"], 2);
 
+    let (batch_order_status, batch_order_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/order",
+        Some(&admin_token),
+        &scope.order_payload("PATCH-BATCH"),
+    )
+    .await;
+    assert_eq!(batch_order_status, StatusCode::OK);
+    assert_eq!(batch_order_json["code"], 0);
+    let (_, batch_receipt_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/receipt/list",
+        Some(&admin_token),
+        &format!(
+            r#"{{"offset":0,"size":10,"oddnumber":"{}"}}"#,
+            scope.oddnumber("PATCH-BATCH")
+        ),
+    )
+    .await;
+    assert_eq!(batch_receipt_json["data"]["totalCount"], 1);
+    let batch_receipt_id = batch_receipt_json["data"]["list"][0]["id"]
+        .as_i64()
+        .expect("batch receipt id should be numeric");
+
     let (receipt_patch_status, receipt_patch_json) = json_request(
         app.clone(),
         "PATCH",
@@ -992,6 +1034,52 @@ async fn mysql_api_order_patch_delete_reconciles_legacy_side_effects_through_htt
         received_issue_filter_json["data"]["list"][0]["issuestate"],
         "已发放"
     );
+
+    let (receipt_batch_status, receipt_batch_json) = json_request(
+        app.clone(),
+        "PATCH",
+        "/api/receipt/batch/status",
+        Some(&admin_token),
+        &format!(r#"{{"receiptIds":[{batch_receipt_id},{receipt_id}],"poststate":"已寄出"}}"#),
+    )
+    .await;
+    assert_eq!(receipt_batch_status, StatusCode::OK);
+    assert_eq!(receipt_batch_json["code"], 0);
+    assert_eq!(receipt_batch_json["message"], "回单寄出成功！");
+
+    let (missing_batch_status, missing_batch_json) = json_request(
+        app.clone(),
+        "PATCH",
+        "/api/receipt/batch/status",
+        Some(&admin_token),
+        &format!(r#"{{"receiptIds":[{batch_receipt_id},999999999],"recoverystate":"已回收"}}"#),
+    )
+    .await;
+    assert_eq!(missing_batch_status, StatusCode::NOT_FOUND);
+    assert_eq!(missing_batch_json["code"], -404);
+    assert_eq!(
+        missing_batch_json["message"],
+        "资源不存在: receipt 999999999"
+    );
+
+    let (batch_receipt_status, batch_receipt_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/receipt/list",
+        Some(&admin_token),
+        &format!(
+            r#"{{"offset":0,"size":10,"oddnumber":"{}"}}"#,
+            scope.oddnumber("PATCH-BATCH")
+        ),
+    )
+    .await;
+    assert_eq!(batch_receipt_status, StatusCode::OK);
+    assert_eq!(batch_receipt_json["data"]["totalCount"], 1);
+    assert_eq!(
+        batch_receipt_json["data"]["list"][0]["recoverystate"],
+        "未回收"
+    );
+    assert_eq!(batch_receipt_json["data"]["list"][0]["poststate"], "已寄出");
 
     let updated_oddnumber = scope.oddnumber("PATCH-DELETE-UPDATED");
     let updated_company = format!("{}-发货公司-订单更新", scope.prefix);

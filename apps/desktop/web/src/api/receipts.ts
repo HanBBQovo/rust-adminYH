@@ -152,7 +152,15 @@ export async function updateReceiptStatus(receiptId: number, payload: ReceiptSta
 }
 
 export async function updateReceiptStatuses(receiptIds: number[], payload: ReceiptStatusPayload): Promise<void> {
-  await Promise.all(receiptIds.map((receiptId) => updateReceiptStatus(receiptId, payload)))
+  if (receiptIds.length === 0) return
+
+  await apiRequest<unknown>('/receipt/batch/status', {
+    method: 'PATCH',
+    body: JSON.stringify({
+      receiptIds,
+      ...payload,
+    }),
+  })
 }
 
 export function receiptStatusPatch(action: ReceiptStatusAction): ReceiptStatusPayload {

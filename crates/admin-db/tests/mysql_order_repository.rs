@@ -351,6 +351,79 @@ async fn mysql_order_repository_treats_received_and_legacy_issued_as_aliases() {
 
 #[tokio::test]
 #[ignore = "requires RUN_DB_TESTS=true and ADMIN_DB_TEST_DATABASE_URL"]
+async fn mysql_order_repository_batch_receipt_status_updates_transactionally() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let scope = TestScope::new(&pool).await;
+    let repository = MySqlOrderRepository::new(pool.clone());
+
+    let consignee_a = format!("{}-批量收货人A", scope.prefix);
+    let consignor_a = format!("{}-批量发货人A", scope.prefix);
+    let consignee_b = format!("{}-批量收货人B", scope.prefix);
+    let consignor_b = format!("{}-批量发货人B", scope.prefix);
+    repository
+        .create_order(scope.order_input("036", &consignee_a, &consignor_a, 1))
+        .await
+        .expect("first order should be created");
+    repository
+        .create_order(scope.order_input("037", &consignee_b, &consignor_b, 1))
+        .await
+        .expect("second order should be created");
+    let first = scope
+        .receipt("036")
+        .await
+        .expect("first receipt should exist");
+    let second = scope
+        .receipt("037")
+        .await
+        .expect("second receipt should exist");
+
+    repository
+        .update_receipt_statuses(
+            vec![first.id, second.id],
+            ReceiptStatusChange::Issue("已接收".to_owned()),
+        )
+        .await
+        .expect("batch issue status should update");
+    assert_eq!(
+        scope
+            .receipt("036")
+            .await
+            .expect("first receipt should still exist")
+            .issuestate,
+        "已接收"
+    );
+    assert_eq!(
+        scope
+            .receipt("037")
+            .await
+            .expect("second receipt should still exist")
+            .issuestate,
+        "已接收"
+    );
+
+    let failed = repository
+        .update_receipt_statuses(
+            vec![first.id, 999_999_999],
+            ReceiptStatusChange::Recovery("已回收".to_owned()),
+        )
+        .await;
+    assert!(matches!(failed, Err(admin_core::AppError::NotFound(_))));
+    assert_eq!(
+        scope
+            .receipt("036")
+            .await
+            .expect("failed batch should not remove receipt")
+            .recoverystate,
+        "未回收"
+    );
+
+    scope.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires RUN_DB_TESTS=true and ADMIN_DB_TEST_DATABASE_URL"]
 async fn mysql_order_repository_lists_orders_and_receipts_without_filters() {
     let Some(pool) = test_pool().await else {
         return;
@@ -557,6 +630,9 @@ impl<'a> TestScope<'a> {
             .into_iter()
             .next()
             .map(|receipt| TestReceipt {
+                id: receipt.id,
+                recoverystate: receipt.recoverystate,
+                issuestate: receipt.issuestate,
                 recoverynumber: receipt.recoverynumber,
                 consignee: receipt.consignee,
             })
@@ -629,10 +705,18 @@ impl<'a> TestScope<'a> {
             .execute(self.pool)
             .await
             .expect("empty filter memory cleanup should run");
+        sqlx::query("DELETE FROM `memory` WHERE `name` LIKE ?")
+            .bind(format!("{}-%", self.prefix))
+            .execute(self.pool)
+            .await
+            .expect("scoped memory cleanup should run");
     }
 }
 
 struct TestReceipt {
+    id: i64,
+    recoverystate: String,
+    issuestate: String,
     recoverynumber: i64,
     consignee: String,
 }

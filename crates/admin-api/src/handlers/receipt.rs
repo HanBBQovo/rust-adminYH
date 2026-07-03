@@ -1,4 +1,6 @@
-use admin_core::dto::{ReceiptListRequest, ReceiptListResponse, ReceiptStatusRequest};
+use admin_core::dto::{
+    ReceiptBatchStatusRequest, ReceiptListRequest, ReceiptListResponse, ReceiptStatusRequest,
+};
 use axum::{
     extract::{Path, State},
     http::HeaderMap,
@@ -63,6 +65,20 @@ pub async fn update_status(
     state
         .receipt_service
         .update_status(receipt_id, input)
+        .await
+        .map(|message| MessageResponse(message.to_owned()))
+        .map_err(ErrorResponse)
+}
+
+pub async fn update_statuses(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<ReceiptBatchStatusRequest>,
+) -> Result<MessageResponse, ErrorResponse> {
+    require_admin(&state, &headers).await?;
+    state
+        .receipt_service
+        .update_statuses(input)
         .await
         .map(|message| MessageResponse(message.to_owned()))
         .map_err(ErrorResponse)

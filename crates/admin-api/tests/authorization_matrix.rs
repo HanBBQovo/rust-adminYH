@@ -175,6 +175,11 @@ async fn admin_write_routes_reject_operator_with_legacy_forbidden_shape() {
             r#"{"name":"新菜单","type":1,"url":"/main/new","parentId":0}"#,
         ),
         ("PATCH", "/api/receipt/1", r#"{"issuestate":"已接收"}"#),
+        (
+            "PATCH",
+            "/api/receipt/batch/status",
+            r#"{"receiptIds":[1],"issuestate":"已接收"}"#,
+        ),
     ] {
         let (status, json) = json_request(app.clone(), method, uri, Some(&token), body).await;
         assert_eq!(status, StatusCode::FORBIDDEN, "{uri}");

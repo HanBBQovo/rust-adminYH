@@ -173,28 +173,24 @@ describe('receipts api', () => {
     ).toBe(true)
   })
 
-  it('batch patches selected receipt statuses through the same old receipt route wrapper', async () => {
-    fetchMock
-      .mockImplementationOnce(() => jsonResponse({}))
-      .mockImplementationOnce(() => jsonResponse({}))
+  it('batch patches selected receipt statuses through the transaction route wrapper', async () => {
+    fetchMock.mockImplementationOnce(() => jsonResponse({}))
 
     await expect(updateReceiptStatuses([7, 8], { issuestate: '已接收' })).resolves.toBeUndefined()
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
-      '/api/receipt/7',
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/receipt/batch/status',
       expect.objectContaining({
         method: 'PATCH',
-        body: JSON.stringify({ issuestate: '已接收' }),
+        body: JSON.stringify({ receiptIds: [7, 8], issuestate: '已接收' }),
       }),
     )
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      '/api/receipt/8',
-      expect.objectContaining({
-        method: 'PATCH',
-        body: JSON.stringify({ issuestate: '已接收' }),
-      }),
-    )
+  })
+
+  it('keeps empty batch status updates local without calling the backend', async () => {
+    await expect(updateReceiptStatuses([], { issuestate: '已接收' })).resolves.toBeUndefined()
+
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

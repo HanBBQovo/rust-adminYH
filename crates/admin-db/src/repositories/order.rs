@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use admin_core::{
     domain::{OrderRecord, ReceiptRecord},
     dto::{MemoryRecord, OrderListRequest, ReceiptListRequest},
@@ -187,11 +189,7 @@ impl OrderStore for MySqlOrderRepository {
         input: ReceiptStatusChange,
     ) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let (column, value) = match input {
-                ReceiptStatusChange::Recovery(value) => ("recoverystate", value),
-                ReceiptStatusChange::Issue(value) => ("issuestate", value),
-                ReceiptStatusChange::Post(value) => ("poststate", value),
-            };
+            let (column, value) = receipt_status_column_value(input);
             let sql = format!("UPDATE `receipt` SET `{column}` = ? WHERE `id` = ?");
             let result = sqlx::query(&sql)
                 .bind(value)
@@ -206,6 +204,26 @@ impl OrderStore for MySqlOrderRepository {
         })
     }
 
+    fn update_receipt_statuses<'a>(
+        &'a self,
+        receipt_ids: Vec<i64>,
+        input: ReceiptStatusChange,
+    ) -> ServiceFuture<'a, AppResult<()>> {
+        Box::pin(async move {
+            let (column, value) = receipt_status_column_value(input);
+            let mut tx = self.pool.begin().await.map_err(db_error)?;
+            let existing_ids = fetch_existing_receipt_ids(&mut tx, &receipt_ids).await?;
+            if let Some(missing_id) = receipt_ids
+                .iter()
+                .find(|receipt_id| !existing_ids.contains(receipt_id))
+            {
+                return Err(AppError::NotFound(format!("receipt {missing_id}")));
+            }
+            update_receipt_status_rows(&mut tx, &receipt_ids, column, value).await?;
+            tx.commit().await.map_err(db_error)
+        })
+    }
+
     fn list_memories<'a>(&'a self) -> ServiceFuture<'a, AppResult<Vec<MemoryRecord>>> {
         Box::pin(async move {
             sqlx::query("SELECT `name` AS value FROM `memory` ORDER BY `id` ASC")
@@ -217,6 +235,64 @@ impl OrderStore for MySqlOrderRepository {
                 .map_err(db_error)
         })
     }
+}
+
+fn receipt_status_column_value(input: ReceiptStatusChange) -> (&'static str, String) {
+    match input {
+        ReceiptStatusChange::Recovery(value) => ("recoverystate", value),
+        ReceiptStatusChange::Issue(value) => ("issuestate", value),
+        ReceiptStatusChange::Post(value) => ("poststate", value),
+    }
+}
+
+async fn fetch_existing_receipt_ids(
+    tx: &mut Transaction<'_, MySql>,
+    receipt_ids: &[i64],
+) -> AppResult<HashSet<i64>> {
+    if receipt_ids.is_empty() {
+        return Ok(HashSet::new());
+    }
+
+    let mut query = QueryBuilder::new("SELECT `id` FROM `receipt` WHERE `id` IN (");
+    let mut separated = query.separated(", ");
+    for receipt_id in receipt_ids {
+        separated.push_bind(*receipt_id);
+    }
+    separated.push_unseparated(") FOR UPDATE");
+
+    query
+        .build()
+        .fetch_all(tx.as_mut())
+        .await
+        .map_err(db_error)?
+        .into_iter()
+        .map(|row| row.try_get::<i64, _>("id").map_err(db_error))
+        .collect()
+}
+
+async fn update_receipt_status_rows(
+    tx: &mut Transaction<'_, MySql>,
+    receipt_ids: &[i64],
+    column: &str,
+    value: String,
+) -> AppResult<()> {
+    if receipt_ids.is_empty() {
+        return Ok(());
+    }
+
+    let mut query = QueryBuilder::new("UPDATE `receipt` SET `");
+    query.push(column);
+    query.push("` = ");
+    query.push_bind(value);
+    query.push(" WHERE `id` IN (");
+    let mut separated = query.separated(", ");
+    for receipt_id in receipt_ids {
+        separated.push_bind(*receipt_id);
+    }
+    separated.push_unseparated(")");
+
+    query.build().execute(tx.as_mut()).await.map_err(db_error)?;
+    Ok(())
 }
 
 fn order_select_builder(input: &OrderListRequest) -> QueryBuilder<'_, MySql> {

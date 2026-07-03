@@ -193,7 +193,7 @@ describe('ReceiptsList', () => {
     expect(screen.getByRole('button', { name: '寄出' })).toBeDisabled()
   })
 
-  it('batch updates selected receipt statuses through the old PATCH route wrapper', async () => {
+  it('batch updates selected receipt statuses through the transaction API wrapper', async () => {
     const user = userEvent.setup()
     const { showToast } = renderReceiptsList()
 
@@ -218,6 +218,7 @@ describe('ReceiptsList', () => {
     await waitFor(() => {
       expect(updateReceiptStatusesMock).toHaveBeenCalledWith([1, 2], { poststate: '已寄出' })
     })
+    expect(updateReceiptStatusesMock).toHaveBeenCalledTimes(2)
     expect(showToast).toHaveBeenCalledWith('success', '回单寄出成功！已批量更新 2 条回单。', { translate: false })
     expect(listReceiptsMock).toHaveBeenCalledTimes(3)
   })
@@ -234,6 +235,8 @@ describe('ReceiptsList', () => {
     await waitFor(() => {
       expect(showToast).toHaveBeenCalledWith('error', '批量更新失败', { translate: false })
     })
+    expect(updateReceiptStatusesMock).toHaveBeenCalledWith([1, 2], { recoverystate: '已回收' })
+    expect(updateReceiptStatusesMock).toHaveBeenCalledTimes(1)
     expect(screen.getByText('已选 2 条')).toBeInTheDocument()
     expect(listReceiptsMock).toHaveBeenCalledTimes(2)
   })
