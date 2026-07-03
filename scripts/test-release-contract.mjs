@@ -16,6 +16,11 @@ function assertIncludes(content, expected, message) {
   assert(content.includes(expected), message)
 }
 
+function assertOccurrences(content, expected, minCount, message) {
+  const count = content.split(expected).length - 1
+  assert(count >= minCount, `${message}; expected at least ${minCount}, found ${count}`)
+}
+
 const checkAll = read('scripts/check-all.sh')
 const backendGate = read('scripts/test-backend.sh')
 const backendMysqlContract = read('scripts/test-backend-mysql-contract.mjs')
@@ -127,6 +132,12 @@ assertIncludes(ciWorkflow, 'run_docker:', 'manual workflow must expose Docker re
 assertIncludes(ciWorkflow, 'run_tauri:', 'manual workflow must expose Tauri release input')
 assertIncludes(ciWorkflow, 'run_tauri_dmg:', 'manual workflow must expose Tauri DMG release input')
 assertIncludes(ciWorkflow, 'run_tauri_sidecar_smoke:', 'manual workflow must expose bundled Tauri sidecar smoke input')
+assertIncludes(ciWorkflow, 'NPM_REGISTRY: https://registry.npmjs.org', 'GitHub workflow must pin the npm registry used by release jobs')
+assertOccurrences(ciWorkflow, '--registry="${NPM_REGISTRY}"', 4, 'GitHub release workflow npm installs must use the pinned npm registry')
+assertOccurrences(ciWorkflow, '--replace-registry-host=always', 4, 'GitHub release workflow npm installs must normalize mixed package-lock registry hosts')
+assertOccurrences(ciWorkflow, '--fetch-retries=5', 4, 'GitHub release workflow npm installs must retry transient registry/network failures')
+assertOccurrences(ciWorkflow, '--fetch-retry-mintimeout=20000', 4, 'GitHub release workflow npm installs must use stable npm retry minimum timeout')
+assertOccurrences(ciWorkflow, '--fetch-retry-maxtimeout=120000', 4, 'GitHub release workflow npm installs must use stable npm retry maximum timeout')
 assertIncludes(ciWorkflow, 'release-candidate-preflight:', 'manual workflow must include a release candidate preflight job')
 assertIncludes(ciWorkflow, 'RELEASE_CANDIDATE: ${{ inputs.release_candidate }}', 'release candidate preflight must read the release_candidate input')
 assertIncludes(ciWorkflow, 'RUN_DOCKER: ${{ inputs.run_docker }}', 'release candidate preflight must verify the Docker toggle')

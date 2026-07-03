@@ -38,6 +38,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NPM_REGISTRY: https://registry.npmjs.org
+
 jobs:
   release-candidate-preflight:
     name: Release candidate preflight
@@ -157,7 +160,15 @@ jobs:
           cache: npm
           cache-dependency-path: apps/desktop/web/package-lock.json
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci \
+            --no-audit \
+            --no-fund \
+            --registry="${NPM_REGISTRY}" \
+            --replace-registry-host=always \
+            --fetch-retries=5 \
+            --fetch-retry-mintimeout=20000 \
+            --fetch-retry-maxtimeout=120000
       - name: Lint
         run: npm run lint
       - name: Typecheck
@@ -187,7 +198,15 @@ jobs:
           cache: npm
           cache-dependency-path: apps/desktop/web/package-lock.json
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci \
+            --no-audit \
+            --no-fund \
+            --registry="${NPM_REGISTRY}" \
+            --replace-registry-host=always \
+            --fetch-retries=5 \
+            --fetch-retry-mintimeout=20000 \
+            --fetch-retry-maxtimeout=120000
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: Run Playwright E2E
@@ -245,7 +264,15 @@ jobs:
           workspaces: |
             apps/desktop/src-tauri -> apps/desktop/src-tauri/target
       - name: Install frontend dependencies
-        run: npm ci --prefix apps/desktop/web
+        run: |
+          npm ci --prefix apps/desktop/web \
+            --no-audit \
+            --no-fund \
+            --registry="${NPM_REGISTRY}" \
+            --replace-registry-host=always \
+            --fetch-retries=5 \
+            --fetch-retry-mintimeout=20000 \
+            --fetch-retry-maxtimeout=120000
       - name: Check Tauri runtime contract
         run: scripts/test-tauri-contract.sh
       - name: Build Tauri app bundle
@@ -283,7 +310,15 @@ jobs:
           cache-dependency-path: apps/desktop/web/package-lock.json
       - name: Install frontend dependencies for Docker E2E
         if: ${{ inputs.run_docker_e2e }}
-        run: npm ci --prefix apps/desktop/web
+        run: |
+          npm ci --prefix apps/desktop/web \
+            --no-audit \
+            --no-fund \
+            --registry="${NPM_REGISTRY}" \
+            --replace-registry-host=always \
+            --fetch-retries=5 \
+            --fetch-retry-mintimeout=20000 \
+            --fetch-retry-maxtimeout=120000
       - name: Install Playwright browser for Docker E2E
         if: ${{ inputs.run_docker_e2e }}
         run: npx --prefix apps/desktop/web playwright install --with-deps chromium

@@ -16,6 +16,11 @@ function assertIncludes(content, expected, message) {
   assert(content.includes(expected), message)
 }
 
+function assertOccurrences(content, expected, minCount, message) {
+  const count = content.split(expected).length - 1
+  assert(count >= minCount, `${message}; expected at least ${minCount}, found ${count}`)
+}
+
 const apiDockerfile = read('Dockerfile.admin-api')
 const webDockerfile = read('Dockerfile.desktop-web')
 const compose = read('docker-compose.ci.yml')
@@ -42,7 +47,13 @@ assertIncludes(apiDockerfile, 'ENTRYPOINT ["/usr/local/bin/admin-api"]', 'admin-
 assertIncludes(webDockerfile, 'ARG NODE_IMAGE=node:22-slim', 'desktop-web Dockerfile must pin the default Node builder image to the same major version as CI')
 assertIncludes(webDockerfile, 'ARG NGINX_IMAGE=nginx:1.27-alpine', 'desktop-web Dockerfile must pin the default nginx runtime image')
 assertIncludes(webDockerfile, 'ARG NPM_REGISTRY=https://registry.npmjs.org', 'desktop-web Dockerfile must define a stable npm registry override')
+assertIncludes(webDockerfile, '--no-audit', 'desktop-web Dockerfile must skip npm audit during deterministic image installs')
+assertIncludes(webDockerfile, '--no-fund', 'desktop-web Dockerfile must skip npm fund output during deterministic image installs')
+assertIncludes(webDockerfile, '--registry=${NPM_REGISTRY}', 'desktop-web Dockerfile must install dependencies through the configured npm registry')
 assertIncludes(webDockerfile, '--replace-registry-host=always', 'desktop-web Dockerfile must avoid mixed lockfile registry hosts during npm ci')
+assertIncludes(webDockerfile, '--fetch-retries=5', 'desktop-web Dockerfile must retry transient npm registry/network failures')
+assertIncludes(webDockerfile, '--fetch-retry-mintimeout=20000', 'desktop-web Dockerfile must use a stable npm retry minimum timeout')
+assertIncludes(webDockerfile, '--fetch-retry-maxtimeout=120000', 'desktop-web Dockerfile must use a stable npm retry maximum timeout')
 assertIncludes(webDockerfile, 'test -x node_modules/.bin/tsc', 'desktop-web Dockerfile must hard-fail when TypeScript was not installed')
 assertIncludes(webDockerfile, 'test -x node_modules/.bin/vite', 'desktop-web Dockerfile must hard-fail when Vite was not installed')
 assertIncludes(webDockerfile, 'ARG VITE_API_BASE_URL=/api', 'desktop-web build must default to the nginx /api proxy')
@@ -129,6 +140,15 @@ assertIncludes(ciWorkflow, 'docker-release:', 'manual workflow must include a Do
 assertIncludes(ciWorkflow, 'if: ${{ inputs.run_docker }}', 'Docker release gate must only run when explicitly requested')
 assertIncludes(ciWorkflow, 'RUN_DOCKER_E2E=${{ inputs.run_docker_e2e }} scripts/test-docker.sh', 'Docker job must run the existing diagnostic Docker gate')
 assertIncludes(ciWorkflow, 'npx --prefix apps/desktop/web playwright install --with-deps chromium', 'Docker E2E job must install Chromium when real browser validation is requested')
+assertIncludes(ciWorkflow, 'NPM_REGISTRY: https://registry.npmjs.org', 'GitHub workflow must define a stable npm registry override')
+assertOccurrences(ciWorkflow, '--registry="${NPM_REGISTRY}"', 4, 'GitHub workflow npm installs must use the stable registry override')
+assertOccurrences(ciWorkflow, '--replace-registry-host=always', 4, 'GitHub workflow npm installs must rewrite mixed package-lock registry hosts')
+assertOccurrences(ciWorkflow, '--fetch-retries=5', 4, 'GitHub workflow npm installs must use retry settings for registry/network flake')
+assertOccurrences(ciWorkflow, '--fetch-retry-mintimeout=20000', 4, 'GitHub workflow npm installs must use a stable retry minimum timeout')
+assertOccurrences(ciWorkflow, '--fetch-retry-maxtimeout=120000', 4, 'GitHub workflow npm installs must use a stable retry maximum timeout')
+assertOccurrences(ciWorkflow, '--no-audit', 4, 'GitHub workflow npm installs must skip npm audit during deterministic CI install')
+assertOccurrences(ciWorkflow, '--no-fund', 4, 'GitHub workflow npm installs must skip npm fund output during deterministic CI install')
+assertOccurrences(ciWorkflow, 'npm ci --prefix apps/desktop/web', 2, 'GitHub root-level jobs must install frontend dependencies through --prefix')
 
 assertIncludes(dockerSeed, "INSERT INTO `user`", 'Docker E2E seed must create a login user')
 assertIncludes(dockerSeed, '0192023a7bbd73250516f069df18b500', 'Docker E2E seed must use the legacy admin123 MD5 hash')
