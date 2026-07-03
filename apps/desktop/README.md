@@ -67,13 +67,21 @@ npm run tauri:build:app -- --config '{"bundle":{"resources":{"../../../target/re
 
 ## CI
 
-GitHub Actions 位于 `.github/workflows/ci.yml`，push/PR 到 `main` 会执行：
+GitHub Actions 位于 `.github/workflows/ci.yml`，开发期不会因 push/PR 自动触发。每个功能切片仍需本地跑完对应门禁后用 `[skip ci]` 提交并推送，等整体开发完成或需要发布候选时，再从 Actions 页面手动运行 `CI` workflow。
+
+手动触发时默认执行：
 
 - 后端 Rust fmt/check/clippy/test。
 - 前端 lint/typecheck/Vitest/build。
 - Playwright E2E。
 - 迁移文档与迁移 crate 单测。
-- Tauri macOS `.app` 打包并上传 artifact。
+
+手动输入项控制重型发布门禁：
+
+- `run_docker=true`：构建 API/Web Docker 镜像并执行 compose 健康检查。
+- `run_docker_e2e=true`：在 Docker compose 后用 Playwright 连接 nginx Web + Rust API + MySQL 真实链路。
+- `run_tauri=true`：构建 Tauri macOS `.app` 并上传 artifact。
+- `run_tauri_dmg=true`：在 Tauri job 内额外生成 DMG。
 
 DMG 生成依赖 macOS Finder/hdiutil 图形环境，作为 release-only 门禁处理，不在普通 PR 阻塞链路中默认执行。
 

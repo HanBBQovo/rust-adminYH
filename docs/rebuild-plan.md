@@ -27,7 +27,7 @@
 
 - Git 远程固定为 `https://github.com/HanBBQovo/rust-adminYH.git`，本地仓库初始化后必须设置 `origin` 指向该地址。
 - 开发分支按功能拆分提交，不把文档、测试脚手架、后端业务实现、前端页面实现混在同一个 commit。
-- 每完成一个独立功能必须立即执行：格式/语法检查 → `git status` 复核 → commit → push。
+- 每完成一个独立功能必须立即执行：格式/语法检查 → `git status` 复核 → commit → push；开发期提交信息必须带 `[skip ci]`，避免每个切片都触发 GitHub Actions。等整体开发完成或进入发布候选时，再从 GitHub Actions 手动触发 `CI` workflow 并按需打开 Docker/Tauri 发布门禁。
 - 推荐提交粒度：
   - `docs: document git and rebuild workflow`
   - `test: add quality gate scripts`
@@ -973,6 +973,8 @@ scripts/test-e2e.sh
 
 Docker/容器门禁已作为发布级测试的一部分补齐：`Dockerfile.admin-api` 构建 Rust Axum API 镜像，`Dockerfile.desktop-web` 构建模板前端静态镜像，`docker-compose.ci.yml` 组合 MySQL、API 和 Web，并通过 `DATABASE_MIGRATE_ON_START=true` 在 CI 数据库启动时应用兼容 schema，用于验证镜像能启动并通过 `/api/health` 与首页检查。默认 `scripts/check-all.sh` 会先执行轻量 `scripts/test-docker-contract.mjs`，静态锁定 Dockerfile、compose、nginx `/api` 代理、非 root 运行、迁移开关、健康检查和失败诊断契约；重型镜像构建和 compose smoke 仍需显式设置 `RUN_DOCKER=true`。发布候选版本必须执行 `RUN_DOCKER=true RUN_DOCKER_E2E=true scripts/check-all.sh`。如果 Docker 构建或 compose 启动失败，`scripts/test-docker.sh` 必须输出 `docker version`、`docker compose version`、commit、镜像 tag、脱敏后的数据库连接、compose ps 和三类服务最近 200 行日志，不能只给出笼统的 “Docker build failed”。
 
+GitHub Actions 开发期不自动执行：`.github/workflows/ci.yml` 只保留 `workflow_dispatch`，push/PR 不会启动 runner。最终需要 GitHub Docker 打包时，从 Actions 页面手动运行 `CI` workflow，并勾选 `run_docker=true`；若要证明生产浏览器链路，同时勾选 `run_docker_e2e=true`。Docker job 复用 `scripts/test-docker.sh`，失败时仍输出 Docker 版本、commit、镜像 tag、脱敏数据库连接、compose 状态和服务日志，便于定位是镜像拉取、构建、启动、健康检查还是真实 E2E 失败。
+
 Docker 真实浏览器 E2E 必须验证完整生产链路，而不是只验证 mock 或静态页面：`RUN_DOCKER_E2E=true scripts/test-docker.sh` 会先用 `scripts/seed-docker-e2e.sql` 写入稳定的管理员、菜单、订单、回单、公司和头像测试数据，再让 Playwright 通过 nginx Web 地址登录真实 Rust API，断言工作台指标、订单列表、回单管理和页面注册表都来自 MySQL seed 数据。该用例使用 `PLAYWRIGHT_BASE_URL` 指向 compose 暴露的 Web 服务，`REAL_API_E2E=true` 才启用，避免本地普通 E2E 误连真实服务；发布级验收必须同时保存 Docker 健康检查、seed、Playwright 和 compose cleanup 的日志。
 
 订单表单的旧 `memory` 体验已迁入前端封装：`src/api/memory.ts` 统一读取 data-only `/api/memory/list` 响应并归一成选项，`AutocompleteInput` 作为模板 UI 控件支持自由输入和历史记忆值选择，`OrderFormDialog` 只把收货人/发货人字段接到封装后的 `searchMemoryOptions`。后续如果把记忆词条扩展到发货单位、货物名称或地址，必须复用这层 API/UI 封装，不允许在业务页面直接 `fetch` 或散写弹层样式。
@@ -1012,6 +1014,7 @@ Tauri 打包门禁已封装为 `scripts/test-tauri-build.sh`，并接入 `RUN_TA
 | DB 仓储变更 | `RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL=mysql://... scripts/check-all.sh` | SQLx repository 在真实 MySQL 测试库里验证分页、筛选、事务、弱关联和注入 payload | 只允许指向可重建测试库，不能指向旧生产库或新生产库 |
 | 迁移变更 | `OLD_DATABASE_URL=mysql://... NEW_DATABASE_URL=mysql://... NEW_AVATAR_DIR=/tmp/admin_yh_avatar_shadow scripts/test-migration.sh` | 迁移 dry-run、rollback-plan、头像文件 verify 和影子库对账可重复执行 | 未设置 `MIGRATION_APPLY=true` 时不执行真实 apply |
 | Docker 发布候选 | `RUN_DOCKER=true scripts/check-all.sh` | API/Web 镜像构建、compose MySQL/API/Web 健康检查通过 | 不代表桌面 `.app` 或 DMG 可安装 |
+| GitHub 手动 Docker 打包 | Actions 手动运行 `CI`，勾选 `run_docker=true`，需要真实浏览器链路时再勾选 `run_docker_e2e=true` | 证明 GitHub runner 上 Docker 镜像构建、compose 健康检查和可选真实 API E2E 可复现 | 开发期 push 不会自动触发，需手动启动；GitHub billing/spending limit 异常会导致 job 未启动 |
 | Tauri 发布候选 | `RUN_TAURI=true RUN_TAURI_SIDECAR_SMOKE=true TAURI_SIDECAR_DATABASE_URL=mysql://... scripts/check-all.sh` | sidecar 单测、release sidecar、macOS `.app` 打包、bundled binary 检查和打包后 `/api/health` 真实启动 smoke 通过 | 不代表 DMG 已通过 |
 | macOS DMG 发布 | `RUN_TAURI=true RUN_TAURI_DMG=true scripts/check-all.sh` | DMG 构建流程通过 | 如果 GUI/Finder/hdiutil 环境失败，必须记录原因并以 `.app` 通过作为替代验证，不能伪造 DMG 通过 |
 

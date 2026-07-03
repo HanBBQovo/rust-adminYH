@@ -1,10 +1,28 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_docker:
+        description: "Build Docker images and run compose health checks"
+        required: true
+        default: false
+        type: boolean
+      run_docker_e2e:
+        description: "After Docker compose starts, run Playwright against nginx + Rust API + MySQL"
+        required: true
+        default: false
+        type: boolean
+      run_tauri:
+        description: "Build the macOS Tauri .app bundle"
+        required: true
+        default: false
+        type: boolean
+      run_tauri_dmg:
+        description: "Build the macOS DMG bundle"
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -103,6 +121,7 @@ jobs:
   tauri-app:
     name: Tauri app bundle
     runs-on: macos-14
+    if: ${{ inputs.run_tauri }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -124,10 +143,33 @@ jobs:
       - name: Check Tauri runtime contract
         run: scripts/test-tauri-contract.sh
       - name: Build Tauri app bundle
-        run: CARGO_NET_OFFLINE=false RUN_TAURI=true scripts/test-tauri-build.sh
+        run: CARGO_NET_OFFLINE=false RUN_TAURI=true RUN_TAURI_DMG=${{ inputs.run_tauri_dmg }} scripts/test-tauri-build.sh
       - name: Upload macOS app bundle
         uses: actions/upload-artifact@v4
         with:
           name: tauri-macos-app
           path: apps/desktop/src-tauri/target/release/bundle/macos/*.app
           if-no-files-found: error
+
+  docker-release:
+    name: Docker release gate
+    runs-on: ubuntu-latest
+    if: ${{ inputs.run_docker }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node for Docker E2E
+        if: ${{ inputs.run_docker_e2e }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/web/package-lock.json
+      - name: Install frontend dependencies for Docker E2E
+        if: ${{ inputs.run_docker_e2e }}
+        run: npm ci --prefix apps/desktop/web
+      - name: Install Playwright browser for Docker E2E
+        if: ${{ inputs.run_docker_e2e }}
+        run: npx --prefix apps/desktop/web playwright install --with-deps chromium
+      - name: Build Docker images and run compose gate
+        run: RUN_DOCKER_E2E=${{ inputs.run_docker_e2e }} scripts/test-docker.sh
