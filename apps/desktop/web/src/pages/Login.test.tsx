@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ThemeProvider } from '@/components/theme'
+import { nsKey } from '@/config'
 import Login from '@/pages/Login'
 import type { AdminSession } from '@/session/types'
 
@@ -30,6 +31,7 @@ function renderLogin(onAuthenticated = vi.fn<(session: AdminSession) => void>())
 
 describe('Login', () => {
   beforeEach(() => {
+    window.localStorage.clear()
     loginMock.mockReset()
     fetchCaptchaCodeMock.mockReset()
     fetchCaptchaCodeMock.mockResolvedValue('<svg>ABCD</svg>')
@@ -78,6 +80,47 @@ describe('Login', () => {
     await user.click(screen.getByRole('button', { name: /登录/ }))
 
     expect(loginMock).toHaveBeenCalledWith({ name: 'admin', password: 'secret' })
+  })
+
+  it('prefills the remembered account name without restoring any password', async () => {
+    window.localStorage.setItem(nsKey('remembered-login-name'), 'admin')
+
+    renderLogin()
+
+    expect(await screen.findByAltText('验证码')).toBeInTheDocument()
+    expect(screen.getByLabelText('账号')).toHaveValue('admin')
+    expect(screen.getByLabelText('密码')).toHaveValue('')
+    expect(screen.getByLabelText('记住账号')).toBeChecked()
+  })
+
+  it('remembers only the account name after a successful login', async () => {
+    const user = userEvent.setup()
+    loginMock.mockResolvedValueOnce(TEST_SESSION)
+
+    renderLogin()
+
+    await user.type(screen.getByLabelText('账号'), 'admin')
+    await user.type(screen.getByLabelText('密码'), 'secret')
+    await user.click(screen.getByLabelText('记住账号'))
+    await user.click(screen.getByRole('button', { name: /登录/ }))
+
+    expect(window.localStorage.getItem(nsKey('remembered-login-name'))).toBe('admin')
+    expect(window.localStorage.getItem('password')).toBeNull()
+    expect(window.localStorage.getItem(nsKey('password'))).toBeNull()
+  })
+
+  it('clears the remembered account when the user opts out', async () => {
+    const user = userEvent.setup()
+    loginMock.mockResolvedValueOnce(TEST_SESSION)
+    window.localStorage.setItem(nsKey('remembered-login-name'), 'admin')
+
+    renderLogin()
+
+    await user.type(screen.getByLabelText('密码'), 'secret')
+    await user.click(screen.getByLabelText('记住账号'))
+    await user.click(screen.getByRole('button', { name: /登录/ }))
+
+    expect(window.localStorage.getItem(nsKey('remembered-login-name'))).toBeNull()
   })
 
   it('keeps submit disabled until account and password are filled', async () => {

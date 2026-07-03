@@ -4,10 +4,12 @@ import { Boxes, Loader2, LogIn, RefreshCw } from 'lucide-react'
 import { fetchCaptchaCode, loginSession } from '@/api/auth'
 import { ThemeToggleButton } from '@/components/theme'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BRAND_NAME, PRODUCT_SUBTITLE } from '@/config'
 import { motion } from '@/lib/motion'
+import { clearRememberedLoginName, readRememberedLoginName, saveRememberedLoginName } from '@/session/session-store'
 import type { AdminSession } from '@/session/types'
 
 interface LoginProps {
@@ -16,7 +18,8 @@ interface LoginProps {
 
 export default function Login({ onAuthenticated }: LoginProps) {
   const [password, setPassword] = useState('')
-  const [name, setName] = useState('')
+  const [name, setName] = useState(() => readRememberedLoginName())
+  const [rememberName, setRememberName] = useState(() => Boolean(readRememberedLoginName()))
   const [code, setCode] = useState('')
   const [captchaSvg, setCaptchaSvg] = useState('')
   const [captchaError, setCaptchaError] = useState('')
@@ -49,6 +52,11 @@ export default function Login({ onAuthenticated }: LoginProps) {
     try {
       const trimmedCode = code.trim()
       const session = await loginSession({ name, password, ...(trimmedCode ? { code: trimmedCode } : {}) })
+      if (rememberName) {
+        saveRememberedLoginName(name)
+      } else {
+        clearRememberedLoginName()
+      }
       onAuthenticated(session)
     } catch (err) {
       setError(err instanceof Error ? err.message : '登录失败')
@@ -136,6 +144,18 @@ export default function Login({ onAuthenticated }: LoginProps) {
             )}
           </div>
           {captchaError ? <div className="text-xs text-muted-foreground">{captchaError}</div> : null}
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-3 text-sm">
+          <label className="flex items-center gap-2 text-muted-foreground" htmlFor="remember-name">
+            <Checkbox
+              id="remember-name"
+              checked={rememberName}
+              onCheckedChange={(checked) => setRememberName(checked === true)}
+            />
+            记住账号
+          </label>
+          <span className="text-xs text-muted-foreground">不会保存密码</span>
         </div>
 
         {error ? <div className="mt-3 text-sm text-destructive">{error}</div> : null}

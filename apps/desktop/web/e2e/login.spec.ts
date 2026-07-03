@@ -192,7 +192,7 @@ async function login(page: Page) {
 
   await expect(page.getByRole('heading', { name: '宇涵物流订单系统' })).toBeVisible()
 
-  await page.getByLabel('账号').fill('admin')
+  await page.getByRole('textbox', { name: '账号', exact: true }).fill('admin')
   await page.getByLabel('密码').fill('admin123')
   await page.getByRole('button', { name: /登录/ }).click()
 
@@ -205,8 +205,9 @@ test('renders the login shell from the frontend template', async ({ page }) => {
   await page.goto('/')
 
   await expect(page.getByRole('heading', { name: '宇涵物流订单系统' })).toBeVisible()
-  await expect(page.getByLabel('账号')).toBeVisible()
+  await expect(page.getByRole('textbox', { name: '账号', exact: true })).toBeVisible()
   await expect(page.getByLabel('密码')).toBeVisible()
+  await expect(page.getByRole('checkbox', { name: '记住账号' })).toBeVisible()
   await expect(page.getByRole('button', { name: /登录/ })).toBeDisabled()
 })
 
@@ -226,7 +227,7 @@ test('logs in, renders dashboard data, and logs out', async ({ page }) => {
   await page.getByRole('button', { name: /退出登录/ }).click()
 
   await expect(page.getByRole('heading', { name: '宇涵物流订单系统' })).toBeVisible()
-  await expect(page.getByLabel('账号')).toBeVisible()
+  await expect(page.getByRole('textbox', { name: '账号', exact: true })).toBeVisible()
 })
 
 test('navigates core business pages with compatible API contracts', async ({ page }) => {

@@ -3,6 +3,7 @@ import { nsKey } from '@/config'
 import type { AdminSession } from '@/session/types'
 
 const SESSION_STORAGE_KEY = nsKey('session')
+const REMEMBERED_LOGIN_NAME_KEY = nsKey('remembered-login-name')
 
 function isSession(value: unknown): value is AdminSession {
   if (!value || typeof value !== 'object') return false
@@ -45,4 +46,17 @@ export function clearSession(): void {
 
 export function readStoredToken(): string {
   return getAuthToken() || readStoredSession()?.token || ''
+}
+
+export function readRememberedLoginName(): string {
+  if (typeof window === 'undefined') return ''
+  return window.localStorage.getItem(REMEMBERED_LOGIN_NAME_KEY) || ''
+}
+
+export function saveRememberedLoginName(name: string): void {
+  window.localStorage.setItem(REMEMBERED_LOGIN_NAME_KEY, name)
+}
+
+export function clearRememberedLoginName(): void {
+  window.localStorage.removeItem(REMEMBERED_LOGIN_NAME_KEY)
 }
