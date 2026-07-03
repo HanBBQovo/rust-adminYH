@@ -768,6 +768,293 @@ async fn mysql_api_compatibility_uses_real_database_services() {
     let _ = tokio::fs::remove_dir_all(avatar_root).await;
 }
 
+#[tokio::test]
+#[ignore = "requires RUN_DB_TESTS=true and ADMIN_DB_TEST_DATABASE_URL"]
+async fn mysql_api_order_patch_delete_reconciles_legacy_side_effects_through_http() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let scope = TestScope::new(&pool).await;
+    scope.seed_roles_and_users().await;
+
+    let app = build_router(test_state(pool.clone(), None));
+    let (login_status, login_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/login",
+        None,
+        &format!(
+            r#"{{"name":"{}","password":"secret","code":"ignored"}}"#,
+            scope.admin_name
+        ),
+    )
+    .await;
+    assert_eq!(login_status, StatusCode::OK);
+    let admin_token = login_json["data"]["token"]
+        .as_str()
+        .expect("login should return a token")
+        .to_owned();
+
+    let (create_status, create_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/order",
+        Some(&admin_token),
+        &scope.order_payload("PATCH-DELETE"),
+    )
+    .await;
+    assert_eq!(create_status, StatusCode::OK);
+    assert_eq!(create_json["code"], 0);
+    assert_eq!(create_json["message"], "创建订单成功！");
+
+    let (order_status, order_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/order/list",
+        Some(&admin_token),
+        &format!(
+            r#"{{"offset":0,"size":10,"oddnumber":"{}"}}"#,
+            scope.oddnumber("PATCH-DELETE")
+        ),
+    )
+    .await;
+    assert_eq!(order_status, StatusCode::OK);
+    assert_eq!(order_json["data"]["totalCount"], 1);
+    let order_id = order_json["data"]["list"][0]["id"]
+        .as_i64()
+        .expect("created order id should be numeric");
+    assert_eq!(order_json["data"]["list"][0]["receiptnum"], 2);
+    assert_eq!(scope.count_company_order(order_id).await, 1);
+
+    let (receipt_status, receipt_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/receipt/list",
+        Some(&admin_token),
+        &format!(
+            r#"{{"offset":0,"size":10,"oddnumber":"{}"}}"#,
+            scope.oddnumber("PATCH-DELETE")
+        ),
+    )
+    .await;
+    assert_eq!(receipt_status, StatusCode::OK);
+    assert_eq!(receipt_json["data"]["totalCount"], 1);
+    let receipt_id = receipt_json["data"]["list"][0]["id"]
+        .as_i64()
+        .expect("created receipt id should be numeric");
+    assert_eq!(receipt_json["data"]["list"][0]["recoverynumber"], 2);
+
+    let (receipt_patch_status, receipt_patch_json) = json_request(
+        app.clone(),
+        "PATCH",
+        &format!("/api/receipt/{receipt_id}"),
+        Some(&admin_token),
+        r#"{"recoverystate":"已回收"}"#,
+    )
+    .await;
+    assert_eq!(receipt_patch_status, StatusCode::OK);
+    assert_eq!(receipt_patch_json["code"], 0);
+    assert_eq!(receipt_patch_json["message"], "回单回收成功！");
+
+    let updated_oddnumber = scope.oddnumber("PATCH-DELETE-UPDATED");
+    let updated_company = format!("{}-发货公司-订单更新", scope.prefix);
+    let updated_consignee = format!("{}-更新收货人", scope.prefix);
+    let updated_consignor = format!("{}-更新发货人", scope.prefix);
+    let (order_update_status, order_update_json) = json_request(
+        app.clone(),
+        "PATCH",
+        &format!("/api/order/{order_id}"),
+        Some(&admin_token),
+        &format!(
+            r#"{{
+                "oddnumber":"{updated_oddnumber}",
+                "billingAt":1767312000000,
+                "consignee":"{updated_consignee}",
+                "consigneephone":"13811112222",
+                "address":"更新测试地址",
+                "method":"自提",
+                "goodsname":"更新测试货物",
+                "number":"3",
+                "pack":"木箱",
+                "weight":"30",
+                "measurement":"2",
+                "cainsurance":"是",
+                "value":"300",
+                "insurance":"5",
+                "consignor":"{updated_consignor}",
+                "consignorphone":"13911112222",
+                "freight":"150",
+                "delivery":"30",
+                "sumfreight":"180",
+                "freightstate":"月结",
+                "paynow":"",
+                "paygo":"180",
+                "payback":"",
+                "paymonth":"180",
+                "receiptnum":3,
+                "company":"{updated_company}",
+                "remarks":"真实 MySQL API 更新订单"
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(order_update_status, StatusCode::OK);
+    assert_eq!(order_update_json["code"], 0);
+    assert_eq!(order_update_json["message"], "修改订单信息成功！");
+
+    let (old_order_list_status, old_order_list_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/order/list",
+        Some(&admin_token),
+        &format!(
+            r#"{{"offset":0,"size":10,"oddnumber":"{}"}}"#,
+            scope.oddnumber("PATCH-DELETE")
+        ),
+    )
+    .await;
+    assert_eq!(old_order_list_status, StatusCode::OK);
+    assert_eq!(old_order_list_json["data"]["totalCount"], 0);
+
+    let (updated_order_detail_status, updated_order_detail_json) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/order/{order_id}"),
+        Some(&admin_token),
+        "",
+    )
+    .await;
+    assert_eq!(updated_order_detail_status, StatusCode::OK);
+    assert_eq!(
+        updated_order_detail_json["data"]["oddnumber"],
+        updated_oddnumber
+    );
+    assert_eq!(updated_order_detail_json["data"]["billingAt"], "2026-01-02");
+    assert_eq!(
+        updated_order_detail_json["data"]["consignee"],
+        updated_consignee
+    );
+    assert_eq!(
+        updated_order_detail_json["data"]["consignor"],
+        updated_consignor
+    );
+    assert_eq!(updated_order_detail_json["data"]["receiptnum"], 3);
+    assert_eq!(
+        updated_order_detail_json["data"]["company"],
+        updated_company
+    );
+    assert_eq!(scope.count_company_order(order_id).await, 1);
+    assert_eq!(
+        scope
+            .count_company_order_by_name(&scope.company_order_name())
+            .await,
+        0,
+        "order update must move the weak company_order.com_name link"
+    );
+    assert_eq!(scope.count_company_order_by_name(&updated_company).await, 1);
+
+    let (old_receipt_status, old_receipt_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/receipt/list",
+        Some(&admin_token),
+        &format!(
+            r#"{{"offset":0,"size":10,"oddnumber":"{}"}}"#,
+            scope.oddnumber("PATCH-DELETE")
+        ),
+    )
+    .await;
+    assert_eq!(old_receipt_status, StatusCode::OK);
+    assert_eq!(old_receipt_json["data"]["totalCount"], 0);
+
+    let (updated_receipt_status, updated_receipt_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/receipt/list",
+        Some(&admin_token),
+        &format!(r#"{{"offset":0,"size":10,"oddnumber":"{updated_oddnumber}"}}"#),
+    )
+    .await;
+    assert_eq!(updated_receipt_status, StatusCode::OK);
+    assert_eq!(updated_receipt_json["data"]["totalCount"], 1);
+    assert_eq!(
+        updated_receipt_json["data"]["list"][0]["oddnumber"],
+        updated_oddnumber
+    );
+    assert_eq!(
+        updated_receipt_json["data"]["list"][0]["billingAt"],
+        "2026-01-02"
+    );
+    assert_eq!(
+        updated_receipt_json["data"]["list"][0]["recoverystate"],
+        "已回收"
+    );
+    assert_eq!(updated_receipt_json["data"]["list"][0]["recoverynumber"], 3);
+    assert_eq!(
+        updated_receipt_json["data"]["list"][0]["consignee"],
+        updated_consignee
+    );
+    assert_eq!(
+        updated_receipt_json["data"]["list"][0]["consignor"],
+        updated_consignor
+    );
+    assert_eq!(updated_receipt_json["data"]["list"][0]["goodsnumber"], "3");
+
+    assert_eq!(scope.count_memory(&updated_consignee).await, 1);
+    assert_eq!(scope.count_memory(&updated_consignor).await, 1);
+
+    let (memory_status, memory_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/memory/list",
+        Some(&admin_token),
+        "{}",
+    )
+    .await;
+    assert_eq!(memory_status, StatusCode::OK);
+    assert!(memory_json["code"].is_null());
+    assert!(memory_json["message"].is_null());
+    let memory_values = memory_json["data"]
+        .as_array()
+        .expect("memory response should keep old data-only array")
+        .iter()
+        .filter_map(|item| item["value"].as_str())
+        .collect::<Vec<_>>();
+    assert!(memory_values.contains(&updated_consignee.as_str()));
+    assert!(memory_values.contains(&updated_consignor.as_str()));
+
+    let (order_delete_status, order_delete_json) = json_request(
+        app.clone(),
+        "DELETE",
+        &format!("/api/order/{order_id}"),
+        Some(&admin_token),
+        "",
+    )
+    .await;
+    assert_eq!(order_delete_status, StatusCode::OK);
+    assert_eq!(order_delete_json["code"], 0);
+    assert_eq!(order_delete_json["message"], "删除订单成功！");
+
+    let (deleted_order_detail_status, deleted_order_detail_json) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/order/{order_id}"),
+        Some(&admin_token),
+        "",
+    )
+    .await;
+    assert_eq!(deleted_order_detail_status, StatusCode::OK);
+    assert!(deleted_order_detail_json["data"].is_null());
+    assert_eq!(scope.count_company_order(order_id).await, 0);
+    assert_eq!(scope.count_company_order_by_name(&updated_company).await, 0);
+    assert_eq!(
+        scope.count_receipts_by_oddnumber(&updated_oddnumber).await,
+        0
+    );
+
+    scope.cleanup().await;
+}
+
 fn test_state(pool: MySqlPool, avatar_dir: Option<PathBuf>) -> AppState {
     let mut config = AppConfig::from_env().expect("config should load");
     config.database.url = env::var("ADMIN_DB_TEST_DATABASE_URL")
@@ -1082,6 +1369,26 @@ impl<'a> TestScope<'a> {
             .expect("total should exist")
     }
 
+    async fn count_receipts_by_oddnumber(&self, oddnumber: &str) -> i64 {
+        sqlx::query("SELECT COUNT(*) AS total FROM `receipt` WHERE `oddnumber` = ?")
+            .bind(oddnumber)
+            .fetch_one(self.pool)
+            .await
+            .expect("receipt count should load")
+            .try_get("total")
+            .expect("total should exist")
+    }
+
+    async fn count_memory(&self, name: &str) -> i64 {
+        sqlx::query("SELECT COUNT(*) AS total FROM `memory` WHERE `name` = ?")
+            .bind(name)
+            .fetch_one(self.pool)
+            .await
+            .expect("memory count should load")
+            .try_get("total")
+            .expect("total should exist")
+    }
+
     async fn company_id_by_name(&self, name: &str) -> i64 {
         sqlx::query("SELECT `id` FROM `company` WHERE `name` = ?")
             .bind(name)
@@ -1173,9 +1480,10 @@ impl<'a> TestScope<'a> {
             .execute(self.pool)
             .await
             .expect("order cleanup should run");
-        sqlx::query("DELETE FROM `memory` WHERE `name` IN (?, ?)")
+        sqlx::query("DELETE FROM `memory` WHERE `name` IN (?, ?) OR `name` LIKE ?")
             .bind(&self.consignee)
             .bind(&self.consignor)
+            .bind(format!("{}-%", self.prefix))
             .execute(self.pool)
             .await
             .expect("memory cleanup should run");
