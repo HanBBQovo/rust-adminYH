@@ -2036,6 +2036,46 @@ mod tests {
     }
 
     #[test]
+    fn migration_specs_cover_every_compat_schema_table_and_column() {
+        let schema =
+            include_str!("../../admin-db/src/migrations/202607010001_init_compat_schema.sql");
+        let schema_tables = parse_schema_tables(schema);
+        let expected_tables = EXPECTED_TABLES.iter().copied().collect::<BTreeSet<_>>();
+        let spec_tables = TABLE_SPECS
+            .iter()
+            .map(|spec| spec.table)
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(
+            schema_tables.keys().copied().collect::<BTreeSet<_>>(),
+            expected_tables,
+            "baseline schema tables must stay aligned with migration EXPECTED_TABLES"
+        );
+        assert_eq!(
+            spec_tables, expected_tables,
+            "migration TABLE_SPECS must cover every expected legacy table"
+        );
+
+        for spec in TABLE_SPECS {
+            let schema_columns = schema_tables
+                .get(spec.table)
+                .unwrap_or_else(|| panic!("schema should declare `{}`", spec.table));
+            let spec_columns = spec.columns.iter().copied().collect::<BTreeSet<_>>();
+
+            assert_eq!(
+                schema_columns, &spec_columns,
+                "migration columns for `{}` must match compat schema columns exactly",
+                spec.table
+            );
+            assert!(
+                spec.columns.contains(&"id"),
+                "migration table `{}` must copy legacy ids so auto-increment can be restored",
+                spec.table
+            );
+        }
+    }
+
+    #[test]
     fn row_fingerprint_distinguishes_values_nulls_and_order() {
         let baseline = fingerprint_serialized_rows(&[
             vec![Some("1".to_owned()), Some("A".to_owned()), None],
@@ -2185,5 +2225,41 @@ mod tests {
             "admin-migration-test-{}-{suffix}-{counter}",
             std::process::id()
         ))
+    }
+
+    fn parse_schema_tables(schema: &str) -> BTreeMap<&str, BTreeSet<&str>> {
+        let mut tables = BTreeMap::new();
+        let lines = schema.lines().collect::<Vec<_>>();
+        let mut index = 0;
+
+        while index < lines.len() {
+            let line = lines[index].trim();
+            let Some(table) = line
+                .strip_prefix("CREATE TABLE IF NOT EXISTS `")
+                .and_then(|value| value.split_once('`').map(|(table, _)| table))
+            else {
+                index += 1;
+                continue;
+            };
+
+            index += 1;
+            let mut columns = BTreeSet::new();
+            while index < lines.len() {
+                let column_line = lines[index].trim();
+                if column_line.starts_with(")") {
+                    break;
+                }
+                if let Some(column) = column_line
+                    .strip_prefix('`')
+                    .and_then(|value| value.split_once('`').map(|(column, _)| column))
+                {
+                    columns.insert(column);
+                }
+                index += 1;
+            }
+            tables.insert(table, columns);
+        }
+
+        tables
     }
 }
