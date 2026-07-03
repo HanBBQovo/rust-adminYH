@@ -7,10 +7,7 @@ use admin_core::{
 };
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row};
 
-use crate::transaction::{
-    begin_mysql_transaction, commit_mysql_transaction, transaction_sql_error,
-    with_mysql_transaction, MySqlTransaction,
-};
+use crate::transaction::{transaction_sql_error, with_mysql_transaction, MySqlTransaction};
 
 #[derive(Debug, Clone)]
 pub struct MySqlRoleRepository {
@@ -97,22 +94,29 @@ impl RoleStore for MySqlRoleRepository {
 
     fn remove<'a>(&'a self, role_id: i64) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let mut tx = begin_mysql_transaction(&self.pool, "role.remove").await?;
-            ensure_role_not_assigned_to_users(&mut tx, role_id).await?;
-            let result = sqlx::query("DELETE FROM `role` WHERE `id` = ?")
-                .bind(role_id)
-                .execute(tx.as_mut())
-                .await
-                .map_err(db_error)?;
-            if result.rows_affected() == 0 {
-                return Err(AppError::NotFound(format!("role {role_id}")));
-            }
-            sqlx::query("DELETE FROM `role_permission` WHERE `role_id` = ?")
-                .bind(role_id)
-                .execute(tx.as_mut())
-                .await
-                .map_err(db_error)?;
-            commit_mysql_transaction(tx).await
+            with_mysql_transaction(&self.pool, "role.remove", |tx| {
+                Box::pin(async move {
+                    ensure_role_not_assigned_to_users(tx, role_id).await?;
+                    let scope = tx.scope();
+                    let result = sqlx::query("DELETE FROM `role` WHERE `id` = ?")
+                        .bind(role_id)
+                        .execute(tx.as_mut())
+                        .await
+                        .map_err(|error| transaction_sql_error(scope, "delete_role", error))?;
+                    if result.rows_affected() == 0 {
+                        return Err(AppError::NotFound(format!("role {role_id}")));
+                    }
+                    sqlx::query("DELETE FROM `role_permission` WHERE `role_id` = ?")
+                        .bind(role_id)
+                        .execute(tx.as_mut())
+                        .await
+                        .map_err(|error| {
+                            transaction_sql_error(scope, "delete_role_permissions", error)
+                        })?;
+                    Ok(())
+                })
+            })
+            .await
         })
     }
 
@@ -272,13 +276,16 @@ async fn ensure_role_not_assigned_to_users(
     tx: &mut MySqlTransaction<'_>,
     role_id: i64,
 ) -> AppResult<()> {
+    let scope = tx.scope();
     let user_count = sqlx::query("SELECT COUNT(*) AS total FROM `user_role` WHERE `role_id` = ?")
         .bind(role_id)
         .fetch_one(tx.as_mut())
         .await
-        .map_err(db_error)?
+        .map_err(|error| transaction_sql_error(scope, "ensure_role_not_assigned_to_users", error))?
         .try_get::<i64, _>("total")
-        .map_err(db_error)?;
+        .map_err(|error| {
+            transaction_sql_error(scope, "ensure_role_not_assigned_to_users", error)
+        })?;
     if user_count > 0 {
         return Err(AppError::Validation("角色已分配用户，不能删除".to_owned()));
     }

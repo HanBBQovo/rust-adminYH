@@ -180,6 +180,30 @@ assertIncludes(
   'role.replace_menu_ids must include scoped SQL error context for insert',
 )
 assertIncludes(
+  roleRepository,
+  'with_mysql_transaction(&self.pool, "role.remove"',
+  'role.remove must use the shared transaction runner',
+)
+assert(
+  !roleRepository.includes('begin_mysql_transaction(&self.pool, "role.remove"'),
+  'role.remove must not hand-roll begin/commit after runner migration',
+)
+assertIncludes(
+  roleRepository,
+  'transaction_sql_error(scope, "ensure_role_not_assigned_to_users"',
+  'role.remove must include scoped SQL error context for assigned-user guard',
+)
+assertIncludes(
+  roleRepository,
+  'transaction_sql_error(scope, "delete_role"',
+  'role.remove must include scoped SQL error context for role delete',
+)
+assertIncludes(
+  roleRepository,
+  'transaction_sql_error(scope, "delete_role_permissions"',
+  'role.remove must include scoped SQL error context for permission cleanup',
+)
+assertIncludes(
   orderRepository,
   'with_mysql_transaction(&self.pool, "receipt.batch_status"',
   'receipt.batch_status must use the shared transaction runner',
