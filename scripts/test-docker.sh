@@ -70,6 +70,46 @@ require_docker_daemon() {
   exit 125
 }
 
+prepull_base_images() {
+  local image
+  for image in "$RUST_IMAGE" "$RUNTIME_IMAGE" "$NODE_IMAGE" "$NGINX_IMAGE" "$MYSQL_IMAGE"; do
+    if docker image inspect "$image" >/dev/null 2>&1; then
+      echo "cached ${image}"
+      continue
+    fi
+
+    echo "pulling ${image}"
+    if docker pull "$image"; then
+      continue
+    fi
+
+    echo
+    echo "ERROR: 无法拉取 Docker 基础镜像：${image}"
+    echo "这通常是 Docker Hub registry/auth 网络或账号访问问题，不是项目 Dockerfile 编译失败。"
+    echo "如本机无法直连 Docker Hub，可临时指定镜像前缀后重跑："
+    echo "  DOCKER_REGISTRY_PREFIX=docker.1ms.run/library scripts/test-docker.sh"
+    echo "GitHub runner 上如果 job 没有任何 step 日志，需要先检查 Actions billing/spending limit。"
+    exit 126
+  done
+}
+
+port_is_listening() {
+  local port="$1"
+  (echo >"/dev/tcp/127.0.0.1/${port}") >/dev/null 2>&1
+}
+
+require_host_ports_available() {
+  local port
+  for port in "$API_PORT" "$WEB_PORT" "$MYSQL_PORT"; do
+    if port_is_listening "$port"; then
+      echo "ERROR: Docker gate 需要的本机端口 ${port} 已被占用。"
+      echo "请停止占用该端口的服务，或使用 API_PORT / WEB_PORT / MYSQL_PORT 指定备用端口后重跑。"
+      echo "例如：API_PORT=16825 WEB_PORT=18081 MYSQL_PORT=33307 scripts/test-docker.sh"
+      exit 124
+    fi
+  done
+}
+
 docker_compose() {
   RUST_IMAGE="$RUST_IMAGE" \
   RUNTIME_IMAGE="$RUNTIME_IMAGE" \
@@ -157,6 +197,12 @@ fi
 
 section "Docker cleanup before run"
 docker_compose down --volumes --remove-orphans || true
+
+section "Docker host port preflight"
+require_host_ports_available
+
+section "Docker base image preflight"
+prepull_base_images
 
 section "Docker build admin-api"
 docker build \
