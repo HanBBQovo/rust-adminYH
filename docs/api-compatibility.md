@@ -80,10 +80,6 @@
 | Receipt | POST | `/notrecovery/list` | `/api/notrecovery/list` | 登录 | 未回收回单分页筛选 |
 | Receipt | POST | `/recovery/list` | `/api/recovery/list` | 登录 | 已回收回单分页筛选 |
 | Receipt | PATCH | `/receipt/:receiptId` | `/api/receipt/:receiptId` | 管理员 | 回收、发放、寄出状态流转；普通用户禁止写 |
-| Receipt | POST | `/receipt/list` | `/api/receipt/list` | 登录 | 全部回单 |
-| Receipt | PATCH | `/receipt/:receiptId` | `/api/receipt/:receiptId` | 登录 | 更新回收/发放/寄出状态 |
-| Receipt | POST | `/notrecovery/list` | `/api/notrecovery/list` | 登录 | 未回收列表 |
-| Receipt | POST | `/recovery/list` | `/api/recovery/list` | 登录 | 已回收列表 |
 | Upload | POST | `/upload/avatar` | `/api/upload/avatar` | 登录 | 上传头像 |
 | Memory | POST | `/memory/list` | `/api/memory/list` | 登录 | 旧响应不带 code，新系统需兼容或前端统一适配 |
 
