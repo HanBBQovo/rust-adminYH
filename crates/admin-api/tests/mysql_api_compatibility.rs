@@ -493,6 +493,21 @@ async fn mysql_api_compatibility_uses_real_database_services() {
         scope.oddnumber("001")
     );
     assert_eq!(receipt_json["data"]["list"][0]["recoverynumber"], 2);
+    let receipt_id = receipt_json["data"]["list"][0]["id"]
+        .as_i64()
+        .expect("created receipt id should be numeric");
+
+    let (receipt_forbidden_status, receipt_forbidden_json) = json_request(
+        app.clone(),
+        "PATCH",
+        &format!("/api/receipt/{receipt_id}"),
+        Some(&operator_token),
+        r#"{"issuestate":"已接收"}"#,
+    )
+    .await;
+    assert_eq!(receipt_forbidden_status, StatusCode::FORBIDDEN);
+    assert_eq!(receipt_forbidden_json["code"], -403);
+    assert_eq!(receipt_forbidden_json["message"], "没有权限执行该操作");
 
     let (memory_status, memory_json) = json_request(
         app.clone(),
