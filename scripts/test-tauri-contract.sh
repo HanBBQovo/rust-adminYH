@@ -167,10 +167,13 @@ assert(
   read('scripts/test-tauri-build.sh').includes('Bundled sidecar runtime smoke') &&
     read('scripts/test-tauri-build.sh').includes('RUN_TAURI_SIDECAR_SMOKE') &&
     read('scripts/test-tauri-build.sh').includes('TAURI_SIDECAR_DATABASE_URL') &&
+    read('scripts/test-tauri-build.sh').includes('SIDECAR_SMOKE_PORT="${SIDECAR_SMOKE_PORT:-16824}"') &&
+    read('scripts/test-tauri-build.sh').includes('APP_HTTP__PORT="$SIDECAR_SMOKE_PORT"') &&
     read('scripts/test-tauri-build.sh').includes('sidecar_smoke_url=') &&
+    read('scripts/test-tauri-build.sh').includes('sidecar_smoke_port=') &&
     read('scripts/test-tauri-build.sh').includes('sidecar_database_url=') &&
     read('scripts/test-tauri-build.sh').includes('curl --fail --silent --show-error "$SIDECAR_SMOKE_URL"'),
-  'RUN_TAURI build gate must optionally launch the bundled admin-api sidecar and verify /api/health with diagnostics',
+  'RUN_TAURI build gate must optionally launch the bundled admin-api sidecar on a configurable smoke port and verify /api/health with diagnostics',
 )
 const checkAll = read('scripts/check-all.sh')
 assert(

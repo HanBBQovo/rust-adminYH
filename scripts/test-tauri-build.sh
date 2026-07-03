@@ -8,7 +8,8 @@ ADMIN_API_BIN="$ROOT_DIR/target/release/admin-api"
 TAURI_RESOURCE_CONFIG='{"bundle":{"resources":{"../../../target/release/admin-api":"binaries/admin-api"}}}'
 SIDECAR_SMOKE_PID=""
 SIDECAR_SMOKE_LOG_DIR=""
-SIDECAR_SMOKE_URL="${SIDECAR_SMOKE_URL:-http://127.0.0.1:16824/api/health}"
+SIDECAR_SMOKE_PORT="${SIDECAR_SMOKE_PORT:-16824}"
+SIDECAR_SMOKE_URL="${SIDECAR_SMOKE_URL:-http://127.0.0.1:${SIDECAR_SMOKE_PORT}/api/health}"
 
 section() {
   printf '\n==> %s\n' "$1"
@@ -38,6 +39,7 @@ diagnostics() {
   echo "tauri_config_resource=$TAURI_RESOURCE_CONFIG"
   echo "run_tauri_dmg=${RUN_TAURI_DMG:-false}"
   echo "run_tauri_sidecar_smoke=${RUN_TAURI_SIDECAR_SMOKE:-false}"
+  echo "sidecar_smoke_port=${SIDECAR_SMOKE_PORT}"
   echo "sidecar_smoke_url=${SIDECAR_SMOKE_URL}"
   echo "sidecar_database_url=$(printf '%s' "${TAURI_SIDECAR_DATABASE_URL:-${DATABASE_URL:-}}" | redact_url)"
   echo
@@ -103,7 +105,7 @@ if [[ "${RUN_TAURI_SIDECAR_SMOKE:-false}" == "true" ]]; then
     exit 1
   fi
   if curl --fail --silent --show-error "$SIDECAR_SMOKE_URL" >/dev/null 2>&1; then
-    echo "ERROR: $SIDECAR_SMOKE_URL 已经可访问，无法证明打包后的 sidecar 自己启动成功；请停止占用 16824 的本机 API 后重跑。"
+    echo "ERROR: $SIDECAR_SMOKE_URL 已经可访问，无法证明打包后的 sidecar 自己启动成功；请停止占用 ${SIDECAR_SMOKE_PORT} 的本机 API，或设置 SIDECAR_SMOKE_PORT=<free-port> 后重跑。"
     exit 1
   fi
   SIDECAR_SMOKE_LOG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/rust-adminyh-tauri-sidecar.XXXXXX")"
@@ -113,7 +115,7 @@ if [[ "${RUN_TAURI_SIDECAR_SMOKE:-false}" == "true" ]]; then
   APP_ENV=desktop \
   APP_NAME=rust-adminYH \
   APP_HTTP__HOST=127.0.0.1 \
-  APP_HTTP__PORT=16824 \
+  APP_HTTP__PORT="$SIDECAR_SMOKE_PORT" \
   APP_LOGGING__JSON_LOGS=true \
   APP_STORAGE__AVATAR_DIR="$APP_STORAGE_DIR" \
   DATABASE_URL="${TAURI_SIDECAR_DATABASE_URL:-${DATABASE_URL:-}}" \
