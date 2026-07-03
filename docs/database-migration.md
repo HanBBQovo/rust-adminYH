@@ -111,7 +111,7 @@ dry-run 只读旧库和新库，输出：
 - SQLx 动态筛选已补充真实 MySQL 空筛选回归：用户、角色、订单和回单的 list/count 在无筛选项时不会拼接悬空 `WHERE`，文本筛选为空字符串时跳过条件，避免迁移后旧前端默认列表请求触发 SQL 语法错误或全表 `LIKE '%%'` 伪筛选。
 - 密码安全升级已接入：`CompatPasswordVerifier` 支持旧 MD5 与 Argon2；认证成功且原密码为 MD5 时会回写 Argon2，用户创建和改密也会写入 Argon2。真实 MySQL 回归已纳入 `mysql_user_auth_repository` 发布级 gate，验证旧 MD5 首登升级、错误密码不污染旧 hash/token、`user.token` 单点登录写回、新建/改密 Argon2 写入。生产切换前必须确认旧 Node 服务不会继续并行读取同一写库，否则升级后的用户无法再由旧服务登录。
 - 生产 token 策略已从开发态 `dev-{user_id}-{uuid}` 切换为 32 字节随机 opaque token，仍保留写回 `user.token` 的旧单用户单 token 语义；旧库已有 token 只作为迁移数据保留，新系统新登录会覆盖为新格式。
-- `MySqlMenuRepository`、`MySqlRoleRepository` 已实现旧 RBAC SQLx 仓储，菜单从 `permission` 拉平后在 Rust 构树，角色授权通过事务替换 `role_permission`，并对重复 `menuList` 做幂等去重。
+- `MySqlMenuRepository`、`MySqlRoleRepository` 已实现旧 RBAC SQLx 仓储，菜单从 `permission` 拉平后在 Rust 构树，角色授权通过事务替换 `role_permission`，并对重复 `menuList` 做幂等去重。真实 MySQL HTTP 回归已覆盖系统管理生产装配：用户列表/详情/创建/改密/删除、角色列表/详情、菜单创建/树形兼容、角色菜单 ID 查询、授权去重和失败不清空既有权限，避免迁移后权限页只在内存仓储或前端 mock 下可用。
 - `admin-api` 生产启动路径已通过 `build_mysql_pool` 装配全部 SQLx 仓储；未设置可连接 `DATABASE_URL` 时生产 API 会启动失败，测试路径仍通过 `AppState::with_services` 注入内存仓储。生产 `/api/health` 会通过 `MySqlHealthRepository` ping 当前连接池，成功时 `data.checks` 包含 `database: ok`，失败时返回 503 和 `status=degraded`，用于 Docker/Tauri/发布门禁识别真实数据库不可用。
 - Docker/CI 可通过 `DATABASE_MIGRATE_ON_START=true` 在 API 启动时执行兼容 schema migration；生产环境是否启用必须由发布流程明确控制，避免未备份生产库时自动变更结构。
 

@@ -104,6 +104,308 @@ async fn mysql_api_compatibility_uses_real_database_services() {
         .expect("operator login should return token")
         .to_owned();
 
+    let (user_list_status, user_list_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/users/list",
+        Some(&admin_token),
+        &format!(
+            r#"{{"offset":0,"size":10,"name":"{}","enable":1,"roleId":1}}"#,
+            scope.admin_name
+        ),
+    )
+    .await;
+    assert_eq!(user_list_status, StatusCode::OK);
+    assert_eq!(user_list_json["code"], 0);
+    assert_eq!(user_list_json["data"]["totalCount"], 1);
+    assert_eq!(user_list_json["data"]["list"][0]["id"], scope.admin_user_id);
+    assert_eq!(user_list_json["data"]["list"][0]["roleId"], 1);
+    assert_eq!(
+        user_list_json["data"]["list"][0]["avatarUrl"],
+        format!("/users/{}/avatar", scope.admin_user_id)
+    );
+    assert!(user_list_json["data"]["list"][0]["createAt"].is_string());
+    assert!(user_list_json["data"]["list"][0]["updateAt"].is_string());
+
+    let (user_detail_status, user_detail_json) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/users/{}", scope.admin_user_id),
+        Some(&admin_token),
+        "",
+    )
+    .await;
+    assert_eq!(user_detail_status, StatusCode::OK);
+    assert_eq!(user_detail_json["code"], 0);
+    assert_eq!(user_detail_json["data"]["id"], scope.admin_user_id);
+    assert_eq!(user_detail_json["data"]["role"]["id"], 1);
+    assert_eq!(user_detail_json["data"]["role"]["name"], "超级管理员");
+
+    let system_user_name = format!("{}-system-user", scope.prefix);
+    let (user_create_status, user_create_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/users",
+        Some(&admin_token),
+        &format!(
+            r#"{{"name":"{system_user_name}","password":"system-secret","roleId":{}}}"#,
+            scope.operator_role_id
+        ),
+    )
+    .await;
+    assert_eq!(user_create_status, StatusCode::OK);
+    assert_eq!(user_create_json["code"], 0);
+    assert_eq!(user_create_json["message"], "创建用户成功！");
+    let system_user_id = scope.user_id_by_name(&system_user_name).await;
+
+    let (system_user_detail_status, system_user_detail_json) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/users/{system_user_id}"),
+        Some(&admin_token),
+        "",
+    )
+    .await;
+    assert_eq!(system_user_detail_status, StatusCode::OK);
+    assert_eq!(system_user_detail_json["data"]["name"], system_user_name);
+    assert_eq!(
+        system_user_detail_json["data"]["role"]["id"],
+        scope.operator_role_id
+    );
+    assert_eq!(
+        system_user_detail_json["data"]["avatarUrl"],
+        format!("/users/{system_user_id}/avatar")
+    );
+
+    let (password_status, password_json) = json_request(
+        app.clone(),
+        "PATCH",
+        &format!("/api/users/{system_user_id}/password"),
+        Some(&admin_token),
+        r#""system-secret-updated""#,
+    )
+    .await;
+    assert_eq!(password_status, StatusCode::OK);
+    assert_eq!(password_json["code"], 0);
+    assert_eq!(password_json["message"], "修改密码成功！");
+    assert!(
+        scope
+            .user_password(&system_user_name)
+            .await
+            .starts_with("$argon2"),
+        "HTTP password update through database services must write Argon2 hashes"
+    );
+
+    let (user_delete_status, user_delete_json) = json_request(
+        app.clone(),
+        "DELETE",
+        &format!("/api/users/{system_user_id}"),
+        Some(&admin_token),
+        "",
+    )
+    .await;
+    assert_eq!(user_delete_status, StatusCode::OK);
+    assert_eq!(user_delete_json["code"], 0);
+    assert_eq!(user_delete_json["message"], "删除用户成功！");
+    let (deleted_user_status, deleted_user_json) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/users/{system_user_id}"),
+        Some(&admin_token),
+        "",
+    )
+    .await;
+    assert_eq!(deleted_user_status, StatusCode::OK);
+    assert!(deleted_user_json["data"].is_null());
+
+    let (role_list_status, role_list_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/role/list",
+        Some(&admin_token),
+        &format!(
+            r#"{{"offset":0,"size":10,"name":"{}-operator-role","intro":"真实 MySQL"}}"#,
+            scope.prefix
+        ),
+    )
+    .await;
+    assert_eq!(role_list_status, StatusCode::OK);
+    assert_eq!(role_list_json["code"], 0);
+    assert_eq!(role_list_json["data"]["totalCount"], 1);
+    assert_eq!(
+        role_list_json["data"]["list"][0]["id"],
+        scope.operator_role_id
+    );
+    assert!(role_list_json["data"]["list"][0]["createAt"].is_string());
+    assert!(role_list_json["data"]["list"][0]["updateAt"].is_string());
+
+    let (role_detail_status, role_detail_json) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/role/{}", scope.operator_role_id),
+        Some(&admin_token),
+        "",
+    )
+    .await;
+    assert_eq!(role_detail_status, StatusCode::OK);
+    assert_eq!(role_detail_json["data"]["id"], scope.operator_role_id);
+    assert_eq!(
+        role_detail_json["data"]["name"],
+        format!("{}-operator-role", scope.prefix)
+    );
+
+    let (menu_forbidden_status, menu_forbidden_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/menu",
+        Some(&operator_token),
+        &format!(
+            r#"{{"name":"{}-禁止菜单","type":1,"url":"/main/forbidden"}}"#,
+            scope.prefix
+        ),
+    )
+    .await;
+    assert_eq!(menu_forbidden_status, StatusCode::FORBIDDEN);
+    assert_eq!(menu_forbidden_json["code"], -403);
+    assert_eq!(menu_forbidden_json["message"], "没有权限执行该操作");
+
+    let api_menu_name = format!("{}-HTTP菜单", scope.prefix);
+    let (menu_create_status, menu_create_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/menu",
+        Some(&admin_token),
+        &format!(
+            r#"{{"name":"{api_menu_name}","type":2,"url":"/main/{}/http","icon":"settings","sort":12,"parentId":{}}}"#,
+            scope.prefix, scope.menu_root_id
+        ),
+    )
+    .await;
+    assert_eq!(menu_create_status, StatusCode::OK);
+    assert_eq!(menu_create_json["code"], 0);
+    assert_eq!(menu_create_json["message"], "创建菜单成功！");
+    let api_menu_id = scope.permission_id_by_name(&api_menu_name).await;
+
+    let (menu_tree_status, menu_tree_json) =
+        json_request(app.clone(), "GET", "/api/menu/tree", Some(&admin_token), "").await;
+    assert_eq!(menu_tree_status, StatusCode::OK);
+    assert_eq!(menu_tree_json["code"], 0);
+    let all_menus = menu_tree_json["data"]
+        .as_array()
+        .expect("menu tree should return an array");
+    let seeded_root = find_value_by_id(all_menus, scope.menu_root_id, "menu root");
+    assert_eq!(seeded_root["name"], format!("{}-资源菜单", scope.prefix));
+    assert!(seeded_root["children"].is_null());
+    let created_menu = find_value_by_id(
+        seeded_root["chilren"]
+            .as_array()
+            .expect("full menu tree should keep old chilren field"),
+        api_menu_id,
+        "created menu",
+    );
+    assert_eq!(created_menu["name"], api_menu_name);
+    assert_eq!(created_menu["parentId"], scope.menu_root_id);
+    assert_eq!(created_menu["partentId"], scope.menu_root_id);
+    assert_eq!(created_menu["url"], format!("/main/{}/http", scope.prefix));
+
+    let (assign_status, assign_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/role/assign",
+        Some(&admin_token),
+        &format!(
+            r#"{{"roleId":{},"menuList":[{},{},{}]}}"#,
+            scope.operator_role_id, scope.menu_root_id, api_menu_id, api_menu_id
+        ),
+    )
+    .await;
+    assert_eq!(assign_status, StatusCode::OK);
+    assert_eq!(assign_json["code"], 0);
+    assert_eq!(assign_json["message"], "分配权限成功！");
+
+    let (role_menu_ids_status, role_menu_ids_json) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/role/{}/menuIds", scope.operator_role_id),
+        Some(&admin_token),
+        "",
+    )
+    .await;
+    assert_eq!(role_menu_ids_status, StatusCode::OK);
+    assert_eq!(role_menu_ids_json["data"]["id"], scope.operator_role_id);
+    let assigned_menu_ids = role_menu_ids_json["data"]["menuIds"]
+        .as_array()
+        .expect("role menu ids should be an array");
+    assert_eq!(
+        assigned_menu_ids
+            .iter()
+            .filter(|value| value.as_i64() == Some(api_menu_id))
+            .count(),
+        1,
+        "role assign must deduplicate duplicate menu ids"
+    );
+    assert!(assigned_menu_ids
+        .iter()
+        .any(|value| value.as_i64() == Some(scope.menu_root_id)));
+
+    let (role_menu_status, role_menu_json) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/role/{}/menu", scope.operator_role_id),
+        Some(&admin_token),
+        "",
+    )
+    .await;
+    assert_eq!(role_menu_status, StatusCode::OK);
+    let role_menus = role_menu_json["data"]
+        .as_array()
+        .expect("role menu tree should return an array");
+    let role_root = find_value_by_id(role_menus, scope.menu_root_id, "role menu root");
+    assert!(role_root["chilren"].is_null());
+    let role_child = find_value_by_id(
+        role_root["children"]
+            .as_array()
+            .expect("role menu tree should keep children field"),
+        api_menu_id,
+        "role menu child",
+    );
+    assert_eq!(role_child["parentId"], scope.menu_root_id);
+    assert_eq!(role_child["partentId"], scope.menu_root_id);
+
+    let before_failed_assign = assigned_menu_ids.clone();
+    let (assign_error_status, assign_error_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/role/assign",
+        Some(&admin_token),
+        &format!(
+            r#"{{"roleId":{},"menuList":[{},999999999]}}"#,
+            scope.operator_role_id, scope.menu_root_id
+        ),
+    )
+    .await;
+    assert_eq!(assign_error_status, StatusCode::BAD_REQUEST);
+    assert_eq!(assign_error_json["code"], -400);
+    assert_eq!(
+        assign_error_json["message"],
+        "请求参数错误: 权限菜单不存在: 999999999"
+    );
+    let (_, after_failed_assign_json) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/role/{}/menuIds", scope.operator_role_id),
+        Some(&admin_token),
+        "",
+    )
+    .await;
+    assert_eq!(
+        after_failed_assign_json["data"]["menuIds"]
+            .as_array()
+            .expect("role menu ids should remain an array"),
+        &before_failed_assign,
+        "failed role assign validation must not clear existing role permissions"
+    );
+
     let (forbidden_status, forbidden_json) = json_request(
         app.clone(),
         "POST",
@@ -790,6 +1092,26 @@ impl<'a> TestScope<'a> {
             .expect("company id should exist")
     }
 
+    async fn user_id_by_name(&self, name: &str) -> i64 {
+        sqlx::query("SELECT `id` FROM `user` WHERE `name` = ?")
+            .bind(name)
+            .fetch_one(self.pool)
+            .await
+            .expect("user id should load")
+            .try_get("id")
+            .expect("user id should exist")
+    }
+
+    async fn permission_id_by_name(&self, name: &str) -> i64 {
+        sqlx::query("SELECT `id` FROM `permission` WHERE `name` = ?")
+            .bind(name)
+            .fetch_one(self.pool)
+            .await
+            .expect("permission id should load")
+            .try_get("id")
+            .expect("permission id should exist")
+    }
+
     async fn table_count(&self, table: &str) -> u64 {
         let sql = format!("SELECT COUNT(*) AS total FROM `{table}`");
         sqlx::query(&sql)
@@ -857,28 +1179,56 @@ impl<'a> TestScope<'a> {
             .execute(self.pool)
             .await
             .expect("memory cleanup should run");
-        sqlx::query("DELETE FROM `user_role` WHERE `user_id` IN (?, ?) OR `role_id` = ?")
-            .bind(self.admin_user_id)
-            .bind(self.operator_user_id)
-            .bind(self.operator_role_id)
-            .execute(self.pool)
-            .await
-            .expect("user role cleanup should run");
-        sqlx::query("DELETE FROM `avatar` WHERE `user_id` IN (?, ?)")
-            .bind(self.admin_user_id)
-            .bind(self.operator_user_id)
-            .execute(self.pool)
-            .await
-            .expect("avatar cleanup should run");
-        sqlx::query("DELETE FROM `role_permission` WHERE `permission_id` IN (?, ?)")
+        sqlx::query(
+            r#"
+            DELETE ur
+            FROM `user_role` ur
+            LEFT JOIN `user` u ON u.`id` = ur.`user_id`
+            WHERE ur.`user_id` IN (?, ?)
+               OR ur.`role_id` = ?
+               OR u.`name` LIKE ?
+            "#,
+        )
+        .bind(self.admin_user_id)
+        .bind(self.operator_user_id)
+        .bind(self.operator_role_id)
+        .bind(format!("{}-%", self.prefix))
+        .execute(self.pool)
+        .await
+        .expect("user role cleanup should run");
+        sqlx::query(
+            r#"
+            DELETE a
+            FROM `avatar` a
+            LEFT JOIN `user` u ON u.`id` = a.`user_id`
+            WHERE a.`user_id` IN (?, ?) OR u.`name` LIKE ?
+            "#,
+        )
+        .bind(self.admin_user_id)
+        .bind(self.operator_user_id)
+        .bind(format!("{}-%", self.prefix))
+        .execute(self.pool)
+        .await
+        .expect("avatar cleanup should run");
+        sqlx::query(
+            r#"
+            DELETE rp
+            FROM `role_permission` rp
+            LEFT JOIN `permission` p ON p.`id` = rp.`permission_id`
+            WHERE rp.`role_id` = ? OR rp.`permission_id` IN (?, ?) OR p.`name` LIKE ?
+            "#,
+        )
+        .bind(self.operator_role_id)
+        .bind(self.menu_root_id)
+        .bind(self.menu_child_id)
+        .bind(format!("{}-%", self.prefix))
+        .execute(self.pool)
+        .await
+        .expect("role_permission cleanup should run");
+        sqlx::query("DELETE FROM `permission` WHERE `id` IN (?, ?) OR `name` LIKE ?")
             .bind(self.menu_root_id)
             .bind(self.menu_child_id)
-            .execute(self.pool)
-            .await
-            .expect("role_permission cleanup should run");
-        sqlx::query("DELETE FROM `permission` WHERE `id` IN (?, ?)")
-            .bind(self.menu_root_id)
-            .bind(self.menu_child_id)
+            .bind(format!("{}-%", self.prefix))
             .execute(self.pool)
             .await
             .expect("permission cleanup should run");
@@ -888,11 +1238,12 @@ impl<'a> TestScope<'a> {
             .execute(self.pool)
             .await
             .expect("company cleanup should run");
-        sqlx::query("DELETE FROM `user` WHERE `id` IN (?, ?) OR `name` IN (?, ?)")
+        sqlx::query("DELETE FROM `user` WHERE `id` IN (?, ?) OR `name` IN (?, ?) OR `name` LIKE ?")
             .bind(self.admin_user_id)
             .bind(self.operator_user_id)
             .bind(&self.admin_name)
             .bind(&self.operator_name)
+            .bind(format!("{}-%", self.prefix))
             .execute(self.pool)
             .await
             .expect("user cleanup should run");
@@ -929,6 +1280,13 @@ fn find_company(companies: &[Value], company_id: i64) -> &Value {
         .iter()
         .find(|company| company["id"] == company_id)
         .unwrap_or_else(|| panic!("company {company_id} should exist in list"))
+}
+
+fn find_value_by_id<'a>(items: &'a [Value], item_id: i64, label: &str) -> &'a Value {
+    items
+        .iter()
+        .find(|item| item["id"] == item_id)
+        .unwrap_or_else(|| panic!("{label} {item_id} should exist"))
 }
 
 async fn next_id(pool: &MySqlPool, table: &str) -> i64 {
