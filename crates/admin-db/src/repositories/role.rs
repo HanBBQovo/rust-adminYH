@@ -93,6 +93,7 @@ impl RoleStore for MySqlRoleRepository {
     fn remove<'a>(&'a self, role_id: i64) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(db_error)?;
+            ensure_role_not_assigned_to_users(&mut tx, role_id).await?;
             let result = sqlx::query("DELETE FROM `role` WHERE `id` = ?")
                 .bind(role_id)
                 .execute(&mut *tx)
@@ -253,6 +254,23 @@ async fn ensure_role_exists(tx: &mut Transaction<'_, MySql>, role_id: i64) -> Ap
         .is_some();
     if !exists {
         return Err(AppError::NotFound(format!("role {role_id}")));
+    }
+    Ok(())
+}
+
+async fn ensure_role_not_assigned_to_users(
+    tx: &mut Transaction<'_, MySql>,
+    role_id: i64,
+) -> AppResult<()> {
+    let user_count = sqlx::query("SELECT COUNT(*) AS total FROM `user_role` WHERE `role_id` = ?")
+        .bind(role_id)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_error)?
+        .try_get::<i64, _>("total")
+        .map_err(db_error)?;
+    if user_count > 0 {
+        return Err(AppError::Validation("角色已分配用户，不能删除".to_owned()));
     }
     Ok(())
 }

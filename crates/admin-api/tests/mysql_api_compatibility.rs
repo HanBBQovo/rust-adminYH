@@ -406,6 +406,27 @@ async fn mysql_api_compatibility_uses_real_database_services() {
         "failed role assign validation must not clear existing role permissions"
     );
 
+    let guarded_role_id = scope.seed_assigned_role("受保护角色").await;
+    let (guarded_delete_status, guarded_delete_json) = json_request(
+        app.clone(),
+        "DELETE",
+        &format!("/api/role/{guarded_role_id}"),
+        Some(&admin_token),
+        "",
+    )
+    .await;
+    assert_eq!(guarded_delete_status, StatusCode::BAD_REQUEST);
+    assert_eq!(guarded_delete_json["code"], -400);
+    assert_eq!(
+        guarded_delete_json["message"],
+        "请求参数错误: 角色已分配用户，不能删除"
+    );
+    assert_eq!(
+        scope.user_role_count_for_role(guarded_role_id).await,
+        1,
+        "failed role deletion must keep the existing user_role binding"
+    );
+
     let (forbidden_status, forbidden_json) = json_request(
         app.clone(),
         "POST",
@@ -1460,6 +1481,49 @@ impl<'a> TestScope<'a> {
             .expect("permission id should exist")
     }
 
+    async fn seed_assigned_role(&self, suffix: &str) -> i64 {
+        let role_name = format!("{}-{suffix}", self.prefix);
+        let result = sqlx::query("INSERT INTO `role` (`name`, `intro`) VALUES (?, ?)")
+            .bind(&role_name)
+            .bind("仍有用户绑定")
+            .execute(self.pool)
+            .await
+            .expect("assigned role seed should insert");
+        let role_id = result.last_insert_id() as i64;
+
+        let user_name = format!("{}-{suffix}-用户", self.prefix);
+        let user_result = sqlx::query(
+            r#"
+            INSERT INTO `user` (`name`, `password`, `avatar_url`, `enable`)
+            VALUES (?, ?, '', 1)
+            "#,
+        )
+        .bind(&user_name)
+        .bind("legacy-md5")
+        .execute(self.pool)
+        .await
+        .expect("assigned role user seed should insert");
+        let user_id = user_result.last_insert_id() as i64;
+
+        sqlx::query("INSERT INTO `user_role` (`user_id`, `role_id`) VALUES (?, ?)")
+            .bind(user_id)
+            .bind(role_id)
+            .execute(self.pool)
+            .await
+            .expect("assigned role user_role seed should insert");
+        role_id
+    }
+
+    async fn user_role_count_for_role(&self, role_id: i64) -> i64 {
+        sqlx::query("SELECT COUNT(*) AS total FROM `user_role` WHERE `role_id` = ?")
+            .bind(role_id)
+            .fetch_one(self.pool)
+            .await
+            .expect("user role count should query")
+            .try_get("total")
+            .expect("total should exist")
+    }
+
     async fn table_count(&self, table: &str) -> u64 {
         let sql = format!("SELECT COUNT(*) AS total FROM `{table}`");
         sqlx::query(&sql)
@@ -1601,6 +1665,11 @@ impl<'a> TestScope<'a> {
             .execute(self.pool)
             .await
             .expect("operator role cleanup should run");
+        sqlx::query("DELETE FROM `role` WHERE `name` LIKE ?")
+            .bind(format!("{}-%", self.prefix))
+            .execute(self.pool)
+            .await
+            .expect("prefixed role cleanup should run");
     }
 }
 

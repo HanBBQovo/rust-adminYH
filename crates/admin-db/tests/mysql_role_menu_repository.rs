@@ -87,6 +87,41 @@ async fn mysql_role_repository_lists_filters_and_mutates_roles() {
 
 #[tokio::test]
 #[ignore = "requires RUN_DB_TESTS=true and ADMIN_DB_TEST_DATABASE_URL"]
+async fn mysql_role_repository_rejects_deleting_roles_assigned_to_users() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let scope = TestScope::new(&pool).await;
+    let repository = MySqlRoleRepository::new(pool.clone());
+    let service = CompatRoleService::new(Arc::new(repository));
+
+    let role_id = scope.seed_role("已分配角色", "仍有用户绑定").await;
+    let user_id = scope.seed_user_with_role("role-bound-user", role_id).await;
+
+    let error = service
+        .remove(role_id)
+        .await
+        .expect_err("assigned role should not delete");
+    assert_eq!(error.to_string(), "请求参数错误: 角色已分配用户，不能删除");
+    assert_eq!(
+        scope.user_role_count(user_id, role_id).await,
+        1,
+        "failed role deletion must keep the existing user_role row"
+    );
+    assert!(
+        service
+            .detail(role_id)
+            .await
+            .expect("role detail should still load")
+            .is_some(),
+        "failed role deletion must keep the role row"
+    );
+
+    scope.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires RUN_DB_TESTS=true and ADMIN_DB_TEST_DATABASE_URL"]
 async fn mysql_role_repository_lists_without_filters() {
     let Some(pool) = test_pool().await else {
         return;
@@ -429,6 +464,28 @@ impl<'a> TestScope<'a> {
         }
     }
 
+    async fn seed_user_with_role(&self, suffix: &str, role_id: i64) -> i64 {
+        let result = sqlx::query(
+            r#"
+            INSERT INTO `user` (`name`, `password`, `avatar_url`, `enable`)
+            VALUES (?, ?, '', 1)
+            "#,
+        )
+        .bind(self.name(suffix))
+        .bind("legacy-md5")
+        .execute(self.pool)
+        .await
+        .expect("user seed should insert");
+        let user_id = result.last_insert_id() as i64;
+        sqlx::query("INSERT INTO `user_role` (`user_id`, `role_id`) VALUES (?, ?)")
+            .bind(user_id)
+            .bind(role_id)
+            .execute(self.pool)
+            .await
+            .expect("user role seed should insert");
+        user_id
+    }
+
     async fn role_id_by_name(&self, name: &str) -> Option<i64> {
         sqlx::query("SELECT `id` FROM `role` WHERE `name` = ?")
             .bind(name)
@@ -475,7 +532,45 @@ impl<'a> TestScope<'a> {
         .expect("total should exist")
     }
 
+    async fn user_role_count(&self, user_id: i64, role_id: i64) -> i64 {
+        sqlx::query(
+            r#"
+            SELECT COUNT(*) AS total
+            FROM `user_role`
+            WHERE `user_id` = ? AND `role_id` = ?
+            "#,
+        )
+        .bind(user_id)
+        .bind(role_id)
+        .fetch_one(self.pool)
+        .await
+        .expect("user role count should query")
+        .try_get("total")
+        .expect("total should exist")
+    }
+
     async fn cleanup(&self) {
+        sqlx::query(
+            r#"
+            DELETE ur
+            FROM `user_role` ur
+            LEFT JOIN `user` u ON u.`id` = ur.`user_id`
+            LEFT JOIN `role` r ON r.`id` = ur.`role_id`
+            WHERE u.`name` LIKE ? OR r.`name` LIKE ?
+            "#,
+        )
+        .bind(format!("{}-%", self.prefix))
+        .bind(format!("{}-%", self.prefix))
+        .execute(self.pool)
+        .await
+        .expect("user role cleanup should run");
+
+        sqlx::query("DELETE FROM `user` WHERE `name` LIKE ?")
+            .bind(format!("{}-%", self.prefix))
+            .execute(self.pool)
+            .await
+            .expect("user cleanup should run");
+
         sqlx::query(
             r#"
             DELETE rp
