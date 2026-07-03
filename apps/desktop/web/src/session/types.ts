@@ -23,7 +23,17 @@ export interface LegacyMenuItem {
   chilren?: LegacyMenuItem[]
 }
 
-export type AppPage = 'workspace' | 'orders' | 'receipts' | 'companies' | 'users' | 'roles' | 'menus' | 'registry' | 'settings'
+export type AppPage =
+  | 'overview'
+  | 'workspace'
+  | 'orders'
+  | 'receipts'
+  | 'companies'
+  | 'users'
+  | 'roles'
+  | 'menus'
+  | 'registry'
+  | 'settings'
 
 export interface SessionNavItem {
   key: AppPage

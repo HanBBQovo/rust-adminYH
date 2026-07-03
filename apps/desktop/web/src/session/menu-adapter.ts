@@ -1,8 +1,9 @@
-import { Building2, ClipboardList, FileCheck2, KeyRound, LayoutDashboard, ListTree, PackageCheck, Settings, Users } from 'lucide-react'
+import { Building2, ClipboardList, FileCheck2, Info, KeyRound, LayoutDashboard, ListTree, PackageCheck, Settings, Users } from 'lucide-react'
 
 import type { AppPage, LegacyMenuItem, SessionNavItem } from '@/session/types'
 
 const FALLBACK_NAV_ITEMS: SessionNavItem[] = [
+  { key: 'overview', label: '系统概览', icon: Info },
   { key: 'workspace', label: '工作台', icon: LayoutDashboard },
   { key: 'orders', label: '订单列表', icon: PackageCheck },
   { key: 'receipts', label: '回单管理', icon: FileCheck2 },
@@ -15,7 +16,8 @@ const FALLBACK_NAV_ITEMS: SessionNavItem[] = [
 ]
 
 const PAGE_MATCHERS: Array<{ key: AppPage; icon: SessionNavItem['icon']; patterns: RegExp[] }> = [
-  { key: 'workspace', icon: LayoutDashboard, patterns: [/workbench|dashboard|workspace|工作台|统计|首页/i] },
+  { key: 'overview', icon: Info, patterns: [/analysis\/overview|overview|系统概览|项目概览|概览|关于/i] },
+  { key: 'workspace', icon: LayoutDashboard, patterns: [/analysis\/workbench|workbench|dashboard|workspace|工作台|统计|首页/i] },
   { key: 'orders', icon: PackageCheck, patterns: [/order\/orders|order\/list|\/order\b(?!\/company)|订单列表|运单|订单管理/i] },
   { key: 'receipts', icon: FileCheck2, patterns: [/receipt|notrecovery|recovery|回单|未回收|已回收/i] },
   { key: 'companies', icon: Building2, patterns: [/order\/company|company|发货公司/i] },

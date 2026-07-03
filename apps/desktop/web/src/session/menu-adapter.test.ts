@@ -13,13 +13,24 @@ describe('adaptLegacyMenus', () => {
 
   it('maps old menu labels and urls into template pages', () => {
     const items = adaptLegacyMenus([
-      { name: '工作台', url: '/main/analysis/overview' },
+      { name: '系统概览', url: '/main/analysis/overview' },
+      { name: '工作台', url: '/main/analysis/workbench' },
       { name: '订单管理', url: '/main/order/list' },
       { name: '系统设置', url: '/main/settings' },
     ])
 
-    expect(items.map((item) => item.key)).toEqual(['workspace', 'orders', 'settings'])
-    expect(items[1].label).toBe('订单管理')
+    expect(items.map((item) => item.key)).toEqual(['overview', 'workspace', 'orders', 'settings'])
+    expect(items[2].label).toBe('订单管理')
+  })
+
+  it('keeps the old overview route separate from the workbench dashboard', () => {
+    const items = adaptLegacyMenus([
+      { name: '概览', url: '/main/analysis/overview' },
+      { name: '工作台', url: '/main/analysis/workbench' },
+    ])
+
+    expect(items.map((item) => item.key)).toEqual(['overview', 'workspace'])
+    expect(items[0].label).toBe('概览')
   })
 
   it('maps role and menu permission entries as separate template pages', () => {

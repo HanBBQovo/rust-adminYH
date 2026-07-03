@@ -16,6 +16,7 @@ import { adaptLegacyMenus } from '@/session/menu-adapter'
 import type { AdminSession, AppPage, SessionNavItem } from '@/session/types'
 
 const Workspace = lazy(() => import('@/pages/Workspace'))
+const SystemOverview = lazy(() => import('@/pages/SystemOverview'))
 const OrdersList = lazy(() => import('@/pages/OrdersList'))
 const ReceiptsList = lazy(() => import('@/pages/ReceiptsList'))
 const CompaniesList = lazy(() => import('@/pages/CompaniesList'))
@@ -256,6 +257,7 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
                     transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
                   >
                     {!navItems.length ? emptyPermissionState : null}
+                    {navItems.length && currentPage === 'overview' ? <SystemOverview /> : null}
                     {navItems.length && currentPage === 'workspace' ? <Workspace /> : null}
                     {navItems.length && currentPage === 'orders' ? <OrdersList /> : null}
                     {navItems.length && currentPage === 'receipts' ? <ReceiptsList /> : null}
