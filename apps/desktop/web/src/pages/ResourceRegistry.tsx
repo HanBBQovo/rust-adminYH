@@ -19,13 +19,24 @@ const statusMeta: Record<ResourceSummary['status'], { label: string; variant: 'd
   blocked: { label: '待后端', variant: 'destructive' },
 }
 
+const legacyModuleLabels: Record<ResourceSummary['key'], string> = {
+  orders: '订单管理',
+  receipts: '回单管理',
+  companies: '发货公司',
+  users: '用户管理',
+  roles: '角色权限',
+  menus: '菜单权限',
+}
+
 export default function ResourceRegistry() {
   const [keyword, setKeyword] = useState('')
   const { data, loading, error, refresh } = useResource(listResourceSummaries, [])
   const rows = useMemo(() => {
     const normalized = keyword.trim().toLocaleLowerCase('zh-CN')
     if (!normalized) return data ?? []
-    return (data ?? []).filter((item) => [item.title, item.description, item.apiPath, item.owner].join(' ').toLocaleLowerCase('zh-CN').includes(normalized))
+    return (data ?? []).filter((item) =>
+      [item.title, item.description, item.apiPath, item.owner, legacyModuleLabels[item.key]].join(' ').toLocaleLowerCase('zh-CN').includes(normalized),
+    )
   }, [data, keyword])
 
   return (
@@ -43,7 +54,7 @@ export default function ResourceRegistry() {
       <PageSurface>
         <DataTableToolbar
           title="业务模块"
-          description="后续新增页面先登记到这里，再接入具体列表、表单和权限策略。"
+          description="集中查看可用业务模块、兼容接口、数据量和维护归属。"
           searchValue={keyword}
           onSearchChange={setKeyword}
           searchPlaceholder="搜索模块、API 或负责人..."
@@ -62,7 +73,7 @@ export default function ResourceRegistry() {
               <TableRow>
                 <TableHead>模块</TableHead>
                 <TableHead>兼容 API</TableHead>
-                <TableHead>旧前端来源</TableHead>
+                <TableHead>旧模块</TableHead>
                 <TableHead>负责人</TableHead>
                 <TableHead className="text-right">记录数</TableHead>
                 <TableHead>状态</TableHead>
@@ -78,7 +89,7 @@ export default function ResourceRegistry() {
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-xs">{item.apiPath}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{item.legacyPath}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{legacyModuleLabels[item.key]}</TableCell>
                   <TableCell>{item.owner}</TableCell>
                   <TableCell className="text-right font-mono">{formatNumber(item.count)}</TableCell>
                   <TableCell>
@@ -90,7 +101,7 @@ export default function ResourceRegistry() {
           </Table>
         ) : (
           <div className="p-5">
-            <EmptyState title="没有匹配模块" description="换一个关键词，或先在 src/api/registry.ts 添加模块定义。" />
+            <EmptyState title="没有匹配模块" description="请调整关键词或刷新模块数据。" />
           </div>
         )}
       </PageSurface>

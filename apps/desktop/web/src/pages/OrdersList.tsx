@@ -238,12 +238,12 @@ export default function OrdersList() {
 
       <DataTableSurface
         title="订单数据"
-        description="保留旧系统字段名和中文列名；新增、查看、编辑、删除都通过 API 封装处理。"
+        description="展示运单、结算、回单联动数据；新增、查看、编辑、删除均通过统一服务接口处理。"
         error={error}
         loading={loading && !data}
         isEmpty={!rows.length}
         emptyTitle="暂无订单"
-        emptyDescription="调整筛选条件后重新查询，或在后续新增订单切片中创建数据。"
+        emptyDescription="调整筛选条件后重新查询，或点击新建订单录入运单。"
         onRetry={refresh}
         pagination={data ? { page, pageSize: PAGE_SIZE, total, onPageChange: setPage } : undefined}
       >

@@ -437,7 +437,7 @@ export default function UsersList() {
   return (
     <PageShell
       title="用户管理"
-      description="按旧 adminYh 用户模块重建列表、筛选、分页、头像展示、用户维护和独立改密；头像上传不在本切片处理。"
+      description="维护账号、角色、启停状态、头像展示和独立改密。"
       width="full"
       actions={
         <>

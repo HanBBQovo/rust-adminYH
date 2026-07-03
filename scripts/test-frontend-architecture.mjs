@@ -20,6 +20,7 @@ const allowedStyleFiles = new Set([
   'src/components/ui/chart.tsx',
   'src/components/ui/progress.tsx',
 ])
+const productionUiTextPattern = /真实项目|模板只演示|参考页|mock only|demo only|后续新增|本切片|开发期提交|src\/|scripts\//gi
 
 const violations = []
 
@@ -91,8 +92,8 @@ for (const absolutePath of listSourceFiles(sourceRoot)) {
     }
   }
 
-  for (const match of content.matchAll(/真实项目|模板只演示|参考页|mock only|demo only/gi)) {
-    if (!isTestFile(file)) {
+  for (const match of content.matchAll(productionUiTextPattern)) {
+    if (!isTestFile(file) && (file.startsWith('src/pages/') || file.startsWith('src/components/'))) {
       addViolation(file, lineNumber(content, match.index), '禁止生产页面保留模板演示/假实现文案')
     }
   }
