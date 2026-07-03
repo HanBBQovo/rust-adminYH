@@ -194,7 +194,7 @@ scripts/test-backend-mysql-contract.mjs
 scripts/test-release-preflight.mjs
 ```
 
-后端真实 MySQL 门禁额外执行 `scripts/test-backend-mysql-contract.mjs`，默认输出 `Backend MySQL contract OK`。该契约会扫描 `crates/admin-db/tests/mysql_*.rs` 和 `crates/admin-api/tests/mysql_*.rs`，逐个确认测试文件被 `scripts/test-backend.sh` 的 `RUN_DB_TESTS=true` 分支以 `-- --ignored` 执行，并确认每个真实 MySQL 测试默认保持 ignored，防止后续新增仓储/API 真实库回归但忘记接入发布门禁。
+后端真实 MySQL 门禁额外执行 `scripts/test-backend-mysql-contract.mjs`，默认输出 `Backend MySQL contract OK`。该契约会扫描 `crates/admin-db/tests/mysql_*.rs` 和 `crates/admin-api/tests/mysql_*.rs`，确认 `scripts/test-backend.sh` 的 `RUN_DB_TESTS=true` 分支通过 `run_mysql_tests` 自动发现并以 `-- --ignored` 执行每个真实 MySQL 测试文件，并确认每个真实 MySQL 测试默认保持 ignored，防止后续新增仓储/API 真实库回归但忘记接入发布门禁。
 
 发布 preflight 回归额外执行 `scripts/test-release-preflight.mjs`，默认输出 `Release preflight regression OK`。该脚本会真实调用 `RELEASE_GATE=true scripts/check-all.sh` 的负向组合，并断言缺少真实 MySQL、迁移、coverage、Tauri sidecar smoke 或 sidecar 数据库 URL 时会在 Backend 前快速失败，防止发布门禁只停留在静态字符串检查。
 

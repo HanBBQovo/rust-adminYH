@@ -22,6 +22,32 @@ run_if() {
   "$@"
 }
 
+run_mysql_tests() {
+  local package_name="$1"
+  local test_dir="$2"
+  local description_prefix="$3"
+
+  if [[ ! -d "$test_dir" ]]; then
+    return
+  fi
+
+  local found=false
+  while IFS= read -r test_file; do
+    found=true
+    local test_name
+    test_name="$(basename "$test_file" .rs)"
+    run_if "$description_prefix $test_name" \
+      env ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
+      RUN_DB_TESTS=true \
+      cargo test "${CARGO_FLAGS[@]}" -p "$package_name" --test "$test_name" -- --ignored
+  done < <(find "$test_dir" -maxdepth 1 -type f -name 'mysql_*.rs' | sort)
+
+  if [[ "$found" == "false" ]]; then
+    echo "ERROR: $test_dir 下没有发现 mysql_*.rs 真实 MySQL 测试文件。"
+    exit 1
+  fi
+}
+
 if [[ ! -f Cargo.toml ]]; then
   echo "SKIP: Cargo.toml 不存在，Rust workspace 尚未初始化。"
   echo "TODO: 初始化 crates/admin-api、admin-core、admin-db、admin-migration 后启用后端质量门禁。"
@@ -49,27 +75,8 @@ if cargo metadata --format-version=1 --no-deps | grep -q '"name":"admin-db"'; th
       echo "ERROR: RUN_DB_TESTS=true 需要设置 ADMIN_DB_TEST_DATABASE_URL 指向可重建的 MySQL 测试库。"
       exit 1
     fi
-    run_if "admin-db MySQL repository integration tests" \
-      env ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
-      cargo test "${CARGO_FLAGS[@]}" -p admin-db --test mysql_order_repository -- --ignored
-    run_if "admin-db MySQL company repository integration tests" \
-      env ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
-      cargo test "${CARGO_FLAGS[@]}" -p admin-db --test mysql_company_repository -- --ignored
-    run_if "admin-db MySQL chart repository integration tests" \
-      env ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
-      cargo test "${CARGO_FLAGS[@]}" -p admin-db --test mysql_chart_repository -- --ignored
-    run_if "admin-db MySQL role/menu repository integration tests" \
-      env ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
-      cargo test "${CARGO_FLAGS[@]}" -p admin-db --test mysql_role_menu_repository -- --ignored
-    run_if "admin-db MySQL user auth integration tests" \
-      env ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
-      cargo test "${CARGO_FLAGS[@]}" -p admin-db --test mysql_user_auth_repository -- --ignored
-    run_if "admin-db MySQL health integration tests" \
-      env ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
-      cargo test "${CARGO_FLAGS[@]}" -p admin-db --test mysql_health_repository -- --ignored
-    run_if "admin-api MySQL API compatibility integration tests" \
-      env RUN_DB_TESTS=true ADMIN_DB_TEST_DATABASE_URL="$ADMIN_DB_TEST_DATABASE_URL" \
-      cargo test "${CARGO_FLAGS[@]}" -p admin-api --test mysql_api_compatibility -- --ignored
+    run_mysql_tests "admin-db" "$ROOT_DIR/crates/admin-db/tests" "admin-db MySQL integration test"
+    run_mysql_tests "admin-api" "$ROOT_DIR/crates/admin-api/tests" "admin-api MySQL integration test"
   else
     if [[ "$RELEASE_GATE" == "true" ]]; then
       echo "FAIL: RELEASE_GATE=true 不允许跳过真实 MySQL repository 集成测试。"

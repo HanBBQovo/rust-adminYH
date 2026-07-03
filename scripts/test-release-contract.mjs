@@ -86,11 +86,11 @@ assertIncludes(releasePreflight, 'TAURI_SIDECAR_DATABASE_URL', 'release prefligh
 
 assertIncludes(backendGate, 'FAIL: RELEASE_GATE=true 不允许跳过真实 MySQL repository 集成测试。', 'backend gate must not allow release builds to skip real MySQL tests')
 assertIncludes(backendGate, 'scripts/test-backend-mysql-contract.mjs', 'backend gate must always run the MySQL coverage contract')
-assertIncludes(backendGate, 'admin-api MySQL API compatibility integration tests', 'backend gate must include real MySQL HTTP compatibility tests')
-assertIncludes(backendGate, '--test mysql_api_compatibility -- --ignored', 'backend gate must run ignored MySQL API compatibility tests when DB gate is enabled')
+assertIncludes(backendGate, 'run_mysql_tests "admin-api" "$ROOT_DIR/crates/admin-api/tests"', 'backend gate must auto-discover real MySQL HTTP compatibility tests')
+assertIncludes(backendGate, '-p "$package_name" --test "$test_name" -- --ignored', 'backend gate must run ignored MySQL tests when DB gate is enabled')
 assertIncludes(backendMysqlContract, 'crates/admin-db/tests', 'backend MySQL contract must scan admin-db integration tests')
 assertIncludes(backendMysqlContract, 'crates/admin-api/tests', 'backend MySQL contract must scan admin-api integration tests')
-assertIncludes(backendMysqlContract, '-p ${packageName} --test ${testName} -- --ignored', 'backend MySQL contract must verify every mysql_*.rs file is wired into RUN_DB_TESTS')
+assertIncludes(backendMysqlContract, 'backend gate must auto-discover mysql_*.rs tests', 'backend MySQL contract must verify mysql_*.rs auto-discovery is wired into RUN_DB_TESTS')
 
 assertIncludes(migrationGate, 'FAIL: RELEASE_GATE=true 不允许跳过真实数据库迁移 dry-run/verify', 'migration gate must not allow release builds to skip real migration verification')
 assertIncludes(migrationGate, 'FAIL: RELEASE_GATE=true 需要 MIGRATION_APPLY=true', 'migration gate must not allow release builds to skip real migration apply')

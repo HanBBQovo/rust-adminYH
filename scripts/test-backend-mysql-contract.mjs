@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readdirSync, readFileSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
 
 function read(path) {
   return readFileSync(path, 'utf8')
@@ -49,12 +49,15 @@ assertIncludes(backendGate, 'RUN_DB_TESTS:-false', 'backend gate must keep real 
 assertIncludes(backendGate, 'ADMIN_DB_TEST_DATABASE_URL', 'backend gate must require an explicit rebuildable MySQL test database URL')
 assertIncludes(backendGate, 'FAIL: RELEASE_GATE=true 不允许跳过真实 MySQL repository 集成测试。', 'release gate must fail if real MySQL tests are skipped')
 assertIncludes(backendGate, '-- --ignored', 'backend gate must run ignored MySQL tests explicitly when DB tests are enabled')
+assertIncludes(backendGate, 'run_mysql_tests()', 'backend gate must centralize real MySQL test execution')
+assertIncludes(backendGate, 'find "$test_dir" -maxdepth 1 -type f -name \'mysql_*.rs\' | sort', 'backend gate must auto-discover mysql_*.rs tests')
+assertIncludes(backendGate, '-p "$package_name" --test "$test_name" -- --ignored', 'backend gate must execute each discovered MySQL test target')
+assertIncludes(backendGate, 'run_mysql_tests "admin-db" "$ROOT_DIR/crates/admin-db/tests"', 'backend gate must auto-discover admin-db MySQL tests')
+assertIncludes(backendGate, 'run_mysql_tests "admin-api" "$ROOT_DIR/crates/admin-api/tests"', 'backend gate must auto-discover admin-api MySQL tests')
 assertIncludes(releaseContract, 'scripts/test-backend-mysql-contract.mjs', 'release contract must lock the backend MySQL contract into default gates')
 
 for (const file of testFiles) {
   const content = read(file)
-  const testName = basename(file, '.rs')
-  const packageName = file.startsWith('crates/admin-api/') ? 'admin-api' : 'admin-db'
   const tokioTestCount = [...content.matchAll(/#\[tokio::test\]/g)].length
   const ignoredCount = [
     ...content.matchAll(/#\[ignore = "requires RUN_DB_TESTS=true and ADMIN_DB_TEST_DATABASE_URL"\]/g),
@@ -66,11 +69,6 @@ for (const file of testFiles) {
     `${file} must mark every real MySQL test as ignored with the standard RUN_DB_TESTS message`,
   )
   assertIncludes(content, 'ADMIN_DB_TEST_DATABASE_URL', `${file} must read the explicit MySQL test database URL`)
-  assertIncludes(
-    backendGate,
-    `-p ${packageName} --test ${testName} -- --ignored`,
-    `${file} must be executed by scripts/test-backend.sh when RUN_DB_TESTS=true`,
-  )
 }
 
 assertIncludes(
