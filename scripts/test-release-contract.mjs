@@ -27,6 +27,7 @@ const dockerContract = read('scripts/test-docker-contract.mjs')
 const rebuildPlan = read('docs/rebuild-plan.md')
 const databaseMigration = read('docs/database-migration.md')
 const apiCompatibility = read('docs/api-compatibility.md')
+const releasePreflight = read('scripts/test-release-preflight.mjs')
 const ciWorkflow = read('.github/workflows/ci.yml')
 
 const releaseRequirements = [
@@ -49,6 +50,8 @@ assertIncludes(checkAll, 'RELEASE_GATE="${RELEASE_GATE:-false}"', 'check-all mus
 assertIncludes(checkAll, 'section "Release gate preflight"', 'check-all must run release gate preflight before ordinary gates')
 assertIncludes(checkAll, 'Release gate preflight passed.', 'check-all must print an explicit release preflight success message')
 assertIncludes(checkAll, 'scripts/test-release-contract.mjs', 'check-all must always run the release contract test')
+assertIncludes(checkAll, 'scripts/test-release-preflight.mjs', 'check-all must always run executable release preflight regressions')
+assertIncludes(checkAll, 'SKIP_RELEASE_PREFLIGHT_SELFTEST', 'check-all must expose a recursion guard for release preflight self-tests')
 
 for (const [token, message] of releaseRequirements) {
   const variableName = token.split('=')[0]
@@ -68,6 +71,13 @@ assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 RUN_TAURI=true', 'relea
 assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 RUN_TAURI_DMG=true', 'release preflight must fail without DMG validation')
 assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 RUN_TAURI_SIDECAR_SMOKE=true', 'release preflight must fail without bundled sidecar smoke')
 assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 TAURI_SIDECAR_DATABASE_URL 或 DATABASE_URL', 'release preflight must fail without sidecar smoke DB URL')
+assertIncludes(releasePreflight, 'Release preflight regression OK', 'release preflight regression script must print an explicit success marker')
+assertIncludes(releasePreflight, 'SKIP_RELEASE_PREFLIGHT_SELFTEST', 'release preflight regression must guard nested check-all calls')
+assertIncludes(releasePreflight, '========== Backend ==========', 'release preflight regression must prove failures stop before backend gates')
+assertIncludes(releasePreflight, 'RUN_DB_TESTS=true', 'release preflight regression must execute a missing DB toggle case')
+assertIncludes(releasePreflight, 'RUN_COVERAGE=true', 'release preflight regression must execute a missing coverage case')
+assertIncludes(releasePreflight, 'RUN_TAURI_SIDECAR_SMOKE=true', 'release preflight regression must execute a missing sidecar smoke case')
+assertIncludes(releasePreflight, 'TAURI_SIDECAR_DATABASE_URL', 'release preflight regression must execute a missing sidecar database URL case')
 
 assertIncludes(backendGate, 'FAIL: RELEASE_GATE=true 不允许跳过真实 MySQL repository 集成测试。', 'backend gate must not allow release builds to skip real MySQL tests')
 assertIncludes(backendGate, 'scripts/test-backend-mysql-contract.mjs', 'backend gate must always run the MySQL coverage contract')

@@ -77,6 +77,13 @@ section "Migration"
 section "Release contract"
 node "$ROOT_DIR/scripts/test-release-contract.mjs"
 
+section "Release preflight regression"
+if [[ "${SKIP_RELEASE_PREFLIGHT_SELFTEST:-false}" == "true" ]]; then
+  echo "SKIP: SKIP_RELEASE_PREFLIGHT_SELFTEST=true 已设置，跳过 release preflight 自测以避免递归。"
+else
+  node "$ROOT_DIR/scripts/test-release-preflight.mjs"
+fi
+
 if [[ -f "$ROOT_DIR/apps/desktop/src-tauri/Cargo.toml" ]]; then
   section "Tauri contract"
   "$ROOT_DIR/scripts/test-tauri-contract.sh"
