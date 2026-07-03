@@ -57,11 +57,6 @@ jobs:
           NEW_AVATAR_DIR_SET: ${{ secrets.NEW_AVATAR_DIR != '' || vars.NEW_AVATAR_DIR != '' }}
           TAURI_SIDECAR_DATABASE_URL_SET: ${{ secrets.TAURI_SIDECAR_DATABASE_URL != '' || secrets.DATABASE_URL != '' }}
         run: |
-          if [[ "$RELEASE_CANDIDATE" != "true" ]]; then
-            echo "Release candidate preflight skipped."
-            exit 0
-          fi
-
           missing=0
 
           require_toggle() {
@@ -82,6 +77,30 @@ jobs:
             fi
           }
 
+          require_enabled_with_tauri() {
+            local value="$1"
+            local label="$2"
+            if [[ "$value" == "true" && "$RUN_TAURI" != "true" ]]; then
+              echo "FAIL: ${label} requires run_tauri=true."
+              missing=1
+            fi
+          }
+
+          require_enabled_with_tauri "$RUN_TAURI_DMG" "run_tauri_dmg=true"
+          require_enabled_with_tauri "$RUN_TAURI_SIDECAR_SMOKE" "run_tauri_sidecar_smoke=true"
+
+          if [[ "$RUN_TAURI_SIDECAR_SMOKE" == "true" ]]; then
+            require_present "$TAURI_SIDECAR_DATABASE_URL_SET" "TAURI_SIDECAR_DATABASE_URL or DATABASE_URL secret"
+          fi
+
+          if [[ "$RELEASE_CANDIDATE" != "true" ]]; then
+            if [[ "$missing" -ne 0 ]]; then
+              exit 1
+            fi
+            echo "Release candidate preflight skipped."
+            exit 0
+          fi
+
           require_toggle "$RUN_DOCKER" "run_docker=true"
           require_toggle "$RUN_DOCKER_E2E" "run_docker_e2e=true"
           require_toggle "$RUN_TAURI" "run_tauri=true"
@@ -91,7 +110,6 @@ jobs:
           require_present "$OLD_DATABASE_URL_SET" "OLD_DATABASE_URL secret"
           require_present "$NEW_DATABASE_URL_SET" "NEW_DATABASE_URL secret"
           require_present "$NEW_AVATAR_DIR_SET" "NEW_AVATAR_DIR secret or variable"
-          require_present "$TAURI_SIDECAR_DATABASE_URL_SET" "TAURI_SIDECAR_DATABASE_URL or DATABASE_URL secret"
 
           if [[ "$missing" -ne 0 ]]; then
             exit 1
