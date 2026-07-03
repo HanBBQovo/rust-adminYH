@@ -1,5 +1,5 @@
 import { apiRequest, setAuthToken } from '@/api/client'
-import { clearSession, readStoredSession, readStoredToken, saveSession } from '@/session/session-store'
+import { clearSession, readStoredToken, saveSession } from '@/session/session-store'
 import type { AdminSession, LegacyMenuItem, SessionUser } from '@/session/types'
 
 /**
@@ -95,11 +95,10 @@ export async function restoreSession(): Promise<AdminSession | null> {
 
   try {
     const user = toSessionUser(await apiRequest<CurrentUser>('/users/me'))
-    const cached = readStoredSession()
     const session: AdminSession = {
       token: readStoredToken(),
       user,
-      menus: cached?.menus?.length ? cached.menus : await fetchMenus(user),
+      menus: await fetchMenus(user),
     }
     saveSession(session)
     return session

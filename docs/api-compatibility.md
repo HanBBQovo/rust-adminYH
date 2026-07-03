@@ -234,6 +234,7 @@ POST /api/recovery/list
 - `/api/chart/headerList`、`/api/chart/company/order/count`、`/api/chart/company/order/sumfreight`、`/api/chart/company/receipt/sumreceipt` 已先落地内存图表统计仓储和集成测试，兼容旧顶部统计标题、公司维度字段名 `ordercount/sumfreight/sumReceipt`、登录鉴权要求。
 - 前端登录页已通过 `src/api/auth.ts` 封装接入旧 `/api/code` 验证码展示和刷新，SVG 使用 data URL 渲染，不在页面层直接 `fetch` 或注入 HTML；登录 payload 仅在用户填写时携带可选 `code` 字段，继续保持旧系统“展示验证码但不强制校验”的兼容语义。
 - 前端登录页已保留旧系统账号回填体验，但按企业级安全要求降级为“记住账号”：只通过 `session-store` 封装保存账号名，不保存旧系统曾明文缓存的密码；页面文案明确“不会保存密码”，测试锁定密码不会写入 localStorage。
+- 前端恢复登录态必须在 `/api/users/me` 成功后重新请求当前角色的 `/api/role/:roleId/menu`，并用最新菜单覆盖本地 session；角色菜单接口失败时降级为空菜单，不允许复用旧缓存菜单继续授予已撤销页面。
 - 前端数据概览已拆回旧菜单的两个入口：`/main/analysis/overview` 映射到独立 `SystemOverview` 只读说明页，复用 `PageShell/PageSurface/Table/Badge` 模板组件展示当前 Rust + Tauri 技术栈、前后端封装规范和发布门禁；`/main/analysis/workbench` 继续映射到 `Workspace` 工作台，通过 `src/api/dashboard.ts` 封装读取旧 `chart` 接口组合统计数据，不再依赖未实现的 `/chart/dashboard`。配套 `menu-adapter.test.ts`、`Dashboard.test.tsx`、`SystemOverview.test.tsx` 和 `dashboard.test.ts` 覆盖旧字段映射、旧菜单 URL 映射、页面渲染和实际请求路径。
 - 前端 Dashboard 导航只把旧 `type=2` 页面菜单映射成可点击入口；旧 `type=1` 目录仅用于递归子菜单，避免父级“订单管理/系统管理/回单管理”在缺少对应页面权限时误授新模板页面。缺失 `type` 的旧 mock/兼容数据继续按页面候选处理。
 - 前端订单模块已在 `src/api/orders.ts` 和 `OrdersList` 页面补齐列表 + CRUD 第一阶段：通过封装层请求 `/api/order/list`、`GET /api/order/:id`、`POST /api/order`、`PATCH /api/order/:id`、`DELETE /api/order/:id`，保留旧订单字段、搜索条件、分页、当前筛选结果完整 CSV 导出、旧弹窗必填校验、查看只读、编辑保存和删除确认；配套 API/页面测试覆盖 payload、请求路径、字段渲染、筛选、分页、导出二次拉取当前已应用筛选、必填校验、toast、confirm 和刷新行为，`order-export` 单测覆盖旧中文列顺序、BOM、CSV 转义、文件名和 object URL 下载封装。
