@@ -114,6 +114,18 @@ test.describe('business list E2E state matrix', () => {
       })
     })
 
+    await page.route('**/api/memory/list', async (route) => {
+      const request = route.request()
+      expect(request.method()).toBe('POST')
+      expect(request.headers().authorization).toBe(`Bearer ${e2eToken}`)
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [{ value: 'E2E 自动收货人' }, { value: 'E2E 自动发货人' }],
+        }),
+      })
+    })
+
     await loginAsAdmin(page)
     await page.getByRole('button', { name: '订单列表' }).click()
 
@@ -141,6 +153,19 @@ test.describe('business list E2E state matrix', () => {
     expect(csv).toContain(orderFixture.company)
     expect(csv).toContain(orderFixture.remarks)
     expect(csv).toContain(secondOrderFixture.remarks)
+
+    await page.getByRole('button', { name: '新建订单' }).click()
+    const orderDialog = page.getByRole('dialog')
+    const consigneeInput = orderDialog.locator('#order-consignee')
+    const consignorInput = orderDialog.locator('#order-consignor')
+    await consigneeInput.click()
+    await expect(page.getByRole('option', { name: /E2E 自动收货人/ })).toBeVisible()
+    await page.getByRole('option', { name: /E2E 自动收货人/ }).click()
+    await expect(consigneeInput).toHaveValue('E2E 自动收货人')
+    await consignorInput.click()
+    await page.getByRole('option', { name: /E2E 自动发货人/ }).click()
+    await expect(consignorInput).toHaveValue('E2E 自动发货人')
+    await orderDialog.getByRole('button', { name: '取消' }).click()
 
     orderState = 'empty'
     await page.getByRole('button', { name: '刷新' }).click()

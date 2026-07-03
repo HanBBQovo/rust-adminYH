@@ -14,6 +14,11 @@ const createOrderMock = vi.hoisted(() => vi.fn())
 const updateOrderMock = vi.hoisted(() => vi.fn())
 const deleteOrderMock = vi.hoisted(() => vi.fn())
 const exportOrdersCsvMock = vi.hoisted(() => vi.fn())
+const searchMemoryOptionsMock = vi.hoisted(() => vi.fn())
+
+vi.mock('@/api/memory', () => ({
+  searchMemoryOptions: searchMemoryOptionsMock,
+}))
 
 vi.mock('@/api/orders', () => ({
   listOrders: listOrdersMock,
@@ -95,6 +100,7 @@ describe('OrdersList', () => {
     updateOrderMock.mockReset()
     deleteOrderMock.mockReset()
     exportOrdersCsvMock.mockReset()
+    searchMemoryOptionsMock.mockReset()
     listOrdersMock.mockResolvedValue({ rows: [ORDER_ROW], total: 11 })
     listOrdersForExportMock.mockResolvedValue([ORDER_ROW])
     getOrderMock.mockResolvedValue(ORDER_ROW)
@@ -102,6 +108,10 @@ describe('OrdersList', () => {
     updateOrderMock.mockResolvedValue(undefined)
     deleteOrderMock.mockResolvedValue(undefined)
     exportOrdersCsvMock.mockResolvedValue('browser')
+    searchMemoryOptionsMock.mockResolvedValue([
+      { value: '王五', label: '王五', description: '旧订单记忆词条' },
+      { value: '赵六', label: '赵六', description: '旧订单记忆词条' },
+    ])
   })
 
   it('renders old order columns and loads the first page', async () => {
@@ -190,6 +200,39 @@ describe('OrdersList', () => {
     })
     expect(showToast).toHaveBeenCalledWith('success', '创建订单成功！', { translate: false })
     expect(listOrdersMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('selects old memory values while keeping order payload fields unchanged', async () => {
+    const user = userEvent.setup()
+    renderOrdersList()
+
+    await screen.findByText('YD20260101001')
+    await user.click(screen.getByRole('button', { name: '新建订单' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(orderField(dialog, 'oddnumber'), 'YD20260701002')
+    await user.click(orderField(dialog, 'consignee'))
+    await user.click(await screen.findByRole('option', { name: /王五/ }))
+    await user.type(orderField(dialog, 'address'), '北京市')
+    await user.type(orderField(dialog, 'goodsname'), '设备')
+    await user.type(orderField(dialog, 'number'), '2')
+    await user.click(orderField(dialog, 'consignor'))
+    await user.click(await screen.findByRole('option', { name: /赵六/ }))
+    await user.type(orderField(dialog, 'freight'), '100')
+    await user.type(orderField(dialog, 'sumfreight'), '120')
+    await user.type(orderField(dialog, 'company'), '顺丰速运')
+    await user.click(within(dialog).getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(searchMemoryOptionsMock).toHaveBeenCalled()
+      expect(createOrderMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          oddnumber: 'YD20260701002',
+          consignee: '王五',
+          consignor: '赵六',
+          receiptnum: 0,
+        }),
+      )
+    })
   })
 
   it('loads detail for view and keeps the form readonly', async () => {

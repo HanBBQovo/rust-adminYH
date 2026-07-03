@@ -227,6 +227,7 @@ POST /api/recovery/list
 - `/api/chart/headerList`、`/api/chart/company/order/count`、`/api/chart/company/order/sumfreight`、`/api/chart/company/receipt/sumreceipt` 已先落地内存图表统计仓储和集成测试，兼容旧顶部统计标题、公司维度字段名 `ordercount/sumfreight/sumReceipt`、登录鉴权要求。
 - 前端工作台 `src/api/dashboard.ts` 已改为通过封装层读取旧 `chart` 接口组合数据，不再依赖未实现的 `/chart/dashboard`；配套 `dashboard.test.ts` 覆盖旧字段映射、公司维度聚合和实际请求路径。
 - 前端订单模块已在 `src/api/orders.ts` 和 `OrdersList` 页面补齐列表 + CRUD 第一阶段：通过封装层请求 `/api/order/list`、`GET /api/order/:id`、`POST /api/order`、`PATCH /api/order/:id`、`DELETE /api/order/:id`，保留旧订单字段、搜索条件、分页、当前筛选结果完整 CSV 导出、旧弹窗必填校验、查看只读、编辑保存和删除确认；配套 API/页面测试覆盖 payload、请求路径、字段渲染、筛选、分页、导出二次拉取当前已应用筛选、必填校验、toast、confirm 和刷新行为，`order-export` 单测覆盖旧中文列顺序、BOM、CSV 转义、文件名和 object URL 下载封装。
+- 前端订单弹窗已通过 `src/api/memory.ts` 接入旧 `/api/memory/list` 记忆词条，收货人/发货人字段使用统一 `AutocompleteInput` 模板控件实现“可自由输入 + 可选历史记忆值”；业务页面不直接调用旧接口或自写弹层，提交 payload 仍保持旧订单字段不变，页面测试和 Playwright E2E 覆盖记忆词条加载、选择和表单值回填。
 - 前端回单模块已在 `src/api/receipts.ts` 和 `ReceiptsList` 页面补齐列表 + 状态流转第一阶段：通过封装层请求 `/api/receipt/list`、`/api/notrecovery/list`、`/api/recovery/list`、`PATCH /api/receipt/:id`，复用一个页面承载全部回单/未回收/已回收三个旧入口，保留旧回单字段、搜索条件、分页、回收/接收/寄出按钮和 `issuestate='已接收'` 兼容值；配套 API/页面测试覆盖三类列表路径、旧 payload、状态 PATCH、筛选、分页、toast、空态和刷新行为。
 - 前端业务列表 E2E 已补充 `apps/desktop/web/e2e/business-list-states.spec.ts`：订单列表和回单管理在真实浏览器中覆盖登录后进入页面、旧接口分页 payload、Bearer token、成功列表、订单筛选结果完整 CSV 下载、空态、错误态，以及错误时仍保留模板侧栏/顶栏、不退回登录页。
 - 前端系统管理 E2E 已补充 `apps/desktop/web/e2e/system-list-states.spec.ts`：发货公司、用户管理、角色权限、菜单管理在真实浏览器中覆盖登录后进入页面、旧接口 payload/header、成功列表、空态、错误态，以及错误时仍保留模板侧栏/顶栏、不退回登录页。

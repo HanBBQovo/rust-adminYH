@@ -975,6 +975,8 @@ Docker/容器门禁已作为发布级测试的一部分补齐：`Dockerfile.admi
 
 Docker 真实浏览器 E2E 必须验证完整生产链路，而不是只验证 mock 或静态页面：`RUN_DOCKER_E2E=true scripts/test-docker.sh` 会先用 `scripts/seed-docker-e2e.sql` 写入稳定的管理员、菜单、订单、回单、公司和头像测试数据，再让 Playwright 通过 nginx Web 地址登录真实 Rust API，断言工作台指标、订单列表、回单管理和页面注册表都来自 MySQL seed 数据。该用例使用 `PLAYWRIGHT_BASE_URL` 指向 compose 暴露的 Web 服务，`REAL_API_E2E=true` 才启用，避免本地普通 E2E 误连真实服务；发布级验收必须同时保存 Docker 健康检查、seed、Playwright 和 compose cleanup 的日志。
 
+订单表单的旧 `memory` 体验已迁入前端封装：`src/api/memory.ts` 统一读取 data-only `/api/memory/list` 响应并归一成选项，`AutocompleteInput` 作为模板 UI 控件支持自由输入和历史记忆值选择，`OrderFormDialog` 只把收货人/发货人字段接到封装后的 `searchMemoryOptions`。后续如果把记忆词条扩展到发货单位、货物名称或地址，必须复用这层 API/UI 封装，不允许在业务页面直接 `fetch` 或散写弹层样式。
+
 Docker Web 运行态门禁不只检查首页 HTML：`desktop-web` compose 服务必须带 nginx healthcheck，`scripts/test-docker.sh` 必须同时检查 `http://127.0.0.1:18080/`、首页引用的至少一个生产静态资源，以及经 nginx 代理后的 `http://127.0.0.1:18080/api/health`。这样 Docker 发布候选能覆盖 Web 静态资源、SPA fallback 和 `/api` 反代链路，而不是只证明容器进程存在。如果本机 `18080` 已被其他项目占用，使用 `WEB_PORT=<port>`、`WEB_URL=http://127.0.0.1:<port>/`、`WEB_API_URL=http://127.0.0.1:<port>/api/health` 覆盖 Docker Web 门禁端口。
 
 Docker 基础镜像允许通过环境变量覆盖：`RUST_IMAGE`、`RUNTIME_IMAGE`、`NODE_IMAGE`、`NGINX_IMAGE`、`MYSQL_IMAGE`。本机或 CI 如果 Docker Hub 直连不稳定，可以先预拉取内部镜像或镜像站版本，再用这些变量执行 `scripts/test-docker.sh`；脚本会在诊断中打印实际使用的基础镜像，便于定位是网络拉取失败、构建失败还是启动失败。

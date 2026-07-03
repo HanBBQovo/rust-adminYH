@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 
+import { searchMemoryOptions } from '@/api/memory'
 import type { OrderMutationPayload } from '@/api/orders'
 import { FormField, FormSection } from '@/components/layout/FormScaffold'
+import { AutocompleteInput } from '@/components/ui/autocomplete-input'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -43,6 +45,8 @@ const TITLE_BY_MODE: Record<OrderFormMode, string> = {
   edit: '编辑运单',
   view: '查看运单',
 }
+
+const MEMORY_FIELD_KEYS = new Set<keyof OrderFormValues>(['consignee', 'consignor'])
 
 function normalizePayload(values: OrderFormValues): OrderMutationPayload {
   return {
@@ -130,6 +134,15 @@ export function OrderFormDialog({
                       placeholder={field.placeholder}
                       disabled={readonly}
                       onChange={(event) => updateValue(field.key, event.target.value)}
+                    />
+                  ) : MEMORY_FIELD_KEYS.has(field.key) ? (
+                    <AutocompleteInput
+                      id={inputId}
+                      value={String(value ?? '')}
+                      placeholder={field.placeholder}
+                      disabled={readonly}
+                      loadOptions={searchMemoryOptions}
+                      onValueChange={(nextValue) => updateValue(field.key, nextValue)}
                     />
                   ) : (
                     <Input

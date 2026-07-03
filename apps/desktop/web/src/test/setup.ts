@@ -43,6 +43,20 @@ function installBrowserMocks() {
     writable: true,
     value: (id: number) => window.clearTimeout(id),
   })
+
+  Object.defineProperty(window, 'ResizeObserver', {
+    writable: true,
+    value: class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  })
+
+  Object.defineProperty(globalThis, 'ResizeObserver', {
+    writable: true,
+    value: window.ResizeObserver,
+  })
 }
 
 installBrowserMocks()
