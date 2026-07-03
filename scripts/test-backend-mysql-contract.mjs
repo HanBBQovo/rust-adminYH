@@ -265,6 +265,45 @@ assertIncludes(
 )
 assertIncludes(
   orderRepository,
+  'with_mysql_transaction(&self.pool, "order.remove"',
+  'order.remove must use the shared transaction runner',
+)
+assert(
+  !orderRepository.includes('begin_mysql_transaction(&self.pool, "order.remove"'),
+  'order.remove must not hand-roll begin/commit after runner migration',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "fetch_order_oddnumber"',
+  'order.remove must include scoped SQL error context for old order lookup',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "delete_company_order"',
+  'order.remove must include scoped SQL error context for company_order cleanup',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "count_same_oddnumber_orders"',
+  'order.remove must include scoped SQL error context for duplicate oddnumber count',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "read_same_oddnumber_count"',
+  'order.remove must include scoped SQL error context for duplicate oddnumber count decode',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "delete_receipt"',
+  'order.remove must include scoped SQL error context for receipt cleanup',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "delete_order"',
+  'order.remove must include scoped SQL error context for order delete',
+)
+assertIncludes(
+  orderRepository,
   'with_mysql_transaction(&self.pool, "receipt.batch_status"',
   'receipt.batch_status must use the shared transaction runner',
 )

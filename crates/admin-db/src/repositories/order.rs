@@ -113,47 +113,59 @@ impl OrderStore for MySqlOrderRepository {
 
     fn remove_order<'a>(&'a self, order_id: i64) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let mut tx = begin_mysql_transaction(&self.pool, "order.remove").await?;
-            let oddnumber = sqlx::query("SELECT `oddnumber` FROM `order_list` WHERE `id` = ?")
-                .bind(order_id)
-                .fetch_optional(tx.as_mut())
-                .await
-                .map_err(db_error)?
-                .map(|row| get_string(&row, "oddnumber"))
-                .ok_or_else(|| AppError::NotFound(format!("order {order_id}")))?;
+            with_mysql_transaction(&self.pool, "order.remove", |tx| {
+                Box::pin(async move {
+                    let scope = tx.scope();
+                    let oddnumber =
+                        sqlx::query("SELECT `oddnumber` FROM `order_list` WHERE `id` = ?")
+                            .bind(order_id)
+                            .fetch_optional(tx.as_mut())
+                            .await
+                            .map_err(|error| {
+                                transaction_sql_error(scope, "fetch_order_oddnumber", error)
+                            })?
+                            .map(|row| get_string(&row, "oddnumber"))
+                            .ok_or_else(|| AppError::NotFound(format!("order {order_id}")))?;
 
-            sqlx::query("DELETE FROM `company_order` WHERE `order_id` = ?")
-                .bind(order_id)
-                .execute(tx.as_mut())
-                .await
-                .map_err(db_error)?;
+                    sqlx::query("DELETE FROM `company_order` WHERE `order_id` = ?")
+                        .bind(order_id)
+                        .execute(tx.as_mut())
+                        .await
+                        .map_err(|error| transaction_sql_error(scope, "delete_company_order", error))?;
 
-            let same_oddnumber_count = sqlx::query(
-                "SELECT COUNT(*) AS total FROM `order_list` WHERE `oddnumber` = ? AND `id` <> ?",
-            )
-            .bind(&oddnumber)
-            .bind(order_id)
-            .fetch_one(tx.as_mut())
-            .await
-            .map_err(db_error)?
-            .try_get::<i64, _>("total")
-            .map_err(db_error)?;
-
-            if same_oddnumber_count == 0 {
-                sqlx::query("DELETE FROM `receipt` WHERE `oddnumber` = ?")
+                    let same_oddnumber_count = sqlx::query(
+                        "SELECT COUNT(*) AS total FROM `order_list` WHERE `oddnumber` = ? AND `id` <> ?",
+                    )
                     .bind(&oddnumber)
-                    .execute(tx.as_mut())
+                    .bind(order_id)
+                    .fetch_one(tx.as_mut())
                     .await
-                    .map_err(db_error)?;
-            }
+                    .map_err(|error| {
+                        transaction_sql_error(scope, "count_same_oddnumber_orders", error)
+                    })?
+                    .try_get::<i64, _>("total")
+                    .map_err(|error| {
+                        transaction_sql_error(scope, "read_same_oddnumber_count", error)
+                    })?;
 
-            sqlx::query("DELETE FROM `order_list` WHERE `id` = ?")
-                .bind(order_id)
-                .execute(tx.as_mut())
-                .await
-                .map_err(db_error)?;
+                    if same_oddnumber_count == 0 {
+                        sqlx::query("DELETE FROM `receipt` WHERE `oddnumber` = ?")
+                            .bind(&oddnumber)
+                            .execute(tx.as_mut())
+                            .await
+                            .map_err(|error| transaction_sql_error(scope, "delete_receipt", error))?;
+                    }
 
-            commit_mysql_transaction(tx).await
+                    sqlx::query("DELETE FROM `order_list` WHERE `id` = ?")
+                        .bind(order_id)
+                        .execute(tx.as_mut())
+                        .await
+                        .map_err(|error| transaction_sql_error(scope, "delete_order", error))?;
+
+                    Ok(())
+                })
+            })
+            .await
         })
     }
 
