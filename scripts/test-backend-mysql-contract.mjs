@@ -60,6 +60,7 @@ const transactionHelper = read('crates/admin-db/src/transaction.rs')
 const menuRepository = read('crates/admin-db/src/repositories/menu.rs')
 const orderRepository = read('crates/admin-db/src/repositories/order.rs')
 const roleRepository = read('crates/admin-db/src/repositories/role.rs')
+const userRepository = read('crates/admin-db/src/repositories/user.rs')
 const repositoryFiles = listFilesRecursive('crates/admin-db/src/repositories', (file) => file.endsWith('.rs'))
 
 const testFiles = [
@@ -227,6 +228,40 @@ assertIncludes(
   menuRepository,
   'transaction_sql_error(scope, "delete_menu"',
   'menu.remove must include scoped SQL error context for menu delete',
+)
+assertIncludes(
+  userRepository,
+  'with_mysql_transaction(&self.pool, "user.update_avatar"',
+  'user.update_avatar must use the shared transaction runner',
+)
+assert(
+  !userRepository.includes('begin_mysql_transaction(&self.pool, "user.update_avatar"'),
+  'user.update_avatar must not hand-roll begin/commit after runner migration',
+)
+assertIncludes(
+  userRepository,
+  'transaction_sql_error(scope, "ensure_user_exists"',
+  'user.update_avatar must include scoped SQL error context for user existence check',
+)
+assertIncludes(
+  userRepository,
+  'transaction_sql_error(scope, "update_user_avatar_url"',
+  'user.update_avatar must include scoped SQL error context for user avatar URL update',
+)
+assertIncludes(
+  userRepository,
+  'transaction_sql_error(scope, "find_existing_avatar"',
+  'user.update_avatar must include scoped SQL error context for avatar lookup',
+)
+assertIncludes(
+  userRepository,
+  'transaction_sql_error(scope, "update_avatar_metadata"',
+  'user.update_avatar must include scoped SQL error context for avatar update',
+)
+assertIncludes(
+  userRepository,
+  'transaction_sql_error(scope, "insert_avatar_metadata"',
+  'user.update_avatar must include scoped SQL error context for avatar insert',
 )
 assertIncludes(
   orderRepository,

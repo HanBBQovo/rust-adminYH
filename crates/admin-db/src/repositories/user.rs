@@ -13,7 +13,10 @@ use admin_core::{
 };
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row};
 
-use crate::transaction::{begin_mysql_transaction, commit_mysql_transaction, MySqlTransaction};
+use crate::transaction::{
+    begin_mysql_transaction, commit_mysql_transaction, transaction_sql_error,
+    with_mysql_transaction, MySqlTransaction,
+};
 
 #[derive(Debug, Clone)]
 pub struct MySqlUserRepository {
@@ -292,58 +295,77 @@ impl UserStore for MySqlUserRepository {
         input: AvatarUploadInput,
     ) -> UserServiceFuture<'a, AppResult<AvatarInfo>> {
         Box::pin(async move {
-            let mut tx = begin_mysql_transaction(&self.pool, "user.update_avatar").await?;
-            ensure_user_exists(&mut tx, user_id).await?;
-            let avatar_url = format!("/users/{user_id}/avatar");
-            sqlx::query("UPDATE `user` SET `avatar_url` = ? WHERE `id` = ?")
-                .bind(&avatar_url)
-                .bind(user_id)
-                .execute(tx.as_mut())
-                .await
-                .map_err(db_error)?;
+            let filename = input.filename;
+            let mimetype = input.mimetype;
+            let size = input.size;
+            with_mysql_transaction(&self.pool, "user.update_avatar", |tx| {
+                let filename = filename.clone();
+                let mimetype = mimetype.clone();
+                Box::pin(async move {
+                    ensure_user_exists(tx, user_id).await?;
+                    let scope = tx.scope();
+                    let avatar_url = format!("/users/{user_id}/avatar");
+                    sqlx::query("UPDATE `user` SET `avatar_url` = ? WHERE `id` = ?")
+                        .bind(&avatar_url)
+                        .bind(user_id)
+                        .execute(tx.as_mut())
+                        .await
+                        .map_err(|error| {
+                            transaction_sql_error(scope, "update_user_avatar_url", error)
+                        })?;
 
-            let existing = sqlx::query("SELECT `id` FROM `avatar` WHERE `user_id` = ? LIMIT 1")
-                .bind(user_id)
-                .fetch_optional(tx.as_mut())
-                .await
-                .map_err(db_error)?;
+                    let existing =
+                        sqlx::query("SELECT `id` FROM `avatar` WHERE `user_id` = ? LIMIT 1")
+                            .bind(user_id)
+                            .fetch_optional(tx.as_mut())
+                            .await
+                            .map_err(|error| {
+                                transaction_sql_error(scope, "find_existing_avatar", error)
+                            })?;
 
-            if existing.is_some() {
-                sqlx::query(
-                    r#"
-                    UPDATE `avatar`
-                    SET `filename` = ?, `mimetype` = ?, `size` = ?
-                    WHERE `user_id` = ?
-                    "#,
-                )
-                .bind(&input.filename)
-                .bind(&input.mimetype)
-                .bind(input.size as i64)
-                .bind(user_id)
-                .execute(tx.as_mut())
-                .await
-                .map_err(db_error)?;
-            } else {
-                sqlx::query(
-                    r#"
-                    INSERT INTO `avatar` (`filename`, `mimetype`, `size`, `user_id`)
-                    VALUES (?, ?, ?, ?)
-                    "#,
-                )
-                .bind(&input.filename)
-                .bind(&input.mimetype)
-                .bind(input.size as i64)
-                .bind(user_id)
-                .execute(tx.as_mut())
-                .await
-                .map_err(db_error)?;
-            }
+                    if existing.is_some() {
+                        sqlx::query(
+                            r#"
+                            UPDATE `avatar`
+                            SET `filename` = ?, `mimetype` = ?, `size` = ?
+                            WHERE `user_id` = ?
+                            "#,
+                        )
+                        .bind(&filename)
+                        .bind(&mimetype)
+                        .bind(size as i64)
+                        .bind(user_id)
+                        .execute(tx.as_mut())
+                        .await
+                        .map_err(|error| {
+                            transaction_sql_error(scope, "update_avatar_metadata", error)
+                        })?;
+                    } else {
+                        sqlx::query(
+                            r#"
+                            INSERT INTO `avatar` (`filename`, `mimetype`, `size`, `user_id`)
+                            VALUES (?, ?, ?, ?)
+                            "#,
+                        )
+                        .bind(&filename)
+                        .bind(&mimetype)
+                        .bind(size as i64)
+                        .bind(user_id)
+                        .execute(tx.as_mut())
+                        .await
+                        .map_err(|error| {
+                            transaction_sql_error(scope, "insert_avatar_metadata", error)
+                        })?;
+                    }
 
-            commit_mysql_transaction(tx).await?;
+                    Ok(())
+                })
+            })
+            .await?;
             Ok(AvatarInfo {
-                filename: input.filename,
-                mimetype: input.mimetype,
-                size: input.size,
+                filename,
+                mimetype,
+                size,
                 user_id,
             })
         })
@@ -457,11 +479,12 @@ async fn fetch_count(mut query: QueryBuilder<'_, MySql>, pool: &MySqlPool) -> Ap
 }
 
 async fn ensure_user_exists(tx: &mut MySqlTransaction<'_>, user_id: i64) -> AppResult<()> {
+    let scope = tx.scope();
     let exists = sqlx::query("SELECT `id` FROM `user` WHERE `id` = ?")
         .bind(user_id)
         .fetch_optional(tx.as_mut())
         .await
-        .map_err(db_error)?
+        .map_err(|error| transaction_sql_error(scope, "ensure_user_exists", error))?
         .is_some();
     if !exists {
         return Err(AppError::NotFound(format!("user {user_id}")));
