@@ -21,6 +21,15 @@ export async function mockAdminSession(page: Page, options: MockSessionOptions) 
     window.sessionStorage.clear()
   })
 
+  await page.route('**/api/code', async (route) => {
+    expect(route.request().method()).toBe('GET')
+
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ data: '<svg>ABCD</svg>' }),
+    })
+  })
+
   await page.route('**/api/users/me', async (route) => {
     await route.fulfill({
       contentType: 'application/json',

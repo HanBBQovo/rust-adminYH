@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { loginSession, restoreSession } from '@/api/auth'
+import { fetchCaptchaCode, loginSession, restoreSession } from '@/api/auth'
 import { getAuthToken } from '@/api/client'
 
 const fetchMock = vi.fn()
@@ -15,6 +15,17 @@ afterEach(() => {
 })
 
 describe('auth session API', () => {
+  it('fetches the old data-only captcha SVG response', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: '<svg>ABCD</svg>' }),
+    })
+
+    await expect(fetchCaptchaCode()).resolves.toBe('<svg>ABCD</svg>')
+    expect(fetchMock).toHaveBeenCalledWith('/api/code', expect.any(Object))
+  })
+
   it('logs in, stores the token, and returns a session', async () => {
     fetchMock
       .mockResolvedValueOnce({
@@ -45,6 +56,31 @@ describe('auth session API', () => {
         headers: expect.objectContaining({ authorization: 'Bearer token-123' }),
       }),
     )
+  })
+
+  it('passes an optional legacy captcha code without changing the login flow', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ code: 0, data: { id: 58, name: 'admin', token: 'token-123' } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ code: 0, data: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ code: 0, data: [] }),
+      })
+
+    await loginSession({ name: 'admin', password: 'secret', code: 'A1B2' })
+
+    const loginInit = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/login', expect.any(Object))
+    expect(JSON.parse(String(loginInit.body))).toEqual({ name: 'admin', password: 'secret', code: 'A1B2' })
   })
 
   it('restores current user with the stored token', async () => {
