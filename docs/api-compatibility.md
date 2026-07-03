@@ -190,7 +190,10 @@ scripts/check-all.sh
 scripts/test-backend.sh
 scripts/test-frontend.sh
 scripts/test-migration.sh
+scripts/test-backend-mysql-contract.mjs
 ```
+
+后端真实 MySQL 门禁额外执行 `scripts/test-backend-mysql-contract.mjs`，默认输出 `Backend MySQL contract OK`。该契约会扫描 `crates/admin-db/tests/mysql_*.rs` 和 `crates/admin-api/tests/mysql_*.rs`，逐个确认测试文件被 `scripts/test-backend.sh` 的 `RUN_DB_TESTS=true` 分支以 `-- --ignored` 执行，并确认每个真实 MySQL 测试默认保持 ignored，防止后续新增仓储/API 真实库回归但忘记接入发布门禁。
 
 后续 API 集成测试建议覆盖：
 

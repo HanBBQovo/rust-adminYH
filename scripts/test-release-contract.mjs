@@ -18,6 +18,7 @@ function assertIncludes(content, expected, message) {
 
 const checkAll = read('scripts/check-all.sh')
 const backendGate = read('scripts/test-backend.sh')
+const backendMysqlContract = read('scripts/test-backend-mysql-contract.mjs')
 const migrationGate = read('scripts/test-migration.sh')
 const dockerGate = read('scripts/test-docker.sh')
 const tauriGate = read('scripts/test-tauri-build.sh')
@@ -69,8 +70,12 @@ assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 RUN_TAURI_SIDECAR_SMOKE
 assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 TAURI_SIDECAR_DATABASE_URL 或 DATABASE_URL', 'release preflight must fail without sidecar smoke DB URL')
 
 assertIncludes(backendGate, 'FAIL: RELEASE_GATE=true 不允许跳过真实 MySQL repository 集成测试。', 'backend gate must not allow release builds to skip real MySQL tests')
+assertIncludes(backendGate, 'scripts/test-backend-mysql-contract.mjs', 'backend gate must always run the MySQL coverage contract')
 assertIncludes(backendGate, 'admin-api MySQL API compatibility integration tests', 'backend gate must include real MySQL HTTP compatibility tests')
 assertIncludes(backendGate, '--test mysql_api_compatibility -- --ignored', 'backend gate must run ignored MySQL API compatibility tests when DB gate is enabled')
+assertIncludes(backendMysqlContract, 'crates/admin-db/tests', 'backend MySQL contract must scan admin-db integration tests')
+assertIncludes(backendMysqlContract, 'crates/admin-api/tests', 'backend MySQL contract must scan admin-api integration tests')
+assertIncludes(backendMysqlContract, '-p ${packageName} --test ${testName} -- --ignored', 'backend MySQL contract must verify every mysql_*.rs file is wired into RUN_DB_TESTS')
 
 assertIncludes(migrationGate, 'FAIL: RELEASE_GATE=true 不允许跳过真实数据库迁移 dry-run/verify', 'migration gate must not allow release builds to skip real migration verification')
 assertIncludes(migrationGate, 'FAIL: RELEASE_GATE=true 需要 NEW_AVATAR_DIR', 'migration gate must require avatar file verification for release')
