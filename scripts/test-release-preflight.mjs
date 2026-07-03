@@ -92,6 +92,16 @@ const cases = [
     tokens: ['FAIL: RELEASE_GATE=true', 'RUN_COVERAGE=true'],
   },
   {
+    name: 'missing RUN_DOCKER_E2E',
+    env: Object.fromEntries(Object.entries(passingToggles).filter(([key]) => key !== 'RUN_DOCKER_E2E')),
+    tokens: ['FAIL: RELEASE_GATE=true', 'RUN_DOCKER_E2E=true'],
+  },
+  {
+    name: 'missing RUN_TAURI_DMG',
+    env: Object.fromEntries(Object.entries(passingToggles).filter(([key]) => key !== 'RUN_TAURI_DMG')),
+    tokens: ['FAIL: RELEASE_GATE=true', 'RUN_TAURI_DMG=true'],
+  },
+  {
     name: 'missing RUN_TAURI_SIDECAR_SMOKE',
     env: Object.fromEntries(
       Object.entries(passingToggles).filter(([key]) => key !== 'RUN_TAURI_SIDECAR_SMOKE'),

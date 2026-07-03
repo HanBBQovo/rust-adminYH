@@ -76,6 +76,8 @@ assertIncludes(releasePreflight, 'SKIP_RELEASE_PREFLIGHT_SELFTEST', 'release pre
 assertIncludes(releasePreflight, '========== Backend ==========', 'release preflight regression must prove failures stop before backend gates')
 assertIncludes(releasePreflight, 'RUN_DB_TESTS=true', 'release preflight regression must execute a missing DB toggle case')
 assertIncludes(releasePreflight, 'RUN_COVERAGE=true', 'release preflight regression must execute a missing coverage case')
+assertIncludes(releasePreflight, 'RUN_DOCKER_E2E=true', 'release preflight regression must execute a missing Docker E2E case')
+assertIncludes(releasePreflight, 'RUN_TAURI_DMG=true', 'release preflight regression must execute a missing Tauri DMG case')
 assertIncludes(releasePreflight, 'RUN_TAURI_SIDECAR_SMOKE=true', 'release preflight regression must execute a missing sidecar smoke case')
 assertIncludes(releasePreflight, 'TAURI_SIDECAR_DATABASE_URL', 'release preflight regression must execute a missing sidecar database URL case')
 
@@ -110,6 +112,25 @@ assert(!ciWorkflow.includes('push:'), 'GitHub Actions must not auto-run on push 
 assert(!ciWorkflow.includes('pull_request:'), 'GitHub Actions must not auto-run on pull_request during active development')
 assertIncludes(ciWorkflow, 'run_docker:', 'manual workflow must expose Docker release input')
 assertIncludes(ciWorkflow, 'run_tauri:', 'manual workflow must expose Tauri release input')
+assertIncludes(ciWorkflow, 'run_tauri_dmg:', 'manual workflow must expose Tauri DMG release input')
+assertIncludes(ciWorkflow, 'run_tauri_sidecar_smoke:', 'manual workflow must expose bundled Tauri sidecar smoke input')
+assertIncludes(
+  ciWorkflow,
+  'RUN_TAURI_SIDECAR_SMOKE=${{ inputs.run_tauri_sidecar_smoke }}',
+  'Tauri workflow must pass the sidecar smoke input into the build gate',
+)
+assertIncludes(
+  ciWorkflow,
+  'TAURI_SIDECAR_DATABASE_URL: ${{ secrets.TAURI_SIDECAR_DATABASE_URL }}',
+  'Tauri workflow must pass the sidecar smoke database secret into the build gate',
+)
+assertIncludes(ciWorkflow, 'name: tauri-macos-app', 'Tauri workflow must upload the macOS app bundle')
+assertIncludes(ciWorkflow, 'name: tauri-macos-dmg', 'Tauri workflow must upload the macOS DMG bundle when requested')
+assertIncludes(
+  ciWorkflow,
+  'if: ${{ inputs.run_tauri_dmg }}',
+  'Tauri workflow must only require a DMG artifact when the DMG input is enabled',
+)
 
 assertIncludes(databaseMigration, 'verify-files', 'database migration docs must include avatar file verification')
 assertIncludes(databaseMigration, 'rollback-plan', 'database migration docs must include rollback planning')
