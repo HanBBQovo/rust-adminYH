@@ -74,6 +74,9 @@ section "Frontend"
 section "Migration"
 "$ROOT_DIR/scripts/test-migration.sh"
 
+section "Release contract"
+node "$ROOT_DIR/scripts/test-release-contract.mjs"
+
 if [[ -f "$ROOT_DIR/apps/desktop/src-tauri/Cargo.toml" ]]; then
   section "Tauri contract"
   "$ROOT_DIR/scripts/test-tauri-contract.sh"
