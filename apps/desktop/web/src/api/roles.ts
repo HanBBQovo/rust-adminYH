@@ -82,8 +82,17 @@ export async function listRoles(params: RoleListParams): Promise<RoleListResult>
 }
 
 export async function listAssignableRoles(): Promise<LegacyRole[]> {
-  const { rows } = await listRoles({ page: 1, pageSize: 100 })
-  return rows.filter((role) => role.id === 1 || role.id === 2)
+  const pageSize = 100
+  const firstPage = await listRoles({ page: 1, pageSize })
+  const roles = [...firstPage.rows]
+
+  for (let page = 2; roles.length < firstPage.total; page += 1) {
+    const nextPage = await listRoles({ page, pageSize })
+    if (!nextPage.rows.length) break
+    roles.push(...nextPage.rows)
+  }
+
+  return roles
 }
 
 export async function getRole(roleId: number): Promise<LegacyRole | null> {

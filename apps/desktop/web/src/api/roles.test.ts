@@ -96,7 +96,7 @@ describe('roles api', () => {
     )
   })
 
-  it('limits assignable roles to the currently accepted user role ids', async () => {
+  it('returns every assignable role from the old role list route', async () => {
     fetchMock.mockImplementationOnce(() =>
       jsonResponse({
         totalCount: 3,
@@ -104,12 +104,53 @@ describe('roles api', () => {
       }),
     )
 
-    await expect(listAssignableRoles()).resolves.toEqual(ROLE_ROWS.slice(0, 2))
+    await expect(listAssignableRoles()).resolves.toEqual(ROLE_ROWS)
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/role/list',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ offset: 0, size: 100 }),
+      }),
+    )
+  })
+
+  it('loads every assignable role across old paginated role responses', async () => {
+    const firstPageRoles = Array.from({ length: 100 }, (_, index) => ({
+      id: index + 1,
+      name: `角色 ${index + 1}`,
+      intro: '分页权限',
+      createAt: '2026-01-01T00:00:00Z',
+      updateAt: '2026-01-01T00:00:00Z',
+    }))
+    const overflowRole = {
+      id: 101,
+      name: '仓库主管',
+      intro: '仓库权限',
+      createAt: '2026-01-04T00:00:00Z',
+      updateAt: '2026-01-04T00:00:00Z',
+    }
+
+    fetchMock
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          totalCount: 101,
+          list: firstPageRoles,
+        }),
+      )
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          totalCount: 101,
+          list: [overflowRole],
+        }),
+      )
+
+    await expect(listAssignableRoles()).resolves.toEqual([...firstPageRoles, overflowRole])
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/role/list',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ offset: 100, size: 100 }),
       }),
     )
   })

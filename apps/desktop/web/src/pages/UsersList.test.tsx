@@ -43,6 +43,13 @@ const ROLE_ROWS = [
     createAt: '2026-01-02T00:00:00Z',
     updateAt: '2026-01-02T00:00:00Z',
   },
+  {
+    id: 3,
+    name: '财务',
+    intro: '财务权限',
+    createAt: '2026-01-03T00:00:00Z',
+    updateAt: '2026-01-03T00:00:00Z',
+  },
 ]
 
 const USER_ROW = {
@@ -145,6 +152,38 @@ describe('UsersList', () => {
           name: 'admin',
         }),
       )
+    })
+  })
+
+  it('uses every returned role as a user filter and create option', async () => {
+    const user = userEvent.setup()
+    renderUsersList()
+
+    await screen.findByText('admin')
+    await user.click(screen.getByRole('combobox', { name: '权限名称' }))
+    await user.click(await screen.findByRole('option', { name: '财务' }))
+    await user.click(screen.getByRole('button', { name: '查询' }))
+
+    await waitFor(() => {
+      expect(listUsersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          page: 1,
+          pageSize: 10,
+          roleId: 3,
+        }),
+      )
+    })
+
+    await user.click(screen.getByRole('button', { name: '新建用户' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(userField(dialog, 'name'), 'finance')
+    await user.type(userField(dialog, 'password'), 'secret3')
+    await user.click(within(dialog).getByRole('combobox', { name: '选择角色' }))
+    await user.click(await screen.findByRole('option', { name: '财务' }))
+    await user.click(within(dialog).getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(createUserMock).toHaveBeenCalledWith({ name: 'finance', password: 'secret3', roleId: 3 })
     })
   })
 
