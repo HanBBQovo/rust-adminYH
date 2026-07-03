@@ -145,7 +145,7 @@ impl MenuStore for MySqlMenuRepository {
             let child_count: i64 =
                 sqlx::query("SELECT COUNT(*) AS total FROM `permission` WHERE `pid` = ?")
                     .bind(menu_id)
-                    .fetch_one(&mut *tx)
+                    .fetch_one(tx.as_mut())
                     .await
                     .map_err(db_error)?
                     .try_get("total")
@@ -156,18 +156,18 @@ impl MenuStore for MySqlMenuRepository {
 
             sqlx::query("DELETE FROM `role_permission` WHERE `permission_id` = ?")
                 .bind(menu_id)
-                .execute(&mut *tx)
+                .execute(tx.as_mut())
                 .await
                 .map_err(db_error)?;
             let result = sqlx::query("DELETE FROM `permission` WHERE `id` = ?")
                 .bind(menu_id)
-                .execute(&mut *tx)
+                .execute(tx.as_mut())
                 .await
                 .map_err(db_error)?;
             if result.rows_affected() == 0 {
                 return Err(AppError::NotFound(format!("menu {menu_id}")));
             }
-            commit_mysql_transaction(tx, "menu.remove").await
+            commit_mysql_transaction(tx).await
         })
     }
 

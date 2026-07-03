@@ -184,7 +184,7 @@ impl UserStore for MySqlUserRepository {
             )
             .bind(&input.name)
             .bind(&input.password)
-            .execute(&mut *tx)
+            .execute(tx.as_mut())
             .await
             .map_err(db_error)?;
 
@@ -193,12 +193,12 @@ impl UserStore for MySqlUserRepository {
             sqlx::query("UPDATE `user` SET `avatar_url` = ? WHERE `id` = ?")
                 .bind(&avatar_url)
                 .bind(user_id)
-                .execute(&mut *tx)
+                .execute(tx.as_mut())
                 .await
                 .map_err(db_error)?;
             insert_user_role(&mut tx, user_id, input.role_id).await?;
             insert_default_avatar(&mut tx, user_id).await?;
-            commit_mysql_transaction(tx, "user.create").await
+            commit_mysql_transaction(tx).await
         })
     }
 
@@ -212,14 +212,14 @@ impl UserStore for MySqlUserRepository {
             let result = sqlx::query("UPDATE `user` SET `name` = ? WHERE `id` = ?")
                 .bind(&input.name)
                 .bind(user_id)
-                .execute(&mut *tx)
+                .execute(tx.as_mut())
                 .await
                 .map_err(db_error)?;
             if result.rows_affected() == 0 {
                 return Err(AppError::NotFound(format!("user {user_id}")));
             }
             upsert_user_role(&mut tx, user_id, input.role_id).await?;
-            commit_mysql_transaction(tx, "user.update").await
+            commit_mysql_transaction(tx).await
         })
     }
 
@@ -247,7 +247,7 @@ impl UserStore for MySqlUserRepository {
             let mut tx = begin_mysql_transaction(&self.pool, "user.remove").await?;
             let result = sqlx::query("DELETE FROM `user` WHERE `id` = ?")
                 .bind(user_id)
-                .execute(&mut *tx)
+                .execute(tx.as_mut())
                 .await
                 .map_err(db_error)?;
             if result.rows_affected() == 0 {
@@ -255,15 +255,15 @@ impl UserStore for MySqlUserRepository {
             }
             sqlx::query("DELETE FROM `user_role` WHERE `user_id` = ?")
                 .bind(user_id)
-                .execute(&mut *tx)
+                .execute(tx.as_mut())
                 .await
                 .map_err(db_error)?;
             sqlx::query("DELETE FROM `avatar` WHERE `user_id` = ?")
                 .bind(user_id)
-                .execute(&mut *tx)
+                .execute(tx.as_mut())
                 .await
                 .map_err(db_error)?;
-            commit_mysql_transaction(tx, "user.remove").await
+            commit_mysql_transaction(tx).await
         })
     }
 
@@ -298,13 +298,13 @@ impl UserStore for MySqlUserRepository {
             sqlx::query("UPDATE `user` SET `avatar_url` = ? WHERE `id` = ?")
                 .bind(&avatar_url)
                 .bind(user_id)
-                .execute(&mut *tx)
+                .execute(tx.as_mut())
                 .await
                 .map_err(db_error)?;
 
             let existing = sqlx::query("SELECT `id` FROM `avatar` WHERE `user_id` = ? LIMIT 1")
                 .bind(user_id)
-                .fetch_optional(&mut *tx)
+                .fetch_optional(tx.as_mut())
                 .await
                 .map_err(db_error)?;
 
@@ -320,7 +320,7 @@ impl UserStore for MySqlUserRepository {
                 .bind(&input.mimetype)
                 .bind(input.size as i64)
                 .bind(user_id)
-                .execute(&mut *tx)
+                .execute(tx.as_mut())
                 .await
                 .map_err(db_error)?;
             } else {
@@ -334,12 +334,12 @@ impl UserStore for MySqlUserRepository {
                 .bind(&input.mimetype)
                 .bind(input.size as i64)
                 .bind(user_id)
-                .execute(&mut *tx)
+                .execute(tx.as_mut())
                 .await
                 .map_err(db_error)?;
             }
 
-            commit_mysql_transaction(tx, "user.update_avatar").await?;
+            commit_mysql_transaction(tx).await?;
             Ok(AvatarInfo {
                 filename: input.filename,
                 mimetype: input.mimetype,
@@ -459,7 +459,7 @@ async fn fetch_count(mut query: QueryBuilder<'_, MySql>, pool: &MySqlPool) -> Ap
 async fn ensure_user_exists(tx: &mut MySqlTransaction<'_>, user_id: i64) -> AppResult<()> {
     let exists = sqlx::query("SELECT `id` FROM `user` WHERE `id` = ?")
         .bind(user_id)
-        .fetch_optional(&mut **tx)
+        .fetch_optional(tx.as_mut())
         .await
         .map_err(db_error)?
         .is_some();
@@ -477,7 +477,7 @@ async fn insert_user_role(
     sqlx::query("INSERT INTO `user_role` (`user_id`, `role_id`) VALUES (?, ?)")
         .bind(user_id)
         .bind(role_id)
-        .execute(&mut **tx)
+        .execute(tx.as_mut())
         .await
         .map(|_| ())
         .map_err(db_error)
@@ -491,7 +491,7 @@ async fn upsert_user_role(
     let result = sqlx::query("UPDATE `user_role` SET `role_id` = ? WHERE `user_id` = ?")
         .bind(role_id)
         .bind(user_id)
-        .execute(&mut **tx)
+        .execute(tx.as_mut())
         .await
         .map_err(db_error)?;
     if result.rows_affected() == 0 {
@@ -512,7 +512,7 @@ async fn insert_default_avatar(tx: &mut MySqlTransaction<'_>, user_id: i64) -> A
     .bind(default.mimetype)
     .bind(default.size as i64)
     .bind(user_id)
-    .execute(&mut **tx)
+    .execute(tx.as_mut())
     .await
     .map(|_| ())
     .map_err(db_error)

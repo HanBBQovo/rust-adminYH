@@ -80,7 +80,7 @@ impl OrderStore for MySqlOrderRepository {
             }
             insert_memory_if_missing(&mut tx, &input.consignee).await?;
             insert_memory_if_missing(&mut tx, &input.consignor).await?;
-            commit_mysql_transaction(tx, "order.create").await
+            commit_mysql_transaction(tx).await
         })
     }
 
@@ -104,7 +104,7 @@ impl OrderStore for MySqlOrderRepository {
             reconcile_receipt_after_order_update(&mut tx, &previous_order, &input).await?;
             insert_memory_if_missing(&mut tx, &input.consignee).await?;
             insert_memory_if_missing(&mut tx, &input.consignor).await?;
-            commit_mysql_transaction(tx, "order.update").await
+            commit_mysql_transaction(tx).await
         })
     }
 
@@ -150,7 +150,7 @@ impl OrderStore for MySqlOrderRepository {
                 .await
                 .map_err(db_error)?;
 
-            commit_mysql_transaction(tx, "order.remove").await
+            commit_mysql_transaction(tx).await
         })
     }
 
@@ -222,7 +222,7 @@ impl OrderStore for MySqlOrderRepository {
                 return Err(AppError::NotFound(format!("receipt {missing_id}")));
             }
             update_receipt_status_rows(&mut tx, &receipt_ids, column, value).await?;
-            commit_mysql_transaction(tx, "receipt.batch_status").await
+            commit_mysql_transaction(tx).await
         })
     }
 

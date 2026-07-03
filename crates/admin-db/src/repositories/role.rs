@@ -98,7 +98,7 @@ impl RoleStore for MySqlRoleRepository {
             ensure_role_not_assigned_to_users(&mut tx, role_id).await?;
             let result = sqlx::query("DELETE FROM `role` WHERE `id` = ?")
                 .bind(role_id)
-                .execute(&mut *tx)
+                .execute(tx.as_mut())
                 .await
                 .map_err(db_error)?;
             if result.rows_affected() == 0 {
@@ -106,10 +106,10 @@ impl RoleStore for MySqlRoleRepository {
             }
             sqlx::query("DELETE FROM `role_permission` WHERE `role_id` = ?")
                 .bind(role_id)
-                .execute(&mut *tx)
+                .execute(tx.as_mut())
                 .await
                 .map_err(db_error)?;
-            commit_mysql_transaction(tx, "role.remove").await
+            commit_mysql_transaction(tx).await
         })
     }
 
@@ -123,7 +123,7 @@ impl RoleStore for MySqlRoleRepository {
             ensure_role_exists(&mut tx, role_id).await?;
             sqlx::query("DELETE FROM `role_permission` WHERE `role_id` = ?")
                 .bind(role_id)
-                .execute(&mut *tx)
+                .execute(tx.as_mut())
                 .await
                 .map_err(db_error)?;
             let mut seen = HashSet::new();
@@ -133,11 +133,11 @@ impl RoleStore for MySqlRoleRepository {
                 )
                 .bind(role_id)
                 .bind(menu_id)
-                .execute(&mut *tx)
+                .execute(tx.as_mut())
                 .await
                 .map_err(db_error)?;
             }
-            commit_mysql_transaction(tx, "role.replace_menu_ids").await
+            commit_mysql_transaction(tx).await
         })
     }
 
@@ -250,7 +250,7 @@ async fn fetch_count(mut query: QueryBuilder<'_, MySql>, pool: &MySqlPool) -> Ap
 async fn ensure_role_exists(tx: &mut MySqlTransaction<'_>, role_id: i64) -> AppResult<()> {
     let exists = sqlx::query("SELECT `id` FROM `role` WHERE `id` = ?")
         .bind(role_id)
-        .fetch_optional(&mut **tx)
+        .fetch_optional(tx.as_mut())
         .await
         .map_err(db_error)?
         .is_some();
@@ -266,7 +266,7 @@ async fn ensure_role_not_assigned_to_users(
 ) -> AppResult<()> {
     let user_count = sqlx::query("SELECT COUNT(*) AS total FROM `user_role` WHERE `role_id` = ?")
         .bind(role_id)
-        .fetch_one(&mut **tx)
+        .fetch_one(tx.as_mut())
         .await
         .map_err(db_error)?
         .try_get::<i64, _>("total")

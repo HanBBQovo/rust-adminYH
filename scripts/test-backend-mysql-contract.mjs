@@ -105,8 +105,18 @@ assertIncludes(
 )
 assertIncludes(
   transactionHelper,
-  'pub type MySqlTransaction',
-  'admin-db must expose a shared MySQL transaction type alias',
+  'pub struct MySqlTransaction',
+  'admin-db must expose a shared scoped MySQL transaction wrapper',
+)
+assertIncludes(
+  transactionHelper,
+  "scope: &'static str",
+  'shared MySQL transaction wrapper must store the transaction scope',
+)
+assertIncludes(
+  transactionHelper,
+  'pub fn scope(&self)',
+  'shared MySQL transaction wrapper must expose its scope for diagnostics',
 )
 assertIncludes(
   transactionHelper,
@@ -115,8 +125,8 @@ assertIncludes(
 )
 assertIncludes(
   transactionHelper,
-  'commit_mysql_transaction',
-  'admin-db must expose a shared MySQL transaction commit helper',
+  'pub async fn commit_mysql_transaction(tx: MySqlTransaction',
+  'admin-db commit helper must consume the scoped transaction without a repeated scope argument',
 )
 assertIncludes(
   transactionHelper,
@@ -142,6 +152,10 @@ for (const file of repositoryFiles) {
   assert(
     !/Transaction<'_,\s*MySql>/.test(content),
     `${file} must use MySqlTransaction<'_> instead of raw sqlx Transaction aliases`,
+  )
+  assert(
+    !/commit_mysql_transaction\([^,\n]+,\s*["'`]/.test(content),
+    `${file} must rely on the scoped transaction wrapper instead of passing commit scope strings`,
   )
 }
 
