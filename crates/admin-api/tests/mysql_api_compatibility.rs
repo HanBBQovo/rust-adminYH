@@ -162,8 +162,14 @@ async fn mysql_api_compatibility_uses_real_database_services() {
     );
     assert_eq!(receipt_json["data"]["list"][0]["recoverynumber"], 2);
 
-    let (memory_status, memory_json) =
-        json_request(app, "POST", "/api/memory/list", Some(&admin_token), "{}").await;
+    let (memory_status, memory_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/memory/list",
+        Some(&admin_token),
+        "{}",
+    )
+    .await;
     assert_eq!(memory_status, StatusCode::OK);
     assert!(memory_json["code"].is_null());
     assert!(memory_json["message"].is_null());
@@ -175,6 +181,47 @@ async fn mysql_api_compatibility_uses_real_database_services() {
         .collect::<Vec<_>>();
     assert!(memory_values.contains(&scope.consignee.as_str()));
     assert!(memory_values.contains(&scope.consignor.as_str()));
+
+    let (resources_status, resources_json) =
+        json_request(app, "GET", "/api/admin/resources", Some(&admin_token), "").await;
+    assert_eq!(resources_status, StatusCode::OK);
+    assert_eq!(resources_json["code"], 0);
+    let resources = resources_json["data"]
+        .as_array()
+        .expect("resource registry should return an array");
+    assert_eq!(resources.len(), 6);
+    assert_eq!(
+        resource_count(resources, "orders"),
+        scope.table_count("order_list").await
+    );
+    assert_eq!(
+        resource_count(resources, "receipts"),
+        scope.table_count("receipt").await
+    );
+    assert_eq!(
+        resource_count(resources, "companies"),
+        scope.table_count("company").await
+    );
+    assert_eq!(
+        resource_count(resources, "users"),
+        scope.table_count("user").await
+    );
+    assert_eq!(
+        resource_count(resources, "roles"),
+        scope.table_count("role").await
+    );
+    assert_eq!(
+        resource_count(resources, "menus"),
+        scope.reachable_menu_count().await
+    );
+    assert_eq!(
+        resource_field(resources, "orders", "apiPath"),
+        "/order/list"
+    );
+    assert_eq!(
+        resource_field(resources, "menus", "legacyPath"),
+        "adminYh/src/router"
+    );
 
     scope.cleanup().await;
 }
@@ -244,6 +291,9 @@ struct TestScope<'a> {
     admin_user_id: i64,
     operator_user_id: i64,
     operator_role_id: i64,
+    company_id: i64,
+    menu_root_id: i64,
+    menu_child_id: i64,
     consignee: String,
     consignor: String,
 }
@@ -251,14 +301,18 @@ struct TestScope<'a> {
 impl<'a> TestScope<'a> {
     async fn new(pool: &'a MySqlPool) -> Self {
         let prefix = format!("API{}", Uuid::new_v4().simple());
-        let base_id = next_id(pool, "user").await + 10_000;
+        let user_base_id = next_id(pool, "user").await + 10_000;
+        let menu_base_id = next_id(pool, "permission").await + 10_000;
         let scope = Self {
             pool,
             admin_name: format!("{prefix}-admin"),
             operator_name: format!("{prefix}-operator"),
-            operator_role_id: base_id + 10,
-            admin_user_id: base_id,
-            operator_user_id: base_id + 1,
+            operator_role_id: user_base_id + 10,
+            admin_user_id: user_base_id,
+            operator_user_id: user_base_id + 1,
+            company_id: next_id(pool, "company").await + 10_000,
+            menu_root_id: menu_base_id,
+            menu_child_id: menu_base_id + 1,
             consignee: format!("{prefix}-收货人"),
             consignor: format!("{prefix}-发货人"),
             prefix,
@@ -295,6 +349,7 @@ impl<'a> TestScope<'a> {
             self.operator_role_id,
         )
         .await;
+        self.seed_resource_registry_rows().await;
     }
 
     async fn seed_user(&self, user_id: i64, name: &str, role_id: i64) {
@@ -318,6 +373,32 @@ impl<'a> TestScope<'a> {
             .execute(self.pool)
             .await
             .expect("user role seed should insert");
+    }
+
+    async fn seed_resource_registry_rows(&self) {
+        sqlx::query("INSERT INTO `company` (`id`, `name`) VALUES (?, ?)")
+            .bind(self.company_id)
+            .bind(format!("{}-资源注册公司", self.prefix))
+            .execute(self.pool)
+            .await
+            .expect("company registry seed should insert");
+
+        sqlx::query(
+            r#"
+            INSERT INTO `permission` (`id`, `pid`, `name`, `type`, `url`, `icon`, `sort`)
+            VALUES (?, 0, ?, 1, ?, 'box', 10), (?, ?, ?, 2, ?, 'dot', 11)
+            "#,
+        )
+        .bind(self.menu_root_id)
+        .bind(format!("{}-资源菜单", self.prefix))
+        .bind(format!("/main/{}", self.prefix))
+        .bind(self.menu_child_id)
+        .bind(self.menu_root_id)
+        .bind(format!("{}-资源子菜单", self.prefix))
+        .bind(format!("/main/{}/child", self.prefix))
+        .execute(self.pool)
+        .await
+        .expect("permission registry seed should insert");
     }
 
     fn oddnumber(&self, suffix: &str) -> String {
@@ -382,6 +463,38 @@ impl<'a> TestScope<'a> {
             .expect("total should exist")
     }
 
+    async fn table_count(&self, table: &str) -> u64 {
+        let sql = format!("SELECT COUNT(*) AS total FROM `{table}`");
+        sqlx::query(&sql)
+            .fetch_one(self.pool)
+            .await
+            .expect("table count should load")
+            .try_get::<i64, _>("total")
+            .expect("total should exist") as u64
+    }
+
+    async fn reachable_menu_count(&self) -> u64 {
+        sqlx::query(
+            r#"
+            WITH RECURSIVE menu_tree AS (
+                SELECT `id`
+                FROM `permission`
+                WHERE (`pid` IS NULL OR `pid` <= 0) AND `type` = 1
+                UNION ALL
+                SELECT child.`id`
+                FROM `permission` child
+                INNER JOIN menu_tree parent ON child.`pid` = parent.`id`
+            )
+            SELECT COUNT(*) AS total FROM menu_tree
+            "#,
+        )
+        .fetch_one(self.pool)
+        .await
+        .expect("reachable menu count should load")
+        .try_get::<i64, _>("total")
+        .expect("total should exist") as u64
+    }
+
     async fn cleanup(&self) {
         let order_ids: Vec<i64> =
             sqlx::query("SELECT `id` FROM `order_list` WHERE `oddnumber` LIKE ?")
@@ -424,6 +537,24 @@ impl<'a> TestScope<'a> {
             .execute(self.pool)
             .await
             .expect("user role cleanup should run");
+        sqlx::query("DELETE FROM `role_permission` WHERE `permission_id` IN (?, ?)")
+            .bind(self.menu_root_id)
+            .bind(self.menu_child_id)
+            .execute(self.pool)
+            .await
+            .expect("role_permission cleanup should run");
+        sqlx::query("DELETE FROM `permission` WHERE `id` IN (?, ?)")
+            .bind(self.menu_root_id)
+            .bind(self.menu_child_id)
+            .execute(self.pool)
+            .await
+            .expect("permission cleanup should run");
+        sqlx::query("DELETE FROM `company` WHERE `id` = ? OR `name` LIKE ?")
+            .bind(self.company_id)
+            .bind(format!("{}-%", self.prefix))
+            .execute(self.pool)
+            .await
+            .expect("company cleanup should run");
         sqlx::query("DELETE FROM `user` WHERE `id` IN (?, ?) OR `name` IN (?, ?)")
             .bind(self.admin_user_id)
             .bind(self.operator_user_id)
@@ -438,6 +569,26 @@ impl<'a> TestScope<'a> {
             .await
             .expect("operator role cleanup should run");
     }
+}
+
+fn resource_count(resources: &[Value], key: &str) -> u64 {
+    resources
+        .iter()
+        .find(|resource| resource["key"] == key)
+        .unwrap_or_else(|| panic!("resource {key} should exist"))
+        .get("count")
+        .and_then(Value::as_u64)
+        .unwrap_or_else(|| panic!("resource {key} count should be numeric"))
+}
+
+fn resource_field<'a>(resources: &'a [Value], key: &str, field: &str) -> &'a str {
+    resources
+        .iter()
+        .find(|resource| resource["key"] == key)
+        .unwrap_or_else(|| panic!("resource {key} should exist"))
+        .get(field)
+        .and_then(Value::as_str)
+        .unwrap_or_else(|| panic!("resource {key}.{field} should be string"))
 }
 
 async fn next_id(pool: &MySqlPool, table: &str) -> i64 {
