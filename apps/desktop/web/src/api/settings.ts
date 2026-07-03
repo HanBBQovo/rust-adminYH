@@ -18,9 +18,22 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   animations: true,
 }
 
+export const APP_PREFERENCES_CHANGED_EVENT = 'admin-yh:settings-preferences-changed'
+
 const STORAGE_KEY = nsKey('settings-preferences')
 const VALID_OWNERS = new Set(['ops', 'growth', 'support'])
 const VALID_FEATURES = new Set(['audit-log', 'export', 'webhook', 'beta-panel'])
+
+function clonePreferences(preferences: AppPreferences): AppPreferences {
+  return {
+    ...preferences,
+    features: [...preferences.features],
+  }
+}
+
+function defaultPreferences(): AppPreferences {
+  return clonePreferences(DEFAULT_APP_PREFERENCES)
+}
 
 function cleanString(value: unknown, fallback: string): string {
   if (typeof value !== 'string') return fallback
@@ -56,18 +69,31 @@ export function normalizeAppPreferences(value: unknown): AppPreferences {
 }
 
 export async function loadAppPreferences(): Promise<AppPreferences> {
+  return readAppPreferencesSnapshot()
+}
+
+export function readAppPreferencesSnapshot(): AppPreferences {
   const raw = window.localStorage.getItem(STORAGE_KEY)
-  if (!raw) return { ...DEFAULT_APP_PREFERENCES, features: [...DEFAULT_APP_PREFERENCES.features] }
+  if (!raw) return defaultPreferences()
   try {
     return normalizeAppPreferences(JSON.parse(raw))
   } catch {
-    return { ...DEFAULT_APP_PREFERENCES, features: [...DEFAULT_APP_PREFERENCES.features] }
+    return defaultPreferences()
   }
+}
+
+function notifyAppPreferencesChanged(preferences: AppPreferences) {
+  window.dispatchEvent(
+    new CustomEvent<AppPreferences>(APP_PREFERENCES_CHANGED_EVENT, {
+      detail: clonePreferences(preferences),
+    }),
+  )
 }
 
 export async function saveAppPreferences(values: AppPreferences): Promise<AppPreferences> {
   const preferences = normalizeAppPreferences(values)
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences))
+  notifyAppPreferencesChanged(preferences)
   return preferences
 }
 

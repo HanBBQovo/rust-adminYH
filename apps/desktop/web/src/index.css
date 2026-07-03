@@ -159,6 +159,61 @@ html[data-noto-sc-full="1"] {
   .ops-table-shell {
     @apply overflow-hidden rounded-xl border border-border/70 bg-background/80;
   }
+
+  .dashboard-shell-compact main {
+    @apply p-3 md:p-4;
+  }
+
+  .dashboard-shell-compact .dashboard-header {
+    @apply h-14 px-3 md:px-4;
+  }
+
+  .dashboard-shell-compact .dashboard-nav-item {
+    @apply py-2 text-[13px];
+  }
+
+  .dashboard-shell-compact .ops-page-shell {
+    @apply space-y-4;
+  }
+
+  .dashboard-shell-compact .ops-page-header {
+    @apply gap-3 pb-4;
+  }
+
+  .dashboard-shell-compact .ops-subnav,
+  .dashboard-shell-compact .ops-stat-strip {
+    @apply gap-2;
+  }
+
+  .dashboard-shell-compact .ops-stat-card {
+    @apply rounded-xl px-3 py-3;
+  }
+
+  .dashboard-shell-compact .ops-surface {
+    @apply rounded-xl;
+  }
+
+  .dashboard-shell-compact .ops-surface-header,
+  .dashboard-shell-compact .ops-toolbar-row {
+    @apply px-4 py-3;
+  }
+
+  .dashboard-shell-compact .ops-surface-body {
+    @apply px-4 py-4;
+  }
+
+  .dashboard-shell-compact .ops-surface-footer {
+    @apply px-4 py-3;
+  }
+}
+
+.dashboard-shell-reduced-motion *,
+.dashboard-shell-reduced-motion *::before,
+.dashboard-shell-reduced-motion *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 1ms !important;
 }
 
 .dark .ops-subnav,

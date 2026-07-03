@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { APP_PREFERENCES_CHANGED_EVENT, appPreferencesStorageKey, type AppPreferences } from '@/api/settings'
 import { ThemeProvider } from '@/components/theme'
 import Dashboard from '@/pages/Dashboard'
 import type { AdminSession } from '@/session/types'
@@ -20,7 +21,7 @@ vi.mock('@/api/auth', () => ({
 }))
 
 function renderDashboard(session: AdminSession) {
-  render(
+  return render(
     <ThemeProvider>
       <Dashboard session={session} onLogout={vi.fn()} />
     </ThemeProvider>,
@@ -71,5 +72,64 @@ describe('Dashboard', () => {
     expect(screen.getByRole('button', { name: '系统概览' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '工作台' })).toBeInTheDocument()
     await expect(screen.findByRole('heading', { level: 1, name: '系统概览' }, { timeout: 5000 })).resolves.toBeInTheDocument()
+  })
+
+  it('applies persisted appearance preferences to the template shell', async () => {
+    window.localStorage.setItem(
+      appPreferencesStorageKey(),
+      JSON.stringify({
+        siteName: '宇涵物流订单系统',
+        contact: 'admin@yuhang.local',
+        owner: 'ops',
+        features: ['audit-log', 'export'],
+        compactMode: true,
+        animations: false,
+      }),
+    )
+
+    const { container } = renderDashboard({
+      token: 'token-123',
+      user: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] },
+      menus: [{ id: 1, name: '工作台', url: '/main/workbench' }],
+    })
+
+    const shell = container.querySelector('.dashboard-shell')
+    await waitFor(() => {
+      expect(shell).toHaveAttribute('data-density', 'compact')
+      expect(shell).toHaveAttribute('data-motion', 'reduced')
+    })
+    expect(shell).toHaveClass('dashboard-shell-compact')
+    expect(shell).toHaveClass('dashboard-shell-reduced-motion')
+  })
+
+  it('updates shell appearance when Settings saves preferences', async () => {
+    const { container } = renderDashboard({
+      token: 'token-123',
+      user: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] },
+      menus: [{ id: 1, name: '工作台', url: '/main/workbench' }],
+    })
+    const shell = container.querySelector('.dashboard-shell')
+    await waitFor(() => {
+      expect(shell).toHaveAttribute('data-density', 'comfortable')
+      expect(shell).toHaveAttribute('data-motion', 'animated')
+    })
+
+    const saved: AppPreferences = {
+      siteName: '宇涵物流订单系统',
+      contact: 'admin@yuhang.local',
+      owner: 'ops',
+      features: ['audit-log', 'export'],
+      compactMode: true,
+      animations: false,
+    }
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent(APP_PREFERENCES_CHANGED_EVENT, { detail: saved }))
+    })
+
+    await waitFor(() => {
+      expect(shell).toHaveAttribute('data-density', 'compact')
+      expect(shell).toHaveAttribute('data-motion', 'reduced')
+    })
   })
 })

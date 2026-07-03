@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  APP_PREFERENCES_CHANGED_EVENT,
   DEFAULT_APP_PREFERENCES,
   appPreferencesStorageKey,
   loadAppPreferences,
@@ -83,5 +84,23 @@ describe('settings preferences api', () => {
       animations: true,
     })
     await expect(loadAppPreferences()).resolves.toEqual(saved)
+  })
+
+  it('notifies the app shell when preferences change', async () => {
+    const listener = vi.fn()
+    window.addEventListener(APP_PREFERENCES_CHANGED_EVENT, listener)
+
+    const saved = await saveAppPreferences({
+      siteName: '运营后台',
+      contact: 'ops@example.com',
+      owner: 'ops',
+      features: ['export'],
+      compactMode: true,
+      animations: false,
+    })
+
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect((listener.mock.calls[0][0] as CustomEvent).detail).toEqual(saved)
+    window.removeEventListener(APP_PREFERENCES_CHANGED_EVENT, listener)
   })
 })

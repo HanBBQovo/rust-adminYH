@@ -2,6 +2,14 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Boxes, ChevronLeft, ChevronRight, LogOut, PanelLeft, ShieldAlert } from 'lucide-react'
 
 import { logout } from '@/api/auth'
+import {
+  APP_PREFERENCES_CHANGED_EVENT,
+  DEFAULT_APP_PREFERENCES,
+  appPreferencesStorageKey,
+  normalizeAppPreferences,
+  readAppPreferencesSnapshot,
+  type AppPreferences,
+} from '@/api/settings'
 import { ChunkLoadBoundary } from '@/components/ChunkLoadBoundary'
 import { PageLoader } from '@/components/PageLoader'
 import { PageShell, PageSurface } from '@/components/layout/PageScaffold'
@@ -35,6 +43,7 @@ const SettingsPage = lazy(() => import('@/pages/Settings'))
  */
 
 const PAGE_STORAGE_KEY = nsKey('last-page')
+const INSTANT_TRANSITION = { duration: 0 }
 
 function isPage(value: string | null, navItems: SessionNavItem[]): value is AppPage {
   return navItems.some((item) => item.key === value)
@@ -55,9 +64,18 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
   const [activeSession, setActiveSession] = useState(session)
   const navItems = useMemo(() => adaptLegacyMenus(activeSession.menus), [activeSession.menus])
   const [currentPage, setCurrentPage] = useState<AppPage>(() => readStoredPage(navItems))
+  const [appPreferences, setAppPreferences] = useState<AppPreferences>(() =>
+    typeof window === 'undefined' ? normalizeAppPreferences(DEFAULT_APP_PREFERENCES) : readAppPreferencesSnapshot(),
+  )
   const [collapsed, setCollapsed] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [isMobileViewport, setIsMobileViewport] = useState(false)
+  const animationsEnabled = appPreferences.animations
+  const compactMode = appPreferences.compactMode
+  const sidebarTransition = animationsEnabled ? { type: 'spring' as const, bounce: 0.15, duration: 0.4 } : INSTANT_TRANSITION
+  const mobileDrawerTransition = animationsEnabled ? { type: 'spring' as const, bounce: 0.1, duration: 0.35 } : INSTANT_TRANSITION
+  const headerTransition = animationsEnabled ? { type: 'spring' as const, bounce: 0.15, duration: 0.35 } : INSTANT_TRANSITION
+  const pageTransition = animationsEnabled ? { type: 'spring' as const, bounce: 0.15, duration: 0.4 } : INSTANT_TRANSITION
 
   const currentItem = useMemo(
     () => navItems.find((item) => item.key === currentPage) || navItems[0] || null,
@@ -70,6 +88,28 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
     document.title = `${title} - ${BRAND_NAME}`
     if (currentItem) window.localStorage.setItem(PAGE_STORAGE_KEY, currentPage)
   }, [currentItem, currentPage])
+
+  useEffect(() => {
+    const handlePreferencesChanged = (event: Event) => {
+      if (event instanceof CustomEvent) {
+        setAppPreferences(normalizeAppPreferences(event.detail))
+      }
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === appPreferencesStorageKey()) {
+        setAppPreferences(readAppPreferencesSnapshot())
+      }
+    }
+
+    window.addEventListener(APP_PREFERENCES_CHANGED_EVENT, handlePreferencesChanged)
+    window.addEventListener('storage', handleStorage)
+
+    return () => {
+      window.removeEventListener(APP_PREFERENCES_CHANGED_EVENT, handlePreferencesChanged)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
 
   useEffect(() => {
     if (!navItems.some((item) => item.key === currentPage)) {
@@ -151,12 +191,20 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="dashboard-shell flex h-screen overflow-hidden bg-muted/30">
+      <div
+        className={cn(
+          'dashboard-shell flex h-screen overflow-hidden bg-muted/30',
+          compactMode && 'dashboard-shell-compact',
+          !animationsEnabled && 'dashboard-shell-reduced-motion',
+        )}
+        data-density={compactMode ? 'compact' : 'comfortable'}
+        data-motion={animationsEnabled ? 'animated' : 'reduced'}
+      >
         {/* 桌面侧栏:折叠态宽度用 spring 过渡 */}
         <motion.aside
           className="dashboard-aside relative hidden h-full shrink-0 flex-col border-r bg-background md:flex"
           animate={{ width: collapsed ? 68 : 256 }}
-          transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
+          transition={sidebarTransition}
         >
           <div className="flex h-16 items-center border-b px-4">
             <button
@@ -192,18 +240,19 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
               <motion.button
                 type="button"
                 className="fixed inset-0 z-40 bg-black/42 md:hidden dark:bg-black/64"
-                initial={{ opacity: 0 }}
+                initial={animationsEnabled ? { opacity: 0 } : false}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
+                transition={animationsEnabled ? { duration: 0.18 } : INSTANT_TRANSITION}
                 onClick={() => setMobileNavOpen(false)}
                 aria-label="关闭导航"
               />
               <motion.aside
                 className="dashboard-mobile-drawer fixed inset-y-0 left-0 z-50 flex w-[288px] max-w-[86vw] flex-col border-r bg-background md:hidden"
-                initial={{ x: -320 }}
+                initial={animationsEnabled ? { x: -320 } : false}
                 animate={{ x: 0 }}
                 exit={{ x: -320 }}
-                transition={{ type: 'spring', bounce: 0.1, duration: 0.35 }}
+                transition={mobileDrawerTransition}
               >
                 <div className="flex h-16 items-center border-b px-4">
                   <div className="flex items-center gap-3">
@@ -224,9 +273,9 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
             <header className="dashboard-header sticky top-0 z-10 flex h-16 items-center gap-3 border-b bg-background px-4 md:px-6">
               <motion.div
                 key={currentPage}
-                initial={{ opacity: 0, y: 8 }}
+                initial={animationsEnabled ? { opacity: 0, y: 8 } : false}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ type: 'spring', bounce: 0.15, duration: 0.35 }}
+                transition={headerTransition}
                 className="flex min-w-0 flex-1 items-center gap-3"
               >
                 {isMobileViewport ? (
@@ -252,9 +301,9 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
                 <Suspense fallback={<PageLoader />}>
                   <motion.div
                     key={currentPage}
-                    initial={{ opacity: 0, y: 20, scale: 0.99 }}
+                    initial={animationsEnabled ? { opacity: 0, y: 20, scale: 0.99 } : false}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ type: 'spring', bounce: 0.15, duration: 0.4 }}
+                    transition={pageTransition}
                   >
                     {!navItems.length ? emptyPermissionState : null}
                     {navItems.length && currentPage === 'overview' ? <SystemOverview /> : null}
