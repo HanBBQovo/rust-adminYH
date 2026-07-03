@@ -252,6 +252,92 @@ async fn admin_can_create_menu_from_api_and_legacy_paths() {
 }
 
 #[tokio::test]
+async fn admin_can_read_update_and_delete_leaf_menu_from_api_and_legacy_paths() {
+    let app = build_router(test_state());
+    let token = login_token(app.clone(), "admin").await;
+
+    let (detail_status, detail) = get_json(app.clone(), "/api/menu/31", &token).await;
+    assert_eq!(detail_status, StatusCode::OK);
+    assert_eq!(detail["code"], 0);
+    assert_eq!(detail["data"]["name"], "用户管理");
+    assert_eq!(detail["data"]["parentId"], 3);
+
+    let (update_status, updated) = json_request(
+        app.clone(),
+        "PATCH",
+        "/api/menu/31",
+        Some(&token),
+        r#"{"name":"账号管理","type":2,"url":"/main/system/accounts","icon":"Users","sort":4,"parentId":3}"#,
+    )
+    .await;
+    assert_eq!(update_status, StatusCode::OK);
+    assert_eq!(updated["code"], 0);
+    assert_eq!(updated["message"], "修改菜单成功！");
+
+    let (_, legacy_detail) = get_json(app.clone(), "/menu/31", &token).await;
+    assert_eq!(legacy_detail["data"]["name"], "账号管理");
+    assert_eq!(legacy_detail["data"]["url"], "/main/system/accounts");
+    assert_eq!(legacy_detail["data"]["icon"], "Users");
+
+    let (delete_status, removed) =
+        json_request(app.clone(), "DELETE", "/api/menu/31", Some(&token), "{}").await;
+    assert_eq!(delete_status, StatusCode::OK);
+    assert_eq!(removed["code"], 0);
+    assert_eq!(removed["message"], "删除菜单成功！");
+
+    let (_, missing) = get_json(app, "/api/menu/31", &token).await;
+    assert!(missing["data"].is_null());
+}
+
+#[tokio::test]
+async fn menu_update_and_delete_require_admin_role() {
+    let app = build_router(operator_state());
+    let token = login_token(app.clone(), "operator").await;
+
+    let (update_status, update_json) = json_request(
+        app.clone(),
+        "PATCH",
+        "/api/menu/31",
+        Some(&token),
+        r#"{"name":"账号管理","type":2,"url":"/main/system/accounts","sort":4,"parentId":3}"#,
+    )
+    .await;
+    assert_eq!(update_status, StatusCode::FORBIDDEN);
+    assert_eq!(update_json["code"], -403);
+    assert_eq!(update_json["message"], "没有权限执行该操作");
+
+    let (delete_status, delete_json) =
+        json_request(app, "DELETE", "/api/menu/31", Some(&token), "{}").await;
+    assert_eq!(delete_status, StatusCode::FORBIDDEN);
+    assert_eq!(delete_json["code"], -403);
+    assert_eq!(delete_json["message"], "没有权限执行该操作");
+}
+
+#[tokio::test]
+async fn menu_update_and_delete_reject_invalid_tree_changes() {
+    let app = build_router(test_state());
+    let token = login_token(app.clone(), "admin").await;
+
+    let (self_parent_status, self_parent) = json_request(
+        app.clone(),
+        "PATCH",
+        "/api/menu/31",
+        Some(&token),
+        r#"{"name":"用户管理","type":2,"url":"/main/system/user","sort":1,"parentId":31}"#,
+    )
+    .await;
+    assert_eq!(self_parent_status, StatusCode::BAD_REQUEST);
+    assert_eq!(self_parent["code"], -400);
+    assert_eq!(self_parent["message"], "请求参数错误: 父级菜单不能选择自身");
+
+    let (delete_status, delete_json) =
+        json_request(app, "DELETE", "/api/menu/3", Some(&token), "{}").await;
+    assert_eq!(delete_status, StatusCode::BAD_REQUEST);
+    assert_eq!(delete_json["code"], -400);
+    assert_eq!(delete_json["message"], "请求参数错误: 存在子菜单，不能删除");
+}
+
+#[tokio::test]
 async fn menu_create_rejects_empty_name() {
     let app = build_router(test_state());
     let token = login_token(app.clone(), "admin").await;

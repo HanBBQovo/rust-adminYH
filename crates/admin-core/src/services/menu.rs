@@ -21,7 +21,17 @@ pub trait MenuService: Send + Sync {
 
     fn menu_tree<'a>(&'a self) -> ServiceFuture<'a, AppResult<Vec<LegacyMenuNode>>>;
 
+    fn detail<'a>(&'a self, menu_id: i64) -> ServiceFuture<'a, AppResult<Option<LegacyMenuNode>>>;
+
     fn create<'a>(&'a self, input: MenuMutationRequest) -> ServiceFuture<'a, AppResult<()>>;
+
+    fn update<'a>(
+        &'a self,
+        menu_id: i64,
+        input: MenuMutationRequest,
+    ) -> ServiceFuture<'a, AppResult<()>>;
+
+    fn remove<'a>(&'a self, menu_id: i64) -> ServiceFuture<'a, AppResult<()>>;
 
     fn role_menu_ids<'a>(
         &'a self,
@@ -44,7 +54,17 @@ pub trait MenuStore: Send + Sync {
 
     fn menu_tree<'a>(&'a self) -> ServiceFuture<'a, AppResult<Vec<MenuNode>>>;
 
+    fn find_by_id<'a>(&'a self, menu_id: i64) -> ServiceFuture<'a, AppResult<Option<MenuNode>>>;
+
     fn create<'a>(&'a self, input: MenuCreateRecord) -> ServiceFuture<'a, AppResult<()>>;
+
+    fn update<'a>(
+        &'a self,
+        menu_id: i64,
+        input: MenuCreateRecord,
+    ) -> ServiceFuture<'a, AppResult<()>>;
+
+    fn remove<'a>(&'a self, menu_id: i64) -> ServiceFuture<'a, AppResult<()>>;
 
     fn menu_ids_for_role<'a>(&'a self, role_id: i64) -> ServiceFuture<'a, AppResult<Vec<i64>>>;
 }
@@ -106,6 +126,60 @@ impl MenuService for CompatMenuService {
         })
     }
 
+    fn detail<'a>(&'a self, menu_id: i64) -> ServiceFuture<'a, AppResult<Option<LegacyMenuNode>>> {
+        let store = Arc::clone(&self.store);
+        Box::pin(async move {
+            Ok(store
+                .find_by_id(menu_id)
+                .await?
+                .map(LegacyMenuNode::from_menu_tree))
+        })
+    }
+
+    fn update<'a>(
+        &'a self,
+        menu_id: i64,
+        input: MenuMutationRequest,
+    ) -> ServiceFuture<'a, AppResult<()>> {
+        let store = Arc::clone(&self.store);
+        Box::pin(async move {
+            let input = normalize_menu(input)?;
+            let roots = store.menu_tree().await?;
+            let current = find_menu(&roots, menu_id)
+                .ok_or_else(|| AppError::NotFound(format!("menu {menu_id}")))?;
+            if !current.children.is_empty() && input.menu_type == 2 {
+                return Err(AppError::Validation("父级菜单不能修改为子菜单".to_owned()));
+            }
+            if input.parent_id == Some(menu_id) {
+                return Err(AppError::Validation("父级菜单不能选择自身".to_owned()));
+            }
+            if let Some(parent_id) = input.parent_id {
+                find_menu(&roots, parent_id)
+                    .ok_or_else(|| AppError::NotFound(format!("menu {parent_id}")))?;
+                if has_descendant_id(current, parent_id) {
+                    return Err(AppError::Validation(
+                        "父级菜单不能选择自己的子菜单".to_owned(),
+                    ));
+                }
+            }
+
+            store.update(menu_id, input).await
+        })
+    }
+
+    fn remove<'a>(&'a self, menu_id: i64) -> ServiceFuture<'a, AppResult<()>> {
+        let store = Arc::clone(&self.store);
+        Box::pin(async move {
+            let roots = store.menu_tree().await?;
+            let current = find_menu(&roots, menu_id)
+                .ok_or_else(|| AppError::NotFound(format!("menu {menu_id}")))?;
+            if !current.children.is_empty() {
+                return Err(AppError::Validation("存在子菜单，不能删除".to_owned()));
+            }
+            store.remove(menu_id).await
+        })
+    }
+
     fn role_menu_ids<'a>(
         &'a self,
         role_id: i64,
@@ -147,7 +221,29 @@ impl MenuService for DisabledMenuService {
         })
     }
 
+    fn detail<'a>(&'a self, _menu_id: i64) -> ServiceFuture<'a, AppResult<Option<LegacyMenuNode>>> {
+        Box::pin(async {
+            Err(AppError::Database("菜单服务尚未连接数据库仓储".to_owned()))
+        })
+    }
+
     fn create<'a>(&'a self, _input: MenuMutationRequest) -> ServiceFuture<'a, AppResult<()>> {
+        Box::pin(async {
+            Err(AppError::Database("菜单服务尚未连接数据库仓储".to_owned()))
+        })
+    }
+
+    fn update<'a>(
+        &'a self,
+        _menu_id: i64,
+        _input: MenuMutationRequest,
+    ) -> ServiceFuture<'a, AppResult<()>> {
+        Box::pin(async {
+            Err(AppError::Database("菜单服务尚未连接数据库仓储".to_owned()))
+        })
+    }
+
+    fn remove<'a>(&'a self, _menu_id: i64) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async {
             Err(AppError::Database("菜单服务尚未连接数据库仓储".to_owned()))
         })
@@ -220,6 +316,12 @@ impl MenuStore for InMemoryMenuStore {
         })
     }
 
+    fn find_by_id<'a>(&'a self, menu_id: i64) -> ServiceFuture<'a, AppResult<Option<MenuNode>>> {
+        Box::pin(async move {
+            Ok(find_menu(&self.roots.lock().map_err(|_| AppError::Internal)?, menu_id).cloned())
+        })
+    }
+
     fn create<'a>(&'a self, input: MenuCreateRecord) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
             let mut roots = self.roots.lock().map_err(|_| AppError::Internal)?;
@@ -247,6 +349,47 @@ impl MenuStore for InMemoryMenuStore {
             } else {
                 roots.push(node);
             }
+            Ok(())
+        })
+    }
+
+    fn update<'a>(
+        &'a self,
+        menu_id: i64,
+        input: MenuCreateRecord,
+    ) -> ServiceFuture<'a, AppResult<()>> {
+        Box::pin(async move {
+            let mut roots = self.roots.lock().map_err(|_| AppError::Internal)?;
+            let mut node = remove_menu_node(&mut roots, menu_id)
+                .ok_or_else(|| AppError::NotFound(format!("menu {menu_id}")))?;
+            node.name = input.name;
+            node.menu_type = input.menu_type;
+            node.url = input.url;
+            node.icon = input.icon;
+            node.sort = input.sort;
+            node.parent_id = input.parent_id;
+
+            if let Some(parent_id) = node.parent_id {
+                let parent = find_menu_mut(&mut roots, parent_id)
+                    .ok_or_else(|| AppError::NotFound(format!("menu {parent_id}")))?;
+                parent.children.push(node);
+            } else {
+                roots.push(node);
+            }
+            Ok(())
+        })
+    }
+
+    fn remove<'a>(&'a self, menu_id: i64) -> ServiceFuture<'a, AppResult<()>> {
+        Box::pin(async move {
+            let mut roots = self.roots.lock().map_err(|_| AppError::Internal)?;
+            remove_menu_node(&mut roots, menu_id)
+                .ok_or_else(|| AppError::NotFound(format!("menu {menu_id}")))?;
+            self.role_permissions
+                .lock()
+                .map_err(|_| AppError::Internal)?
+                .values_mut()
+                .for_each(|menu_ids| menu_ids.retain(|id| *id != menu_id));
             Ok(())
         })
     }
@@ -321,6 +464,36 @@ fn find_menu_mut(nodes: &mut [MenuNode], menu_id: i64) -> Option<&mut MenuNode> 
             return Some(node);
         }
         if let Some(found) = find_menu_mut(&mut node.children, menu_id) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn find_menu(nodes: &[MenuNode], menu_id: i64) -> Option<&MenuNode> {
+    for node in nodes {
+        if node.id == menu_id {
+            return Some(node);
+        }
+        if let Some(found) = find_menu(&node.children, menu_id) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+fn has_descendant_id(node: &MenuNode, menu_id: i64) -> bool {
+    node.children
+        .iter()
+        .any(|child| child.id == menu_id || has_descendant_id(child, menu_id))
+}
+
+fn remove_menu_node(nodes: &mut Vec<MenuNode>, menu_id: i64) -> Option<MenuNode> {
+    if let Some(index) = nodes.iter().position(|node| node.id == menu_id) {
+        return Some(nodes.remove(index));
+    }
+    for node in nodes {
+        if let Some(found) = remove_menu_node(&mut node.children, menu_id) {
             return Some(found);
         }
     }
@@ -421,5 +594,116 @@ mod tests {
         assert_eq!(created.parent_id, Some(3));
         assert_eq!(created.url.as_deref(), Some("/main/system/menu"));
         assert_eq!(created.icon.as_deref(), Some("settings"));
+    }
+
+    #[tokio::test]
+    async fn menu_detail_update_and_delete_keep_legacy_shapes() {
+        let service = development_menu_service();
+
+        let detail = service
+            .detail(31)
+            .await
+            .expect("menu detail should load")
+            .expect("seeded menu should exist");
+        assert_eq!(detail.name, "用户管理");
+        assert_eq!(detail.parent_id, Some(3));
+        assert_eq!(detail.legacy_parent_id, None);
+
+        service
+            .update(
+                31,
+                MenuMutationRequest {
+                    name: " 账号管理 ".to_owned(),
+                    menu_type: Some(2),
+                    url: Some(" /main/system/accounts ".to_owned()),
+                    icon: Some(" users ".to_owned()),
+                    sort: Some(4),
+                    parent_id: Some(3),
+                    legacy_parent_id: None,
+                    children: Vec::new(),
+                    legacy_children: Vec::new(),
+                },
+            )
+            .await
+            .expect("menu should update");
+        let updated = service
+            .detail(31)
+            .await
+            .expect("menu detail should load")
+            .expect("updated menu should exist");
+        assert_eq!(updated.name, "账号管理");
+        assert_eq!(updated.url.as_deref(), Some("/main/system/accounts"));
+        assert_eq!(updated.icon.as_deref(), Some("users"));
+
+        service.remove(31).await.expect("leaf menu should delete");
+        assert!(service
+            .detail(31)
+            .await
+            .expect("menu detail should load")
+            .is_none());
+        assert!(!service
+            .role_menu_ids(1)
+            .await
+            .expect("role menu ids should load")
+            .menu_ids
+            .contains(&31));
+    }
+
+    #[tokio::test]
+    async fn menu_update_and_delete_reject_unsafe_parent_operations() {
+        let service = development_menu_service();
+
+        let parent_to_child = service
+            .update(
+                3,
+                MenuMutationRequest {
+                    name: "系统设置".to_owned(),
+                    menu_type: Some(2),
+                    url: Some("/main/settings".to_owned()),
+                    icon: None,
+                    sort: Some(3),
+                    parent_id: Some(31),
+                    legacy_parent_id: None,
+                    children: Vec::new(),
+                    legacy_children: Vec::new(),
+                },
+            )
+            .await
+            .expect_err("parent menu should not become a child menu");
+        assert_eq!(
+            parent_to_child.to_string(),
+            "请求参数错误: 父级菜单不能修改为子菜单"
+        );
+
+        let self_parent = service
+            .update(
+                31,
+                MenuMutationRequest {
+                    name: "用户管理".to_owned(),
+                    menu_type: Some(2),
+                    url: Some("/main/system/user".to_owned()),
+                    icon: None,
+                    sort: Some(1),
+                    parent_id: Some(31),
+                    legacy_parent_id: None,
+                    children: Vec::new(),
+                    legacy_children: Vec::new(),
+                },
+            )
+            .await
+            .expect_err("menu should not select itself as parent");
+        assert_eq!(
+            self_parent.to_string(),
+            "请求参数错误: 父级菜单不能选择自身"
+        );
+
+        let delete_parent = service
+            .remove(3)
+            .await
+            .expect_err("parent menu should not delete while it has children");
+        assert_eq!(
+            delete_parent.to_string(),
+            "请求参数错误: 存在子菜单，不能删除"
+        );
     }
 }

@@ -57,6 +57,35 @@ impl MenuStore for MySqlMenuRepository {
         })
     }
 
+    fn find_by_id<'a>(&'a self, menu_id: i64) -> ServiceFuture<'a, AppResult<Option<MenuNode>>> {
+        Box::pin(async move {
+            sqlx::query(
+                r#"
+                SELECT `id`, `name`, `type`, `url`, `icon`, `sort`, `pid`
+                FROM `permission`
+                WHERE `id` = ?
+                "#,
+            )
+            .bind(menu_id)
+            .map(flat_menu_from_row)
+            .fetch_optional(&self.pool)
+            .await
+            .map(|item| {
+                item.map(|item| MenuNode {
+                    id: item.id,
+                    name: item.name,
+                    menu_type: item.menu_type,
+                    url: item.url,
+                    icon: item.icon,
+                    sort: item.sort,
+                    parent_id: item.parent_id,
+                    children: Vec::new(),
+                })
+            })
+            .map_err(db_error)
+        })
+    }
+
     fn create<'a>(&'a self, input: MenuCreateRecord) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
             sqlx::query(
@@ -75,6 +104,68 @@ impl MenuStore for MySqlMenuRepository {
             .await
             .map(|_| ())
             .map_err(db_error)
+        })
+    }
+
+    fn update<'a>(
+        &'a self,
+        menu_id: i64,
+        input: MenuCreateRecord,
+    ) -> ServiceFuture<'a, AppResult<()>> {
+        Box::pin(async move {
+            let result = sqlx::query(
+                r#"
+                UPDATE `permission`
+                SET `pid` = ?, `name` = ?, `type` = ?, `url` = ?, `icon` = ?, `sort` = ?
+                WHERE `id` = ?
+                "#,
+            )
+            .bind(input.parent_id)
+            .bind(input.name)
+            .bind(input.menu_type)
+            .bind(input.url)
+            .bind(input.icon)
+            .bind(input.sort)
+            .bind(menu_id)
+            .execute(&self.pool)
+            .await
+            .map_err(db_error)?;
+            if result.rows_affected() == 0 {
+                return Err(AppError::NotFound(format!("menu {menu_id}")));
+            }
+            Ok(())
+        })
+    }
+
+    fn remove<'a>(&'a self, menu_id: i64) -> ServiceFuture<'a, AppResult<()>> {
+        Box::pin(async move {
+            let mut tx = self.pool.begin().await.map_err(db_error)?;
+            let child_count: i64 =
+                sqlx::query("SELECT COUNT(*) AS total FROM `permission` WHERE `pid` = ?")
+                    .bind(menu_id)
+                    .fetch_one(&mut *tx)
+                    .await
+                    .map_err(db_error)?
+                    .try_get("total")
+                    .map_err(db_error)?;
+            if child_count > 0 {
+                return Err(AppError::Validation("存在子菜单，不能删除".to_owned()));
+            }
+
+            sqlx::query("DELETE FROM `role_permission` WHERE `permission_id` = ?")
+                .bind(menu_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(db_error)?;
+            let result = sqlx::query("DELETE FROM `permission` WHERE `id` = ?")
+                .bind(menu_id)
+                .execute(&mut *tx)
+                .await
+                .map_err(db_error)?;
+            if result.rows_affected() == 0 {
+                return Err(AppError::NotFound(format!("menu {menu_id}")));
+            }
+            tx.commit().await.map_err(db_error)
         })
     }
 

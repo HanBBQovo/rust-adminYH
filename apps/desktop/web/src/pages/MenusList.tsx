@@ -1,17 +1,20 @@
-import { FolderTree, Plus, RefreshCw, Save } from 'lucide-react'
+import { FolderTree, Pencil, Plus, RefreshCw, Save, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import {
   buildMenuCreatePayload,
   createMenu,
+  deleteMenu,
   flattenMenuTree,
+  getMenu,
   listMenuTree,
   normalizeMenuTree,
   type MenuCreateFormValues,
   type MenuCreatePayload,
   type MenuTreeItem,
+  updateMenu,
 } from '@/api/menus'
-import { DataTableSurface } from '@/components/layout/DataTableSurface'
+import { DataTableSurface, StickyActionCell, StickyActionHead } from '@/components/layout/DataTableSurface'
 import { FormField, FormSection, TreeIndent } from '@/components/layout/FormScaffold'
 import { PageShell, PageStat, PageStatStrip } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
@@ -33,11 +36,16 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useConfirm } from '@/components/ui/use-confirm'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
 import { useResource } from '@/lib/use-resource'
 
+type MenuFormMode = 'create' | 'edit'
+
 interface MenuFormDialogProps {
+  mode: MenuFormMode
   open: boolean
+  menu?: MenuTreeItem | null
   rootMenus: MenuTreeItem[]
   submitting?: boolean
   onOpenChange: (open: boolean) => void
@@ -61,16 +69,29 @@ function menuTypeLabel(type: number) {
   return type === 1 ? '一级菜单' : type === 2 ? '子菜单' : `类型 ${type}`
 }
 
-function MenuFormDialog({ open, rootMenus, submitting = false, onOpenChange, onSubmit }: MenuFormDialogProps) {
-  const [values, setValues] = useState<MenuCreateFormValues>(() => emptyFormValues())
+function menuToFormValues(menu?: MenuTreeItem | null): MenuCreateFormValues {
+  if (!menu) return emptyFormValues()
+  return {
+    name: menu.name,
+    type: String(menu.type),
+    sort: String(menu.sort),
+    url: menu.url ?? '',
+    icon: menu.icon ?? '',
+    parentId: menu.parentId ? String(menu.parentId) : '',
+  }
+}
+
+function MenuFormDialog({ mode, open, menu, rootMenus, submitting = false, onOpenChange, onSubmit }: MenuFormDialogProps) {
+  const [values, setValues] = useState<MenuCreateFormValues>(() => menuToFormValues(menu))
   const [errors, setErrors] = useState<Partial<Record<keyof MenuCreateFormValues, string>>>({})
   const isChildMenu = values.type === '2'
+  const parentOptions = rootMenus.filter((rootMenu) => rootMenu.id !== menu?.id)
 
   useEffect(() => {
     if (!open) return
-    setValues(emptyFormValues())
+    setValues(menuToFormValues(menu))
     setErrors({})
-  }, [open])
+  }, [menu, open])
 
   const updateValue = (key: keyof MenuCreateFormValues, value: string) => {
     setValues((current) => ({ ...current, [key]: value }))
@@ -94,9 +115,9 @@ function MenuFormDialog({ open, rootMenus, submitting = false, onOpenChange, onS
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>创建菜单</DialogTitle>
+          <DialogTitle>{mode === 'create' ? '创建菜单' : '编辑菜单'}</DialogTitle>
           <DialogDescription>
-            第一阶段保留旧 adminYh 创建菜单入口，只提交 name、type、url、icon、sort、parentId。
+            保留旧 adminYh 菜单字段，只提交 name、type、url、icon、sort、parentId。
           </DialogDescription>
         </DialogHeader>
 
@@ -150,9 +171,9 @@ function MenuFormDialog({ open, rootMenus, submitting = false, onOpenChange, onS
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ROOT_PARENT_VALUE}>请选择父级菜单</SelectItem>
-                  {rootMenus.map((menu) => (
-                    <SelectItem key={menu.id} value={String(menu.id)}>
-                      {menu.name}
+                  {parentOptions.map((parent) => (
+                    <SelectItem key={parent.id} value={String(parent.id)}>
+                      {parent.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -194,8 +215,11 @@ function MenuFormDialog({ open, rootMenus, submitting = false, onOpenChange, onS
 }
 
 export default function MenusList() {
+  const confirm = useConfirm()
   const { showToast } = useGlobalToast()
+  const [dialogMode, setDialogMode] = useState<MenuFormMode>('create')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [selectedMenu, setSelectedMenu] = useState<MenuTreeItem | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const { data, loading, error, refresh } = useResource(listMenuTree)
   const tree = useMemo(() => normalizeMenuTree(data ?? []), [data])
@@ -203,17 +227,60 @@ export default function MenusList() {
   const rootMenus = useMemo(() => tree.filter((node) => node.type === 1), [tree])
   const childCount = flatRows.filter((node) => node.depth > 0).length
 
+  const openCreateDialog = () => {
+    setDialogMode('create')
+    setSelectedMenu(null)
+    setDialogOpen(true)
+  }
+
+  const openEditDialog = async (menu: MenuTreeItem) => {
+    setDialogMode('edit')
+    setSelectedMenu(menu)
+    setDialogOpen(true)
+    try {
+      const detail = await getMenu(menu.id)
+      if (detail) {
+        setSelectedMenu(normalizeMenuTree([detail])[0] ?? menu)
+      }
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : '菜单详情加载失败', { translate: false })
+    }
+  }
+
   const submitMenu = async (values: MenuCreatePayload) => {
     setSubmitting(true)
     try {
-      await createMenu(values)
-      showToast('success', '创建菜单成功！', { translate: false })
+      if (dialogMode === 'edit' && selectedMenu) {
+        await updateMenu(selectedMenu.id, values)
+        showToast('success', '修改菜单成功！', { translate: false })
+      } else {
+        await createMenu(values)
+        showToast('success', '创建菜单成功！', { translate: false })
+      }
       setDialogOpen(false)
       refresh()
     } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '菜单创建失败', { translate: false })
+      showToast('error', err instanceof Error ? err.message : '菜单保存失败', { translate: false })
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const removeMenu = async (menu: MenuTreeItem) => {
+    const confirmed = await confirm({
+      title: '删除菜单',
+      description: `确认删除菜单 ${menu.name}？存在子菜单时后端会拒绝删除，避免破坏权限树。`,
+      confirmText: '删除',
+      variant: 'destructive',
+    })
+    if (!confirmed) return
+
+    try {
+      await deleteMenu(menu.id)
+      showToast('success', '删除菜单成功！', { translate: false })
+      refresh()
+    } catch (err) {
+      showToast('error', err instanceof Error ? err.message : '菜单删除失败', { translate: false })
     }
   }
 
@@ -224,7 +291,7 @@ export default function MenusList() {
       width="7xl"
       actions={
         <>
-          <Button type="button" className="gap-2" onClick={() => setDialogOpen(true)}>
+          <Button type="button" className="gap-2" onClick={openCreateDialog}>
             <Plus className="h-4 w-4" />
             创建菜单
           </Button>
@@ -251,7 +318,7 @@ export default function MenusList() {
         emptyDescription="旧 /menu/tree 未返回菜单树。"
         onRetry={refresh}
         emptyActions={
-          <Button type="button" className="gap-2" onClick={() => setDialogOpen(true)}>
+          <Button type="button" className="gap-2" onClick={openCreateDialog}>
             <Plus className="h-4 w-4" />
             创建菜单
           </Button>
@@ -261,6 +328,7 @@ export default function MenusList() {
           <TableHeader>
             <TableRow>
               <TableHead className="w-14 text-right">ID</TableHead>
+              <StickyActionHead className="min-w-[120px]" />
               <TableHead className="min-w-[220px]">菜单名称</TableHead>
               <TableHead className="min-w-[110px]">类型</TableHead>
               <TableHead className="min-w-[240px]">菜单url</TableHead>
@@ -275,6 +343,16 @@ export default function MenusList() {
             {flatRows.map((row) => (
               <TableRow key={row.id}>
                 <TableCell className="text-right font-mono text-xs text-muted-foreground">{row.id}</TableCell>
+                <StickyActionCell>
+                  <div className="flex items-center gap-1">
+                    <Button type="button" variant="ghost" size="icon" aria-label="编辑菜单" onClick={() => openEditDialog(row)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon" aria-label="删除菜单" onClick={() => removeMenu(row)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </StickyActionCell>
                 <TableCell>
                   <TreeIndent depth={row.depth} className="flex items-center gap-2">
                     <FolderTree className="h-4 w-4 text-primary" />
@@ -297,7 +375,9 @@ export default function MenusList() {
       </DataTableSurface>
 
       <MenuFormDialog
+        mode={dialogMode}
         open={dialogOpen}
+        menu={selectedMenu}
         rootMenus={rootMenus}
         submitting={submitting}
         onOpenChange={setDialogOpen}

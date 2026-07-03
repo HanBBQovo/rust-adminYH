@@ -30,7 +30,7 @@ export interface MenuTreeItem {
   children: MenuTreeItem[]
 }
 
-export interface MenuCreatePayload {
+export interface MenuMutationPayload {
   name: string
   type: number
   sort: number
@@ -38,6 +38,8 @@ export interface MenuCreatePayload {
   icon?: string
   parentId?: number | null
 }
+
+export type MenuCreatePayload = MenuMutationPayload
 
 export interface MenuCreateFormValues {
   name: string
@@ -77,8 +79,8 @@ export function flattenMenuTree(nodes: MenuTreeItem[], depth = 0): Array<MenuTre
   ])
 }
 
-export function buildMenuCreatePayload(values: MenuCreateFormValues): MenuCreatePayload {
-  const payload: MenuCreatePayload = {
+export function buildMenuCreatePayload(values: MenuCreateFormValues): MenuMutationPayload {
+  const payload: MenuMutationPayload = {
     name: values.name.trim(),
     type: Number(values.type),
     sort: Number(values.sort),
@@ -96,9 +98,26 @@ export async function listMenuTree(): Promise<LegacyMenuNode[]> {
   return apiRequest<LegacyMenuNode[]>('/menu/tree')
 }
 
-export async function createMenu(payload: MenuCreatePayload): Promise<void> {
+export async function getMenu(menuId: number): Promise<LegacyMenuNode | null> {
+  return apiRequest<LegacyMenuNode | null>(`/menu/${menuId}`)
+}
+
+export async function createMenu(payload: MenuMutationPayload): Promise<void> {
   await apiRequest('/menu', {
     method: 'POST',
     body: JSON.stringify(payload),
+  })
+}
+
+export async function updateMenu(menuId: number, payload: MenuMutationPayload): Promise<void> {
+  await apiRequest(`/menu/${menuId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function deleteMenu(menuId: number): Promise<void> {
+  await apiRequest(`/menu/${menuId}`, {
+    method: 'DELETE',
   })
 }

@@ -79,6 +79,14 @@ pub fn build_router(state: AppState) -> Router {
         .route("/api/role/{role_id}/menuIds", get(menu::role_menu_ids))
         .route("/menu", post(menu::create))
         .route("/api/menu", post(menu::create))
+        .route(
+            "/menu/{menu_id}",
+            get(menu::detail).patch(menu::update).delete(menu::remove),
+        )
+        .route(
+            "/api/menu/{menu_id}",
+            get(menu::detail).patch(menu::update).delete(menu::remove),
+        )
         .route("/menu/tree", get(menu::menu_tree))
         .route("/api/menu/tree", get(menu::menu_tree))
         .route("/chart/headerList", get(chart::header_list))

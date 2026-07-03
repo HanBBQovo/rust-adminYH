@@ -52,6 +52,49 @@ pub async fn create(
         .map_err(ErrorResponse)
 }
 
+pub async fn detail(
+    State(state): State<AppState>,
+    Path(menu_id): Path<i64>,
+    headers: HeaderMap,
+) -> Result<JsonResponse<Option<LegacyMenuNode>>, ErrorResponse> {
+    require_auth(&state, &headers).await?;
+    state
+        .menu_service
+        .detail(menu_id)
+        .await
+        .map(JsonResponse)
+        .map_err(ErrorResponse)
+}
+
+pub async fn update(
+    State(state): State<AppState>,
+    Path(menu_id): Path<i64>,
+    headers: HeaderMap,
+    Json(input): Json<MenuMutationRequest>,
+) -> Result<MessageResponse, ErrorResponse> {
+    require_admin(&state, &headers).await?;
+    state
+        .menu_service
+        .update(menu_id, input)
+        .await
+        .map(|_| MessageResponse("修改菜单成功！".to_owned()))
+        .map_err(ErrorResponse)
+}
+
+pub async fn remove(
+    State(state): State<AppState>,
+    Path(menu_id): Path<i64>,
+    headers: HeaderMap,
+) -> Result<MessageResponse, ErrorResponse> {
+    require_admin(&state, &headers).await?;
+    state
+        .menu_service
+        .remove(menu_id)
+        .await
+        .map(|_| MessageResponse("删除菜单成功！".to_owned()))
+        .map_err(ErrorResponse)
+}
+
 pub async fn role_menu_ids(
     State(state): State<AppState>,
     Path(role_id): Path<i64>,

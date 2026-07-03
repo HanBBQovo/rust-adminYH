@@ -245,6 +245,103 @@ test.describe('system write E2E flows', () => {
     await expectTemplateShell(page, '菜单管理', navItems)
   })
 
+  test('edits and deletes menus through legacy menu mutation routes', async ({ page }) => {
+    let updated = false
+    let deleted = false
+
+    await page.route('**/api/menu/tree', async (route) => {
+      const request = route.request()
+      expect(request.method()).toBe('GET')
+      expect(request.headers().authorization).toBe(`Bearer ${e2eToken}`)
+
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          code: 0,
+          data: [
+            {
+              ...menuTreeFixture,
+              chilren: deleted
+                ? [menuTreeFixture.chilren[0]]
+                : [
+                    menuTreeFixture.chilren[0],
+                    updated ? { ...menuTreeFixture.chilren[1], name: '菜单配置', sort: 5 } : menuTreeFixture.chilren[1],
+                  ],
+            },
+          ],
+        }),
+      })
+    })
+
+    await page.route('**/api/menu/32', async (route) => {
+      const request = route.request()
+      expect(request.headers().authorization).toBe(`Bearer ${e2eToken}`)
+
+      if (request.method() === 'GET') {
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 0, data: menuTreeFixture.chilren[1] }),
+        })
+        return
+      }
+
+      if (request.method() === 'PATCH') {
+        expect(request.postDataJSON()).toEqual({
+          name: '菜单配置',
+          type: 2,
+          sort: 5,
+          url: '/main/system/menu',
+          icon: 'ListTree',
+          parentId: 3,
+        })
+        updated = true
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 0, data: null, message: '修改菜单成功！' }),
+        })
+        return
+      }
+
+      if (request.method() === 'DELETE') {
+        deleted = true
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ code: 0, data: null, message: '删除菜单成功！' }),
+        })
+        return
+      }
+
+      throw new Error(`unexpected menu method: ${request.method()}`)
+    })
+
+    await loginAsAdmin(page)
+    await page.getByRole('button', { name: '菜单管理' }).click()
+
+    await expectTemplateShell(page, '菜单管理', navItems)
+    const row = page.getByRole('row').filter({ hasText: '/main/system/menu' })
+    await expect(row.getByText('菜单管理')).toBeVisible()
+
+    await row.getByRole('button', { name: '编辑菜单' }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByRole('heading', { name: '编辑菜单' })).toBeVisible()
+    await dialog.getByLabel('菜单名称').fill('菜单配置')
+    await dialog.getByLabel('排序').fill('5')
+    await dialog.getByRole('button', { name: '保存' }).click()
+
+    await expect.poll(() => updated).toBe(true)
+    await expect(page.getByText('修改菜单成功！')).toBeVisible()
+    await expect(page.getByText('菜单配置').first()).toBeVisible()
+
+    const updatedRow = page.getByRole('row').filter({ hasText: '/main/system/menu' })
+    await updatedRow.getByRole('button', { name: '删除菜单' }).click()
+    await page.getByRole('button', { name: '删除' }).click()
+
+    await expect.poll(() => deleted).toBe(true)
+    await expect(page.getByText('删除菜单成功！')).toBeVisible()
+    await expect(page.getByText('/main/system/menu')).toHaveCount(0)
+    await expectTemplateShell(page, '菜单管理', navItems)
+  })
+
   test('keeps the resource registry aligned with implemented modules', async ({ page }) => {
     await loginAsAdmin(page)
     await page.getByRole('button', { name: '页面注册表' }).click()

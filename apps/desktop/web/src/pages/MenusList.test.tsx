@@ -3,11 +3,15 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ThemeProvider } from '@/components/theme'
+import { ConfirmDialogContext } from '@/components/ui/confirm-dialog-context'
 import { GlobalToastContext } from '@/components/ui/global-toast-context'
 import MenusList from '@/pages/MenusList'
 
 const listMenuTreeMock = vi.hoisted(() => vi.fn())
 const createMenuMock = vi.hoisted(() => vi.fn())
+const getMenuMock = vi.hoisted(() => vi.fn())
+const updateMenuMock = vi.hoisted(() => vi.fn())
+const deleteMenuMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/api/menus', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/menus')>()
@@ -15,6 +19,9 @@ vi.mock('@/api/menus', async (importOriginal) => {
     ...actual,
     listMenuTree: listMenuTreeMock,
     createMenu: createMenuMock,
+    getMenu: getMenuMock,
+    updateMenu: updateMenuMock,
+    deleteMenu: deleteMenuMock,
   }
 })
 
@@ -51,24 +58,33 @@ const MENU_TREE = [
   },
 ]
 
-function renderMenusList(options?: { showToast?: ReturnType<typeof vi.fn> }) {
+function renderMenusList(options?: { confirm?: () => Promise<boolean>; showToast?: ReturnType<typeof vi.fn> }) {
+  const confirm = options?.confirm || vi.fn().mockResolvedValue(true)
   const showToast = options?.showToast || vi.fn()
   render(
     <ThemeProvider>
       <GlobalToastContext.Provider value={{ showToast }}>
-        <MenusList />
+        <ConfirmDialogContext.Provider value={{ confirm }}>
+          <MenusList />
+        </ConfirmDialogContext.Provider>
       </GlobalToastContext.Provider>
     </ThemeProvider>,
   )
-  return { showToast }
+  return { confirm, showToast }
 }
 
 describe('MenusList', () => {
   beforeEach(() => {
     listMenuTreeMock.mockReset()
     createMenuMock.mockReset()
+    getMenuMock.mockReset()
+    updateMenuMock.mockReset()
+    deleteMenuMock.mockReset()
     listMenuTreeMock.mockResolvedValue(MENU_TREE)
     createMenuMock.mockResolvedValue(undefined)
+    getMenuMock.mockResolvedValue(MENU_TREE[0].chilren[1])
+    updateMenuMock.mockResolvedValue(undefined)
+    deleteMenuMock.mockResolvedValue(undefined)
   })
 
   it('renders the old menu tree fields and typo chilren children', async () => {
@@ -155,6 +171,55 @@ describe('MenusList', () => {
         parentId: 3,
       })
     })
+  })
+
+  it('edits a menu through the API wrapper and refreshes the tree', async () => {
+    const user = userEvent.setup()
+    const { showToast } = renderMenusList()
+
+    const row = (await screen.findByText('/main/system/menu')).closest('tr')
+    if (!row) throw new Error('missing menu row')
+    await user.click(within(row).getByRole('button', { name: '编辑菜单' }))
+    const dialog = await screen.findByRole('dialog')
+
+    await waitFor(() => {
+      expect(getMenuMock).toHaveBeenCalledWith(32)
+      expect(within(dialog).getByLabelText('菜单名称')).toHaveValue('菜单管理')
+    })
+    await user.clear(within(dialog).getByLabelText('菜单名称'))
+    await user.type(within(dialog).getByLabelText('菜单名称'), '菜单配置')
+    await user.clear(within(dialog).getByLabelText('排序'))
+    await user.type(within(dialog).getByLabelText('排序'), '5')
+    await user.click(within(dialog).getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(updateMenuMock).toHaveBeenCalledWith(32, {
+        name: '菜单配置',
+        type: 2,
+        sort: 5,
+        url: '/main/system/menu',
+        icon: 'ListTree',
+        parentId: 3,
+      })
+    })
+    expect(showToast).toHaveBeenCalledWith('success', '修改菜单成功！', { translate: false })
+    expect(listMenuTreeMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('confirms before deleting a menu and refreshes the tree', async () => {
+    const user = userEvent.setup()
+    const { confirm, showToast } = renderMenusList()
+
+    const row = (await screen.findByText('/main/system/menu')).closest('tr')
+    if (!row) throw new Error('missing menu row')
+    await user.click(within(row).getByRole('button', { name: '删除菜单' }))
+
+    await waitFor(() => {
+      expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: '删除菜单', variant: 'destructive' }))
+      expect(deleteMenuMock).toHaveBeenCalledWith(32)
+    })
+    expect(showToast).toHaveBeenCalledWith('success', '删除菜单成功！', { translate: false })
+    expect(listMenuTreeMock).toHaveBeenCalledTimes(2)
   })
 
   it('renders the empty state and keeps the create action available', async () => {

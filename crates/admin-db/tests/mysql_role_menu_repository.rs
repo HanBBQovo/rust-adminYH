@@ -202,6 +202,85 @@ async fn mysql_menu_repository_builds_legacy_trees_and_creates_children() {
 
 #[tokio::test]
 #[ignore = "requires RUN_DB_TESTS=true and ADMIN_DB_TEST_DATABASE_URL"]
+async fn mysql_menu_repository_updates_and_deletes_leaf_menus_safely() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let scope = TestScope::new(&pool).await;
+    let menu_repository = MySqlMenuRepository::new(pool.clone());
+    let service = CompatMenuService::new(Arc::new(menu_repository));
+
+    let root_id = scope
+        .seed_permission(None, "系统设置", 1, "/main/system", 20)
+        .await;
+    let child_id = scope
+        .seed_permission(Some(root_id), "菜单管理", 2, "/main/system/menu", 1)
+        .await;
+    let role_id = scope.seed_role("菜单维护角色", "菜单维护权限").await;
+    scope
+        .assign_permissions(role_id, &[root_id, child_id])
+        .await;
+
+    let detail = service
+        .detail(child_id)
+        .await
+        .expect("menu detail should query")
+        .expect("seeded child should exist");
+    assert_eq!(detail.id, child_id);
+    assert_eq!(detail.parent_id, Some(root_id));
+
+    service
+        .update(
+            child_id,
+            MenuMutationRequest {
+                name: format!("  {}  ", scope.name("菜单配置")),
+                menu_type: Some(2),
+                url: Some(" /main/system/menu-config ".to_owned()),
+                icon: Some(" list-tree ".to_owned()),
+                sort: Some(7),
+                parent_id: Some(root_id),
+                legacy_parent_id: None,
+                children: Vec::new(),
+                legacy_children: Vec::new(),
+            },
+        )
+        .await
+        .expect("leaf menu should update through SQLx repository");
+    let updated = scope
+        .permission_by_name(&scope.name("菜单配置"))
+        .await
+        .expect("updated permission should exist");
+    assert_eq!(updated.parent_id, Some(root_id));
+    assert_eq!(updated.menu_type, 2);
+    assert_eq!(updated.url.as_deref(), Some("/main/system/menu-config"));
+    assert_eq!(updated.icon.as_deref(), Some("list-tree"));
+
+    let delete_parent = service
+        .remove(root_id)
+        .await
+        .expect_err("root menu with child should not delete");
+    assert_eq!(
+        delete_parent.to_string(),
+        "请求参数错误: 存在子菜单，不能删除"
+    );
+
+    service
+        .remove(child_id)
+        .await
+        .expect("leaf menu should delete through SQLx repository");
+    assert!(service
+        .detail(child_id)
+        .await
+        .expect("deleted menu detail should query")
+        .is_none());
+    assert_eq!(scope.role_permission_count(role_id, child_id).await, 0);
+    assert_eq!(scope.role_permission_count(role_id, root_id).await, 1);
+
+    scope.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires RUN_DB_TESTS=true and ADMIN_DB_TEST_DATABASE_URL"]
 async fn mysql_role_assignment_replaces_menu_ids_transactionally() {
     let Some(pool) = test_pool().await else {
         return;

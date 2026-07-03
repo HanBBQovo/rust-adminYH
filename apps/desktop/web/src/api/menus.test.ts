@@ -3,9 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildMenuCreatePayload,
   createMenu,
+  deleteMenu,
   flattenMenuTree,
+  getMenu,
   listMenuTree,
   normalizeMenuTree,
+  updateMenu,
 } from '@/api/menus'
 
 const fetchMock = vi.fn()
@@ -99,7 +102,7 @@ describe('menus api', () => {
     ])
   })
 
-  it('wraps menu tree and create routes through the shared API client', async () => {
+  it('wraps menu tree and mutation routes through the shared API client', async () => {
     fetchMock
       .mockImplementationOnce(() =>
         jsonResponse([
@@ -112,6 +115,9 @@ describe('menus api', () => {
           },
         ]),
       )
+      .mockImplementationOnce(() => jsonResponse(null))
+      .mockImplementationOnce(() => jsonResponse({ id: 11, name: '菜单管理', type: 2, sort: 1, partentId: 1 }))
+      .mockImplementationOnce(() => jsonResponse(null))
       .mockImplementationOnce(() => jsonResponse(null))
 
     await expect(listMenuTree()).resolves.toEqual([
@@ -126,6 +132,11 @@ describe('menus api', () => {
     await expect(
       createMenu({ name: '菜单管理', type: 2, sort: 1, url: '/main/system/menu', parentId: 1 }),
     ).resolves.toBeUndefined()
+    await expect(getMenu(11)).resolves.toEqual({ id: 11, name: '菜单管理', type: 2, sort: 1, partentId: 1 })
+    await expect(
+      updateMenu(11, { name: '菜单配置', type: 2, sort: 2, url: '/main/system/menu', parentId: 1 }),
+    ).resolves.toBeUndefined()
+    await expect(deleteMenu(11)).resolves.toBeUndefined()
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/menu/tree', expect.any(Object))
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -134,6 +145,22 @@ describe('menus api', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ name: '菜单管理', type: 2, sort: 1, url: '/main/system/menu', parentId: 1 }),
+      }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/menu/11', expect.any(Object))
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      '/api/menu/11',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ name: '菜单配置', type: 2, sort: 2, url: '/main/system/menu', parentId: 1 }),
+      }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      '/api/menu/11',
+      expect.objectContaining({
+        method: 'DELETE',
       }),
     )
   })
