@@ -16,7 +16,16 @@ import {
 } from '@/api/roles'
 import { normalizeMenuTree, type MenuTreeItem } from '@/api/menus'
 import { InlineLoader } from '@/components/PageLoader'
-import { DataTableSurface, StickyActionCell, StickyActionHead } from '@/components/layout/DataTableSurface'
+import {
+  DataTableActionGroup,
+  DataTableDateCell,
+  DataTableIconAction,
+  DataTableRowNumberCell,
+  DataTableRowNumberHead,
+  DataTableSurface,
+  StickyActionCell,
+  StickyActionHead,
+} from '@/components/layout/DataTableSurface'
 import { FilterBar, FilterField } from '@/components/layout/FilterBar'
 import { FormField, FormSection, TreeIndent } from '@/components/layout/FormScaffold'
 import { PageShell } from '@/components/layout/PageScaffold'
@@ -433,7 +442,7 @@ export default function RolesList() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-14 text-right">序号</TableHead>
+              <DataTableRowNumberHead />
               <StickyActionHead className="min-w-[180px]" />
               <TableHead className="min-w-[160px]">角色名</TableHead>
               <TableHead className="min-w-[220px]">权限介绍</TableHead>
@@ -444,22 +453,14 @@ export default function RolesList() {
           <TableBody>
             {rows.map((row, index) => (
               <TableRow key={row.id}>
-                <TableCell className="text-right font-mono text-xs text-muted-foreground">{(page - 1) * PAGE_SIZE + index + 1}</TableCell>
+                <DataTableRowNumberCell value={(page - 1) * PAGE_SIZE + index + 1} />
                 <StickyActionCell>
-                  <div className="flex items-center gap-1">
-                    <Button type="button" variant="ghost" size="icon" aria-label="查看角色" onClick={() => openRoleDialog('view', row)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button type="button" variant="ghost" size="icon" aria-label="编辑角色" onClick={() => openRoleDialog('edit', row)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button type="button" variant="ghost" size="icon" aria-label="分配权限" onClick={() => openAssignDialog(row)}>
-                      <ShieldCheck className="h-4 w-4" />
-                    </Button>
-                    <Button type="button" variant="ghost" size="icon" aria-label="删除角色" onClick={() => removeRole(row)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
+                  <DataTableActionGroup>
+                    <DataTableIconAction label="查看角色" icon={Eye} onClick={() => openRoleDialog('view', row)} />
+                    <DataTableIconAction label="编辑角色" icon={Pencil} onClick={() => openRoleDialog('edit', row)} />
+                    <DataTableIconAction label="分配权限" icon={ShieldCheck} onClick={() => openAssignDialog(row)} />
+                    <DataTableIconAction label="删除角色" icon={Trash2} destructive onClick={() => removeRole(row)} />
+                  </DataTableActionGroup>
                 </StickyActionCell>
                 <TableCell className="font-medium">{row.name}</TableCell>
                 <TableCell>
@@ -467,8 +468,8 @@ export default function RolesList() {
                     {row.intro}
                   </Badge>
                 </TableCell>
-                <TableCell className="font-mono text-xs">{row.createAt || '-'}</TableCell>
-                <TableCell className="font-mono text-xs">{row.updateAt || '-'}</TableCell>
+                <DataTableDateCell value={row.createAt} />
+                <DataTableDateCell value={row.updateAt} />
               </TableRow>
             ))}
           </TableBody>

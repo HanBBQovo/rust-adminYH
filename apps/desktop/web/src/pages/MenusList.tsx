@@ -14,7 +14,16 @@ import {
   type MenuTreeItem,
   updateMenu,
 } from '@/api/menus'
-import { DataTableSurface, StickyActionCell, StickyActionHead } from '@/components/layout/DataTableSurface'
+import {
+  DataTableActionGroup,
+  DataTableDateCell,
+  DataTableIconAction,
+  DataTableRowNumberCell,
+  DataTableRowNumberHead,
+  DataTableSurface,
+  StickyActionCell,
+  StickyActionHead,
+} from '@/components/layout/DataTableSurface'
 import { FormField, FormSection, TreeIndent } from '@/components/layout/FormScaffold'
 import { PageShell, PageStat, PageStatStrip } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
@@ -327,7 +336,7 @@ export default function MenusList() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-14 text-right">ID</TableHead>
+              <DataTableRowNumberHead>ID</DataTableRowNumberHead>
               <StickyActionHead className="min-w-[120px]" />
               <TableHead className="min-w-[220px]">菜单名称</TableHead>
               <TableHead className="min-w-[110px]">类型</TableHead>
@@ -342,16 +351,12 @@ export default function MenusList() {
           <TableBody>
             {flatRows.map((row) => (
               <TableRow key={row.id}>
-                <TableCell className="text-right font-mono text-xs text-muted-foreground">{row.id}</TableCell>
+                <DataTableRowNumberCell value={row.id} />
                 <StickyActionCell>
-                  <div className="flex items-center gap-1">
-                    <Button type="button" variant="ghost" size="icon" aria-label="编辑菜单" onClick={() => openEditDialog(row)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button type="button" variant="ghost" size="icon" aria-label="删除菜单" onClick={() => removeMenu(row)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
+                  <DataTableActionGroup>
+                    <DataTableIconAction label="编辑菜单" icon={Pencil} onClick={() => openEditDialog(row)} />
+                    <DataTableIconAction label="删除菜单" icon={Trash2} destructive onClick={() => removeMenu(row)} />
+                  </DataTableActionGroup>
                 </StickyActionCell>
                 <TableCell>
                   <TreeIndent depth={row.depth} className="flex items-center gap-2">
@@ -366,8 +371,8 @@ export default function MenusList() {
                 <TableCell className="font-mono text-xs">{row.icon || '-'}</TableCell>
                 <TableCell className="font-mono text-xs">{row.permission || '-'}</TableCell>
                 <TableCell className="text-right font-mono text-xs">{row.sort}</TableCell>
-                <TableCell className="font-mono text-xs">{row.createAt || '-'}</TableCell>
-                <TableCell className="font-mono text-xs">{row.updateAt || '-'}</TableCell>
+                <DataTableDateCell value={row.createAt} />
+                <DataTableDateCell value={row.updateAt} />
               </TableRow>
             ))}
           </TableBody>

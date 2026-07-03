@@ -2,8 +2,19 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
-import { DataTableSurface, StickyActionCell, StickyActionHead } from '@/components/layout/DataTableSurface'
+import {
+  DataTableActionGroup,
+  DataTableDateCell,
+  DataTableIconAction,
+  DataTableRowNumberCell,
+  DataTableRowNumberHead,
+  DataTableSequenceCell,
+  DataTableSurface,
+  StickyActionCell,
+  StickyActionHead,
+} from '@/components/layout/DataTableSurface'
 import { Table, TableBody, TableHeader, TableRow } from '@/components/ui/table'
+import { Pencil, Trash2 } from 'lucide-react'
 
 function renderTableSurface(props?: Partial<React.ComponentProps<typeof DataTableSurface>>) {
   render(
@@ -89,5 +100,59 @@ describe('DataTableSurface', () => {
       'bg-background',
     )
     expect(screen.getByText('操作按钮').closest('td')).toHaveClass('sticky', 'left-0', 'z-10', 'bg-background')
+  })
+
+  it('centralizes common table cell primitives', () => {
+    render(
+      <table>
+        <tbody>
+          <tr>
+            <DataTableRowNumberCell value={12} />
+            <td>
+              <DataTableActionGroup>
+                <DataTableIconAction label="编辑" icon={Pencil} />
+                <DataTableIconAction label="删除" icon={Trash2} destructive />
+              </DataTableActionGroup>
+            </td>
+            <DataTableDateCell value="2026-07-03 12:00:00" />
+            <DataTableDateCell value="" />
+          </tr>
+        </tbody>
+      </table>,
+    )
+
+    expect(screen.getByText('12').closest('td')).toHaveClass(
+      'text-right',
+      'font-mono',
+      'text-xs',
+      'text-muted-foreground',
+    )
+    expect(screen.getByRole('button', { name: '编辑' }).parentElement).toHaveClass('flex', 'items-center', 'gap-1')
+    expect(screen.getByRole('button', { name: '编辑' }).querySelector('svg')).toHaveClass('h-4', 'w-4')
+    expect(screen.getByRole('button', { name: '删除' }).querySelector('svg')).toHaveClass('text-destructive')
+    expect(screen.getByText('2026-07-03 12:00:00').closest('td')).toHaveClass('font-mono', 'text-xs')
+    expect(screen.getByText('-').closest('td')).toHaveClass('font-mono', 'text-xs')
+  })
+
+  it('centralizes row number header styling and keeps the sequence alias', () => {
+    render(
+      <table>
+        <thead>
+          <tr>
+            <DataTableRowNumberHead />
+            <DataTableRowNumberHead>ID</DataTableRowNumberHead>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <DataTableSequenceCell value={3} />
+          </tr>
+        </tbody>
+      </table>,
+    )
+
+    expect(screen.getByRole('columnheader', { name: '序号' })).toHaveClass('w-14', 'text-right')
+    expect(screen.getByRole('columnheader', { name: 'ID' })).toHaveClass('w-14', 'text-right')
+    expect(screen.getByText('3').closest('td')).toHaveClass('text-right', 'font-mono', 'text-xs')
   })
 })

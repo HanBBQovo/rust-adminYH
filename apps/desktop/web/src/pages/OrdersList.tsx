@@ -13,7 +13,15 @@ import {
   type OrderListParams,
   type OrderMutationPayload,
 } from '@/api/orders'
-import { DataTableSurface, StickyActionCell, StickyActionHead } from '@/components/layout/DataTableSurface'
+import {
+  DataTableActionGroup,
+  DataTableIconAction,
+  DataTableRowNumberCell,
+  DataTableRowNumberHead,
+  DataTableSurface,
+  StickyActionCell,
+  StickyActionHead,
+} from '@/components/layout/DataTableSurface'
 import { FilterBar, FilterField } from '@/components/layout/FilterBar'
 import { PageShell } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
@@ -250,7 +258,7 @@ export default function OrdersList() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-14 text-right">序号</TableHead>
+              <DataTableRowNumberHead />
               <StickyActionHead className="min-w-[160px]" />
               {ORDER_COLUMNS.map((column) => (
                 <TableHead key={column.key} className={column.className}>{column.label}</TableHead>
@@ -260,19 +268,13 @@ export default function OrdersList() {
           <TableBody>
             {rows.map((row, index) => (
               <TableRow key={row.id}>
-                <TableCell className="text-right font-mono text-xs text-muted-foreground">{(page - 1) * PAGE_SIZE + index + 1}</TableCell>
+                <DataTableRowNumberCell value={(page - 1) * PAGE_SIZE + index + 1} />
                 <StickyActionCell>
-                  <div className="flex items-center gap-1">
-                    <Button type="button" variant="ghost" size="icon" aria-label="查看订单" onClick={() => openOrderDialog('view', row)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button type="button" variant="ghost" size="icon" aria-label="编辑订单" onClick={() => openOrderDialog('edit', row)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button type="button" variant="ghost" size="icon" aria-label="删除订单" onClick={() => removeOrder(row)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
+                  <DataTableActionGroup>
+                    <DataTableIconAction label="查看订单" icon={Eye} onClick={() => openOrderDialog('view', row)} />
+                    <DataTableIconAction label="编辑订单" icon={Pencil} onClick={() => openOrderDialog('edit', row)} />
+                    <DataTableIconAction label="删除订单" icon={Trash2} destructive onClick={() => removeOrder(row)} />
+                  </DataTableActionGroup>
                 </StickyActionCell>
                 {ORDER_COLUMNS.map((column) => (
                   <TableCell key={column.key} className={column.className}>{renderCell(row, column)}</TableCell>

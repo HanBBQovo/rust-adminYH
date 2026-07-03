@@ -10,7 +10,16 @@ import {
   type CompanyMutationPayload,
   type LegacyCompany,
 } from '@/api/companies'
-import { DataTableSurface, StickyActionCell, StickyActionHead } from '@/components/layout/DataTableSurface'
+import {
+  DataTableActionGroup,
+  DataTableDateCell,
+  DataTableIconAction,
+  DataTableRowNumberCell,
+  DataTableRowNumberHead,
+  DataTableSurface,
+  StickyActionCell,
+  StickyActionHead,
+} from '@/components/layout/DataTableSurface'
 import { FormField, FormSection } from '@/components/layout/FormScaffold'
 import { PageShell } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
@@ -220,7 +229,7 @@ export default function CompaniesList() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-14 text-right">序号</TableHead>
+              <DataTableRowNumberHead />
               <StickyActionHead className="min-w-[160px]" />
               <TableHead className="min-w-[180px]">发货公司</TableHead>
               <TableHead className="min-w-[120px] text-right">订单数量</TableHead>
@@ -231,46 +240,20 @@ export default function CompaniesList() {
           <TableBody>
             {rows.map((row, index) => (
               <TableRow key={row.id}>
-                <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                  {(page - 1) * PAGE_SIZE + index + 1}
-                </TableCell>
+                <DataTableRowNumberCell value={(page - 1) * PAGE_SIZE + index + 1} />
                 <StickyActionCell>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label="查看发货公司"
-                      onClick={() => openCompanyDialog('view', row)}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label="编辑发货公司"
-                      onClick={() => openCompanyDialog('edit', row)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label="删除发货公司"
-                      onClick={() => removeCompany(row)}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
+                  <DataTableActionGroup>
+                    <DataTableIconAction label="查看发货公司" icon={Eye} onClick={() => openCompanyDialog('view', row)} />
+                    <DataTableIconAction label="编辑发货公司" icon={Pencil} onClick={() => openCompanyDialog('edit', row)} />
+                    <DataTableIconAction label="删除发货公司" icon={Trash2} destructive onClick={() => removeCompany(row)} />
+                  </DataTableActionGroup>
                 </StickyActionCell>
                 <TableCell className="font-medium">{row.name}</TableCell>
                 <TableCell className="text-right">
                   <Badge variant="outline">{row.Countorder}</Badge>
                 </TableCell>
-                <TableCell className="font-mono text-xs">{row.createAt || '-'}</TableCell>
-                <TableCell className="font-mono text-xs">{row.updateAt || '-'}</TableCell>
+                <DataTableDateCell value={row.createAt} />
+                <DataTableDateCell value={row.updateAt} />
               </TableRow>
             ))}
           </TableBody>
