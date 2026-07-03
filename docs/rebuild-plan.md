@@ -443,7 +443,7 @@ admin-migration
 - service 层承载业务规则，例如创建订单后写 `company_order`、可选创建 `receipt`、写 `memory`。
 - repository 层只负责数据库读写，所有 SQL 必须参数化。
 - database 层统一管理 SQLx pool、事务、分页参数、迁移。
-- auth/permission 独立封装，业务模块只能调用统一权限接口，不能硬编码 `role_id == 1`。
+- auth/permission 独立封装，业务模块只能调用统一权限接口，不能硬编码 `role_id == 1`；HTTP 层权限判断必须通过 `AuthPolicy` / `require_policy` 收口，`require_admin` 和 `require_self_or_admin` 只能作为语义化薄封装。
 - error/response 独立封装，所有 API 返回统一结构，不允许每个 handler 自己拼错误格式。
 - validation 独立封装，新增/编辑订单、用户、角色、回单状态必须走 DTO 校验。
 - logging/request-id 独立封装，便于定位桌面端和 API 问题。
