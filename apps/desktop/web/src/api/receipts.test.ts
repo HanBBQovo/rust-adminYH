@@ -58,6 +58,24 @@ describe('receipts api', () => {
     })
   })
 
+  it.each(['已接收', '已发放'] as const)(
+    'keeps issue status filter %s unnormalized for backend alias matching',
+    (issuestate) => {
+      expect(
+        buildReceiptListPayload({
+          mode: 'all',
+          page: 1,
+          pageSize: 20,
+          issuestate,
+        }),
+      ).toEqual({
+        offset: 0,
+        size: 20,
+        issuestate,
+      })
+    },
+  )
+
   it.each([
     ['all', '/api/receipt/list'],
     ['pending', '/api/notrecovery/list'],

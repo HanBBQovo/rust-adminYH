@@ -918,6 +918,66 @@ async fn mysql_api_order_patch_delete_reconciles_legacy_side_effects_through_htt
     assert_eq!(receipt_patch_json["code"], 0);
     assert_eq!(receipt_patch_json["message"], "回单回收成功！");
 
+    let (issue_received_status, issue_received_json) = json_request(
+        app.clone(),
+        "PATCH",
+        &format!("/api/receipt/{receipt_id}"),
+        Some(&admin_token),
+        r#"{"issuestate":"已接收"}"#,
+    )
+    .await;
+    assert_eq!(issue_received_status, StatusCode::OK);
+    assert_eq!(issue_received_json["code"], 0);
+    assert_eq!(issue_received_json["message"], "回单发放成功！");
+
+    let (legacy_issue_filter_status, legacy_issue_filter_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/receipt/list",
+        Some(&admin_token),
+        &format!(
+            r#"{{"offset":0,"size":10,"oddnumber":"{}","issuestate":"已发放"}}"#,
+            scope.oddnumber("PATCH-DELETE")
+        ),
+    )
+    .await;
+    assert_eq!(legacy_issue_filter_status, StatusCode::OK);
+    assert_eq!(legacy_issue_filter_json["data"]["totalCount"], 1);
+    assert_eq!(
+        legacy_issue_filter_json["data"]["list"][0]["issuestate"],
+        "已接收"
+    );
+
+    let (legacy_issue_status, legacy_issue_json) = json_request(
+        app.clone(),
+        "PATCH",
+        &format!("/api/receipt/{receipt_id}"),
+        Some(&admin_token),
+        r#"{"issuestate":"已发放"}"#,
+    )
+    .await;
+    assert_eq!(legacy_issue_status, StatusCode::OK);
+    assert_eq!(legacy_issue_json["code"], 0);
+    assert_eq!(legacy_issue_json["message"], "回单发放成功！");
+
+    let (received_issue_filter_status, received_issue_filter_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/receipt/list",
+        Some(&admin_token),
+        &format!(
+            r#"{{"offset":0,"size":10,"oddnumber":"{}","issuestate":"已接收"}}"#,
+            scope.oddnumber("PATCH-DELETE")
+        ),
+    )
+    .await;
+    assert_eq!(received_issue_filter_status, StatusCode::OK);
+    assert_eq!(received_issue_filter_json["data"]["totalCount"], 1);
+    assert_eq!(
+        received_issue_filter_json["data"]["list"][0]["issuestate"],
+        "已发放"
+    );
+
     let updated_oddnumber = scope.oddnumber("PATCH-DELETE-UPDATED");
     let updated_company = format!("{}-发货公司-订单更新", scope.prefix);
     let updated_consignee = format!("{}-更新收货人", scope.prefix);

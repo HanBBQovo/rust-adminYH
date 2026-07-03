@@ -20,6 +20,7 @@ pub type ServiceFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 const RECEIPT_STATUS_UNRECOVERED: &str = "未回收";
 const RECEIPT_STATUS_RECOVERED: &str = "已回收";
 const RECEIPT_STATUS_ISSUE_PENDING: &str = "未发放";
+const RECEIPT_STATUS_ISSUE_DONE: &str = "已接收";
 const RECEIPT_STATUS_ISSUE_LEGACY_DONE: &str = "已发放";
 const RECEIPT_STATUS_POST_PENDING: &str = "未寄出";
 const RECEIPT_STATUS_POST_DONE: &str = "已寄出";
@@ -958,7 +959,7 @@ fn filter_receipts(receipts: &[ReceiptRecord], input: &ReceiptListRequest) -> Ve
         .filter(|receipt| contains(&receipt.consignee, &consignee))
         .filter(|receipt| contains(&receipt.consignor, &consignor))
         .filter(|receipt| contains(&receipt.recoverystate, &recoverystate))
-        .filter(|receipt| contains(&receipt.issuestate, &issuestate))
+        .filter(|receipt| receipt_issue_state_matches(&receipt.issuestate, &issuestate))
         .filter(|receipt| contains(&receipt.poststate, &poststate))
         .filter(|receipt| in_range(receipt.billing_at, date_range))
         .cloned()
@@ -1014,6 +1015,20 @@ fn filter_text(value: &Option<String>) -> String {
 
 fn contains(value: &str, needle: &str) -> bool {
     needle.is_empty() || value.contains(needle)
+}
+
+fn receipt_issue_state_matches(value: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    if matches!(
+        needle,
+        RECEIPT_STATUS_ISSUE_DONE | RECEIPT_STATUS_ISSUE_LEGACY_DONE
+    ) {
+        return value.contains(RECEIPT_STATUS_ISSUE_DONE)
+            || value.contains(RECEIPT_STATUS_ISSUE_LEGACY_DONE);
+    }
+    value.contains(needle)
 }
 
 fn parse_date_range(value: &Option<Vec<LegacyDateInput>>) -> Option<(i64, i64)> {
@@ -1191,5 +1206,67 @@ mod tests {
             .await
             .expect("recovery list should load");
         assert_eq!(list.total_count, 1);
+    }
+
+    #[tokio::test]
+    async fn receipt_issue_filters_treat_received_and_legacy_issued_as_aliases() {
+        let (_, receipts, _) = development_order_services();
+        receipts
+            .update_status(
+                1,
+                ReceiptStatusRequest {
+                    recoverystate: None,
+                    issuestate: Some("已接收".to_owned()),
+                    poststate: None,
+                },
+            )
+            .await
+            .expect("issue status should update");
+
+        let list_by_legacy = receipts
+            .list(ReceiptListRequest {
+                offset: 0,
+                size: 10,
+                oddnumber: Some("YD20260101001".to_owned()),
+                consignee: None,
+                consignor: None,
+                recoverystate: None,
+                issuestate: Some("已发放".to_owned()),
+                poststate: None,
+                create_at: None,
+            })
+            .await
+            .expect("legacy issue filter should list received receipts");
+        assert_eq!(list_by_legacy.total_count, 1);
+        assert_eq!(list_by_legacy.list[0].issuestate, "已接收");
+
+        receipts
+            .update_status(
+                1,
+                ReceiptStatusRequest {
+                    recoverystate: None,
+                    issuestate: Some("已发放".to_owned()),
+                    poststate: None,
+                },
+            )
+            .await
+            .expect("legacy issue status should update");
+
+        let list_by_received = receipts
+            .list(ReceiptListRequest {
+                offset: 0,
+                size: 10,
+                oddnumber: Some("YD20260101001".to_owned()),
+                consignee: None,
+                consignor: None,
+                recoverystate: None,
+                issuestate: Some("已接收".to_owned()),
+                poststate: None,
+                create_at: None,
+            })
+            .await
+            .expect("received issue filter should list legacy issued receipts");
+        assert_eq!(list_by_received.total_count, 1);
+        assert_eq!(list_by_received.list[0].issuestate, "已发放");
     }
 }

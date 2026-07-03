@@ -9,6 +9,9 @@ use admin_core::{
 };
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row, Transaction};
 
+const RECEIPT_STATUS_ISSUE_DONE: &str = "已接收";
+const RECEIPT_STATUS_ISSUE_LEGACY_DONE: &str = "已发放";
+
 #[derive(Debug, Clone)]
 pub struct MySqlOrderRepository {
     pool: MySqlPool,
@@ -317,13 +320,7 @@ fn push_receipt_filters(query: &mut QueryBuilder<'_, MySql>, input: &ReceiptList
         input.recoverystate.as_deref(),
         LikeMode::Contains,
     );
-    push_like_filter(
-        query,
-        &mut has_filter,
-        "`issuestate`",
-        input.issuestate.as_deref(),
-        LikeMode::Contains,
-    );
+    push_receipt_issue_filter(query, &mut has_filter, input.issuestate.as_deref());
     push_like_filter(
         query,
         &mut has_filter,
@@ -370,6 +367,31 @@ fn push_like_filter(
         LikeMode::Contains => query.push_bind(format!("%{value}%")),
         LikeMode::Prefix => query.push_bind(format!("{value}%")),
     };
+}
+
+fn push_receipt_issue_filter(
+    query: &mut QueryBuilder<'_, MySql>,
+    has_filter: &mut bool,
+    value: Option<&str>,
+) {
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return;
+    };
+    push_filter_separator(query, has_filter);
+    if matches!(
+        value,
+        RECEIPT_STATUS_ISSUE_DONE | RECEIPT_STATUS_ISSUE_LEGACY_DONE
+    ) {
+        query.push("(");
+        query.push("`issuestate` LIKE ");
+        query.push_bind(format!("%{RECEIPT_STATUS_ISSUE_DONE}%"));
+        query.push(" OR `issuestate` LIKE ");
+        query.push_bind(format!("%{RECEIPT_STATUS_ISSUE_LEGACY_DONE}%"));
+        query.push(")");
+    } else {
+        query.push("`issuestate` LIKE ");
+        query.push_bind(format!("%{value}%"));
+    }
 }
 
 fn push_date_filter(

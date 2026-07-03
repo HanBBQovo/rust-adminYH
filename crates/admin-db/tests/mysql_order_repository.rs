@@ -3,7 +3,10 @@ use std::env;
 use admin_core::{
     domain::OrderRecord,
     dto::{OrderListRequest, ReceiptListRequest},
-    services::{order::NormalizedOrderInput, OrderStore},
+    services::{
+        order::{NormalizedOrderInput, ReceiptStatusChange},
+        OrderStore,
+    },
 };
 use admin_db::{migrations, repositories::MySqlOrderRepository};
 use sqlx::{MySqlPool, Row};
@@ -248,6 +251,98 @@ async fn mysql_order_repository_treats_sql_injection_filters_as_plain_text() {
         scope
             .count_by_text("receipt", "oddnumber", &scope.oddnumber("030"))
             .await,
+        1
+    );
+
+    scope.cleanup().await;
+}
+
+#[tokio::test]
+#[ignore = "requires RUN_DB_TESTS=true and ADMIN_DB_TEST_DATABASE_URL"]
+async fn mysql_order_repository_treats_received_and_legacy_issued_as_aliases() {
+    let Some(pool) = test_pool().await else {
+        return;
+    };
+    let scope = TestScope::new(&pool).await;
+    let repository = MySqlOrderRepository::new(pool.clone());
+
+    repository
+        .create_order(scope.order_input("035", "别名收货人", "别名发货人", 1))
+        .await
+        .expect("order should be created");
+    let receipt = repository
+        .list_receipts(&ReceiptListRequest {
+            offset: 0,
+            size: 10,
+            oddnumber: Some(scope.oddnumber("035")),
+            consignee: None,
+            consignor: None,
+            recoverystate: None,
+            issuestate: None,
+            poststate: None,
+            create_at: None,
+        })
+        .await
+        .expect("created receipt should list")
+        .into_iter()
+        .next()
+        .expect("created receipt should exist");
+
+    repository
+        .update_receipt_status(receipt.id, ReceiptStatusChange::Issue("已接收".to_owned()))
+        .await
+        .expect("received issue status should update");
+    let legacy_filter = ReceiptListRequest {
+        offset: 0,
+        size: 10,
+        oddnumber: Some(scope.oddnumber("035")),
+        consignee: None,
+        consignor: None,
+        recoverystate: None,
+        issuestate: Some("已发放".to_owned()),
+        poststate: None,
+        create_at: None,
+    };
+    let list_by_legacy = repository
+        .list_receipts(&legacy_filter)
+        .await
+        .expect("legacy issued filter should include received receipts");
+    assert_eq!(list_by_legacy.len(), 1);
+    assert_eq!(list_by_legacy[0].issuestate, "已接收");
+    assert_eq!(
+        repository
+            .count_receipts(&legacy_filter)
+            .await
+            .expect("legacy issued count should include received receipts"),
+        1
+    );
+
+    repository
+        .update_receipt_status(receipt.id, ReceiptStatusChange::Issue("已发放".to_owned()))
+        .await
+        .expect("legacy issued status should update");
+    let received_filter = ReceiptListRequest {
+        offset: 0,
+        size: 10,
+        oddnumber: Some(scope.oddnumber("035")),
+        consignee: None,
+        consignor: None,
+        recoverystate: None,
+        issuestate: Some("已接收".to_owned()),
+        poststate: None,
+        create_at: None,
+    };
+    let list_by_received = repository
+        .list_receipts(&received_filter)
+        .await
+        .expect("received filter should include legacy issued receipts");
+    assert_eq!(list_by_received.len(), 1);
+    assert_eq!(list_by_received[0].issuestate, "已发放");
+    assert_eq!(
+        repository
+            .count_receipts(&received_filter)
+            .await
+            .expect("received count should include legacy issued receipts"),
         1
     );
 

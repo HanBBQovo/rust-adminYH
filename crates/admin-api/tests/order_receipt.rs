@@ -436,7 +436,7 @@ async fn receipt_lists_and_status_update_keep_legacy_messages() {
     assert_eq!(issue_updated["message"], "回单发放成功！");
 
     let (_, receipt_list) = json_request(
-        app,
+        app.clone(),
         "POST",
         "/api/receipt/list",
         Some(&token),
@@ -445,6 +445,45 @@ async fn receipt_lists_and_status_update_keep_legacy_messages() {
     .await;
     assert_eq!(receipt_list["data"]["totalCount"], 1);
     assert_eq!(receipt_list["data"]["list"][0]["issuestate"], "已接收");
+
+    let (_, legacy_filter_list) = json_request(
+        app.clone(),
+        "POST",
+        "/api/receipt/list",
+        Some(&token),
+        r#"{"offset":0,"size":10,"oddnumber":"YD20260101001","issuestate":"已发放"}"#,
+    )
+    .await;
+    assert_eq!(legacy_filter_list["data"]["totalCount"], 1);
+    assert_eq!(
+        legacy_filter_list["data"]["list"][0]["issuestate"],
+        "已接收"
+    );
+
+    let (_, legacy_issue_updated) = json_request(
+        app.clone(),
+        "PATCH",
+        "/api/receipt/1",
+        Some(&token),
+        r#"{"issuestate":"已发放"}"#,
+    )
+    .await;
+    assert_eq!(legacy_issue_updated["code"], 0);
+    assert_eq!(legacy_issue_updated["message"], "回单发放成功！");
+
+    let (_, received_filter_list) = json_request(
+        app,
+        "POST",
+        "/api/receipt/list",
+        Some(&token),
+        r#"{"offset":0,"size":10,"oddnumber":"YD20260101001","issuestate":"已接收"}"#,
+    )
+    .await;
+    assert_eq!(received_filter_list["data"]["totalCount"], 1);
+    assert_eq!(
+        received_filter_list["data"]["list"][0]["issuestate"],
+        "已发放"
+    );
 }
 
 #[tokio::test]

@@ -129,6 +129,10 @@ async fn read_routes_require_login_but_allow_operator_sessions() {
         ("GET", "/api/menu/tree", ""),
         ("GET", "/api/chart/headerList", ""),
         ("POST", "/api/memory/list", ""),
+        ("POST", "/api/receipt/list", r#"{"offset":0,"size":10}"#),
+        ("POST", "/api/notrecovery/list", r#"{"offset":0,"size":10}"#),
+        ("POST", "/api/recovery/list", r#"{"offset":0,"size":10}"#),
+        ("PATCH", "/api/receipt/1", r#"{"issuestate":"已接收"}"#),
     ] {
         let (missing_status, missing_json) =
             json_request(app.clone(), method, uri, None, body).await;
