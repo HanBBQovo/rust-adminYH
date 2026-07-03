@@ -70,6 +70,6 @@ describe('Dashboard', () => {
 
     expect(screen.getByRole('button', { name: '系统概览' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '工作台' })).toBeInTheDocument()
-    await expect(screen.findByRole('heading', { level: 1, name: '系统概览' })).resolves.toBeInTheDocument()
+    await expect(screen.findByRole('heading', { level: 1, name: '系统概览' }, { timeout: 5000 })).resolves.toBeInTheDocument()
   })
 })

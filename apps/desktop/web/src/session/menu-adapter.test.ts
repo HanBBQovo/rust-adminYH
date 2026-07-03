@@ -79,4 +79,46 @@ describe('adaptLegacyMenus', () => {
     expect(items.map((item) => item.key)).toEqual(['menus'])
     expect(items[0].label).toBe('菜单管理')
   })
+
+  it('does not map old type 1 order directories as order pages', () => {
+    const items = adaptLegacyMenus([
+      {
+        name: '订单管理',
+        type: 1,
+        url: '/main/order',
+        children: [{ name: '发货公司', type: 2, url: '/main/order/company' }],
+      },
+    ])
+
+    expect(items.map((item) => item.key)).toEqual(['companies'])
+    expect(items[0].label).toBe('发货公司')
+  })
+
+  it('does not map old type 1 system directories as registry pages', () => {
+    const items = adaptLegacyMenus([
+      {
+        name: '系统管理',
+        type: 1,
+        url: '/main/system',
+        children: [{ name: '角色管理', type: 2, url: '/main/system/role' }],
+      },
+    ])
+
+    expect(items.map((item) => item.key)).toEqual(['roles'])
+    expect(items[0].label).toBe('角色管理')
+  })
+
+  it('uses the concrete type 2 receipt child instead of the parent directory', () => {
+    const items = adaptLegacyMenus([
+      {
+        name: '回单管理',
+        type: 1,
+        url: '/main/receipt',
+        children: [{ name: '未回收回单', type: 2, url: '/main/receipt/notrecovery' }],
+      },
+    ])
+
+    expect(items.map((item) => item.key)).toEqual(['receipts'])
+    expect(items[0].label).toBe('未回收回单')
+  })
 })

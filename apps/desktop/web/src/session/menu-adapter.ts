@@ -36,13 +36,17 @@ function menuText(menu: LegacyMenuItem): string {
   return [menu.name, menu.title, menu.url, menu.path].filter(Boolean).join(' ')
 }
 
+function isPageMenu(menu: LegacyMenuItem): boolean {
+  return menu.type === undefined || menu.type === null || menu.type === 2
+}
+
 function labelForPage(page: AppPage, source?: LegacyMenuItem): string {
   const fallback = FALLBACK_NAV_ITEMS.find((item) => item.key === page)?.label || page
   return source?.name || source?.title || fallback
 }
 
 export function adaptLegacyMenus(menus: LegacyMenuItem[]): SessionNavItem[] {
-  const flattened = flattenMenus(menus)
+  const flattened = flattenMenus(menus).filter(isPageMenu)
   const matched = PAGE_MATCHERS.flatMap(({ key, icon, patterns }) => {
     const source = flattened.find((menu) => patterns.some((pattern) => pattern.test(menuText(menu))))
     return source ? [{ key, label: labelForPage(key, source), icon }] : []
