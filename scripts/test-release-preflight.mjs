@@ -21,6 +21,7 @@ const passingToggles = {
   OLD_DATABASE_URL: 'mysql://release:test@127.0.0.1/admin_yh_old_shadow',
   NEW_DATABASE_URL: 'mysql://release:test@127.0.0.1/admin_yh_new_shadow',
   MIGRATION_APPLY: 'true',
+  RUN_MIGRATION_SMOKE: 'true',
   NEW_AVATAR_DIR: '/tmp/admin-yh-release-avatar',
   RUN_E2E: 'true',
   RUN_COVERAGE: 'true',
@@ -95,8 +96,20 @@ const cases = [
       OLD_DATABASE_URL: passingToggles.OLD_DATABASE_URL,
       NEW_DATABASE_URL: passingToggles.NEW_DATABASE_URL,
       MIGRATION_APPLY: passingToggles.MIGRATION_APPLY,
+      RUN_MIGRATION_SMOKE: passingToggles.RUN_MIGRATION_SMOKE,
     },
     tokens: ['FAIL: RELEASE_GATE=true', 'NEW_AVATAR_DIR'],
+  },
+  {
+    name: 'missing RUN_MIGRATION_SMOKE',
+    env: {
+      RUN_DB_TESTS: 'true',
+      ADMIN_DB_TEST_DATABASE_URL: passingToggles.ADMIN_DB_TEST_DATABASE_URL,
+      OLD_DATABASE_URL: passingToggles.OLD_DATABASE_URL,
+      NEW_DATABASE_URL: passingToggles.NEW_DATABASE_URL,
+      MIGRATION_APPLY: passingToggles.MIGRATION_APPLY,
+    },
+    tokens: ['FAIL: RELEASE_GATE=true', 'RUN_MIGRATION_SMOKE=true'],
   },
   {
     name: 'missing RUN_COVERAGE',

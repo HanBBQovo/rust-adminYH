@@ -206,10 +206,11 @@ jobs:
   migration:
     name: Migration gates
     needs: release-candidate-preflight
-    runs-on: macos-14
+    runs-on: ubuntu-latest
     env:
       RELEASE_GATE: ${{ inputs.release_candidate }}
       MIGRATION_APPLY: ${{ inputs.release_candidate }}
+      RUN_MIGRATION_SMOKE: ${{ inputs.release_candidate }}
       OLD_DATABASE_URL: ${{ secrets.OLD_DATABASE_URL }}
       NEW_DATABASE_URL: ${{ secrets.NEW_DATABASE_URL }}
       NEW_AVATAR_DIR: ${{ vars.NEW_AVATAR_DIR || secrets.NEW_AVATAR_DIR }}

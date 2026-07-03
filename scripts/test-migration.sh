@@ -17,6 +17,7 @@ OLD_AVATAR_DIR="${OLD_AVATAR_DIR:-/Users/hanhan/Desktop/code/adminYh-server/uplo
 NEW_AVATAR_DIR="${NEW_AVATAR_DIR:-}"
 MIGRATION_APPLY="${MIGRATION_APPLY:-false}"
 MIGRATION_ALLOW_NON_EMPTY_TARGET="${MIGRATION_ALLOW_NON_EMPTY_TARGET:-false}"
+RUN_MIGRATION_SMOKE="${RUN_MIGRATION_SMOKE:-false}"
 
 section() {
   printf '\n==> %s\n' "$1"
@@ -91,6 +92,17 @@ if [[ -f Cargo.toml ]] && cargo metadata --format-version=1 --no-deps 2>/dev/nul
 else
   echo "SKIP: admin-migration crate 尚未初始化。"
   echo "TODO: crate 创建后，本脚本会执行 inspect-old、migrate --dry-run、verify 和头像文件校验。"
+fi
+
+if [[ "$RUN_MIGRATION_SMOKE" == "true" ]]; then
+  section "admin-migration reproducible smoke"
+  "$ROOT_DIR/scripts/test-migration-smoke.sh"
+else
+  if [[ "$RELEASE_GATE" == "true" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要 RUN_MIGRATION_SMOKE=true，发布候选必须执行可重建迁移 smoke。"
+    exit 1
+  fi
+  echo "SKIP: RUN_MIGRATION_SMOKE=true 未设置，跳过可重建迁移 smoke。发布前必须执行 RUN_MIGRATION_SMOKE=true scripts/test-migration.sh。"
 fi
 
 echo

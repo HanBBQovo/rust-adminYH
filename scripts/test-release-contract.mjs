@@ -44,6 +44,7 @@ const releaseRequirements = [
   ['OLD_DATABASE_URL', '发布候选必须提供旧库/影子旧库连接'],
   ['NEW_DATABASE_URL', '发布候选必须提供新库/影子新库连接'],
   ['MIGRATION_APPLY=true', '发布候选必须真实执行迁移 apply 并复验'],
+  ['RUN_MIGRATION_SMOKE=true', '发布候选必须执行可重建迁移 smoke'],
   ['NEW_AVATAR_DIR', '发布候选必须校验新头像目录'],
   ['RUN_E2E=true', '发布候选必须执行 Playwright E2E'],
   ['RUN_COVERAGE=true', '发布候选必须执行前端覆盖率门禁'],
@@ -72,6 +73,7 @@ assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 RUN_DB_TESTS=true', 're
 assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 ADMIN_DB_TEST_DATABASE_URL', 'release preflight must fail without admin DB test URL')
 assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 OLD_DATABASE_URL 和 NEW_DATABASE_URL', 'release preflight must fail without migration DB URLs')
 assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 MIGRATION_APPLY=true', 'release preflight must fail if real migration apply is disabled')
+assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 RUN_MIGRATION_SMOKE=true', 'release preflight must fail if reproducible migration smoke is disabled')
 assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 NEW_AVATAR_DIR', 'release preflight must fail without avatar verify target')
 assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 RUN_E2E=true', 'release preflight must fail without frontend E2E')
 assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 RUN_COVERAGE=true', 'release preflight must fail without coverage')
@@ -86,6 +88,7 @@ assertIncludes(releasePreflight, 'SKIP_RELEASE_PREFLIGHT_SELFTEST', 'release pre
 assertIncludes(releasePreflight, '========== Backend ==========', 'release preflight regression must prove failures stop before backend gates')
 assertIncludes(releasePreflight, 'RUN_DB_TESTS=true', 'release preflight regression must execute a missing DB toggle case')
 assertIncludes(releasePreflight, 'MIGRATION_APPLY=true', 'release preflight regression must execute a missing migration apply case')
+assertIncludes(releasePreflight, 'RUN_MIGRATION_SMOKE=true', 'release preflight regression must execute a missing reproducible migration smoke case')
 assertIncludes(releasePreflight, 'RUN_COVERAGE=true', 'release preflight regression must execute a missing coverage case')
 assertIncludes(releasePreflight, 'RUN_DOCKER_E2E=true', 'release preflight regression must execute a missing Docker E2E case')
 assertIncludes(releasePreflight, 'RUN_TAURI_DMG=true', 'release preflight regression must execute a missing Tauri DMG case')
@@ -102,14 +105,30 @@ assertIncludes(backendMysqlContract, 'backend gate must auto-discover mysql_*.rs
 
 assertIncludes(migrationGate, 'FAIL: RELEASE_GATE=true 不允许跳过真实数据库迁移 dry-run/verify', 'migration gate must not allow release builds to skip real migration verification')
 assertIncludes(migrationGate, 'FAIL: RELEASE_GATE=true 需要 MIGRATION_APPLY=true', 'migration gate must not allow release builds to skip real migration apply')
+assertIncludes(migrationGate, 'FAIL: RELEASE_GATE=true 需要 RUN_MIGRATION_SMOKE=true', 'migration gate must not allow release builds to skip reproducible migration smoke')
 assertIncludes(migrationGate, 'FAIL: RELEASE_GATE=true 需要 NEW_AVATAR_DIR', 'migration gate must require avatar file verification for release')
 assertIncludes(migrationGate, 'migrate --dry-run', 'migration gate must run dry-run migration before any optional apply')
 assertIncludes(migrationSource, 'failed to connect to target database for dry-run preflight', 'migration dry-run must connect to the target database for schema preflight')
 assertIncludes(migrationSource, 'targetPreflight', 'migration report must expose target preflight details')
 assertIncludes(migrationSource, 'dry-run target preflight: target schema is reachable and empty', 'migration dry-run must report an empty reachable target schema')
 assertIncludes(migrationGate, 'MIGRATION_APPLY" == "true"', 'migration gate must keep real apply behind an explicit flag for non-release use')
+assertIncludes(migrationGate, 'RUN_MIGRATION_SMOKE" == "true"', 'migration gate must keep reproducible migration smoke behind an explicit flag for non-release use')
+assertIncludes(migrationGate, 'scripts/test-migration-smoke.sh', 'migration gate must run the reproducible migration smoke when enabled')
 assertIncludes(migrationGate, 'verify --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL"', 'migration gate must run old/new database verify')
 assertIncludes(migrationGate, 'verify-files --old-avatar-dir "$OLD_AVATAR_DIR" --new-avatar-dir "$NEW_AVATAR_DIR"', 'migration gate must verify avatar files when a new avatar dir is provided')
+const migrationSmoke = read('scripts/test-migration-smoke.sh')
+const migrationFixture = read('scripts/seed-migration-fixture.sql')
+assertIncludes(migrationSmoke, 'admin_yh_smoke_old', 'migration smoke must use a dedicated old smoke database')
+assertIncludes(migrationSmoke, 'admin_yh_smoke_new', 'migration smoke must use a dedicated new smoke database')
+assertIncludes(migrationSmoke, 'DROP DATABASE IF EXISTS', 'migration smoke must be repeatable by rebuilding smoke databases')
+assertIncludes(migrationSmoke, 'migrate --dry-run', 'migration smoke must execute dry-run before apply')
+assertIncludes(migrationSmoke, 'migrate --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL"', 'migration smoke must execute real apply against smoke databases')
+assertIncludes(migrationSmoke, 'verify --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL"', 'migration smoke must execute database verification')
+assertIncludes(migrationSmoke, 'verify-files --old-avatar-dir "$OLD_AVATAR_DIR" --new-avatar-dir "$NEW_AVATAR_DIR"', 'migration smoke must execute avatar file verification')
+assertIncludes(migrationSmoke, 'MIGRATION_SMOKE_REPORT_DIR', 'migration smoke must save JSON reports for auditability')
+assertIncludes(migrationFixture, 'MIG-SMOKE-0001', 'migration fixture must seed a stable order with receipt')
+assertIncludes(migrationFixture, 'MIG-SMOKE-0002', 'migration fixture must seed a stable order without receipt')
+assertIncludes(migrationFixture, '已接收', 'migration fixture must preserve legacy received receipt status')
 
 assertIncludes(dockerGate, 'RUN_DOCKER_E2E="${RUN_DOCKER_E2E:-false}"', 'Docker gate must keep real browser E2E opt-in')
 assertIncludes(dockerGate, 'PLAYWRIGHT_BASE_URL="${WEB_URL%/}" REAL_API_E2E=true npm run e2e -- e2e/real-api.spec.ts', 'Docker gate must run browser E2E against compose nginx web URL')
@@ -173,6 +192,7 @@ assertIncludes(ciWorkflow, 'npm run test:coverage', 'frontend job must run cover
 assertIncludes(ciWorkflow, 'OLD_DATABASE_URL: ${{ secrets.OLD_DATABASE_URL }}', 'migration job must receive the old database URL')
 assertIncludes(ciWorkflow, 'NEW_DATABASE_URL: ${{ secrets.NEW_DATABASE_URL }}', 'migration job must receive the new database URL')
 assertIncludes(ciWorkflow, 'MIGRATION_APPLY: ${{ inputs.release_candidate }}', 'migration job must force real apply for release candidates')
+assertIncludes(ciWorkflow, 'RUN_MIGRATION_SMOKE: ${{ inputs.release_candidate }}', 'migration job must force reproducible migration smoke for release candidates')
 assertIncludes(ciWorkflow, 'NEW_AVATAR_DIR: ${{ vars.NEW_AVATAR_DIR || secrets.NEW_AVATAR_DIR }}', 'migration job must receive the avatar verification target')
 assertIncludes(
   ciWorkflow,

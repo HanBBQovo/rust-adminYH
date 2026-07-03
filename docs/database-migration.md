@@ -251,6 +251,20 @@ scripts/test-migration.sh
 
 如目标影子库不是空库，必须人工确认后额外设置 `MIGRATION_ALLOW_NON_EMPTY_TARGET=true`；生产切换前不建议开启该选项。
 
+可重建迁移 smoke 使用专用 Docker MySQL 和固定 fixture，独立创建 `admin_yh_smoke_old` / `admin_yh_smoke_new` 两个本机测试库，先导入旧库 fixture，再串行执行 `rollback-plan`、`inspect-old`、`migrate --dry-run`、真实 `migrate`、`verify` 和 `verify-files`，并把每一步 JSON 报告保存到 `MIGRATION_SMOKE_REPORT_DIR`。该 smoke 只允许写入 `127.0.0.1:<MYSQL_PORT>` 上的本机 compose 测试库，默认端口 `33318`，每次都会 drop/create smoke 数据库和重建头像目录，避免误写生产库或复用脏状态：
+
+```bash
+RUN_MIGRATION_SMOKE=true scripts/test-migration.sh
+```
+
+也可以直接运行：
+
+```bash
+scripts/test-migration-smoke.sh
+```
+
+该脚本使用 `scripts/seed-migration-fixture.sql`，覆盖 11 张兼容表、管理员/普通用户、角色菜单关系、两个订单、一个回单、中文 `issuestate='已接收'`、旧 MD5 密码、头像 DB 记录和头像文件复制。发布候选必须保留这条可重建 smoke，证明迁移 CLI 在没有生产旧库的情况下也能重复完成 dry-run/apply/verify/files 闭环。
+
 如果设置 `NEW_AVATAR_DIR`，脚本还会执行：
 
 ```bash

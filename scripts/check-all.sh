@@ -29,6 +29,10 @@ if [[ "$RELEASE_GATE" == "true" ]]; then
     echo "FAIL: RELEASE_GATE=true 需要 MIGRATION_APPLY=true，发布候选必须从旧库真实 apply 到 fresh 新库并复验。"
     exit 1
   fi
+  if [[ "${RUN_MIGRATION_SMOKE:-false}" != "true" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要 RUN_MIGRATION_SMOKE=true，发布候选必须执行可重建迁移 smoke。"
+    exit 1
+  fi
   if [[ -z "${NEW_AVATAR_DIR:-}" ]]; then
     echo "FAIL: RELEASE_GATE=true 需要 NEW_AVATAR_DIR，发布候选必须执行头像文件迁移校验。"
     exit 1
