@@ -182,6 +182,135 @@ async fn mysql_api_compatibility_uses_real_database_services() {
     assert!(memory_values.contains(&scope.consignee.as_str()));
     assert!(memory_values.contains(&scope.consignor.as_str()));
 
+    let (company_forbidden_status, company_forbidden_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/company",
+        Some(&operator_token),
+        &format!(r#"{{"name":"{}"}}"#, scope.company_order_name()),
+    )
+    .await;
+    assert_eq!(company_forbidden_status, StatusCode::FORBIDDEN);
+    assert_eq!(company_forbidden_json["code"], -403);
+    assert_eq!(company_forbidden_json["message"], "没有权限执行该操作");
+
+    let (company_create_status, company_create_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/company",
+        Some(&admin_token),
+        &format!(r#"{{"name":"{}"}}"#, scope.company_order_name()),
+    )
+    .await;
+    assert_eq!(company_create_status, StatusCode::OK);
+    assert_eq!(company_create_json["code"], 0);
+    assert_eq!(company_create_json["message"], "创建发货公司成功！");
+
+    let company_id = scope.company_id_by_name(&scope.company_order_name()).await;
+    let company_list_size = scope.table_count("company").await + 10;
+    let (company_list_status, company_list_json) = json_request(
+        app.clone(),
+        "POST",
+        "/api/company/list",
+        Some(&admin_token),
+        &format!(r#"{{"offset":0,"size":{company_list_size}}}"#),
+    )
+    .await;
+    assert_eq!(company_list_status, StatusCode::OK);
+    assert_eq!(company_list_json["code"], 0);
+    assert_eq!(
+        company_list_json["data"]["totalCount"],
+        scope.table_count("company").await
+    );
+    let company_list = company_list_json["data"]["list"]
+        .as_array()
+        .expect("company list should be an array");
+    let created_company = find_company(company_list, company_id);
+    assert_eq!(created_company["name"], scope.company_order_name());
+    assert_eq!(created_company["Countorder"], 1);
+    assert!(created_company["createAt"].is_string());
+    assert!(created_company["updateAt"].is_string());
+
+    let (company_detail_status, company_detail_json) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/company/{company_id}"),
+        Some(&admin_token),
+        "",
+    )
+    .await;
+    assert_eq!(company_detail_status, StatusCode::OK);
+    assert_eq!(company_detail_json["code"], 0);
+    assert_eq!(
+        company_detail_json["data"][0]["name"],
+        scope.company_order_name()
+    );
+    assert_eq!(company_detail_json["data"][0]["Countorder"], 1);
+
+    let renamed_company = format!("{}-发货公司-改名", scope.prefix);
+    let (company_update_status, company_update_json) = json_request(
+        app.clone(),
+        "PATCH",
+        &format!("/api/company/{company_id}"),
+        Some(&admin_token),
+        &format!(r#"{{"name":"{renamed_company}"}}"#),
+    )
+    .await;
+    assert_eq!(company_update_status, StatusCode::OK);
+    assert_eq!(company_update_json["code"], 0);
+    assert_eq!(company_update_json["message"], "修改发货公司成功！");
+
+    let (company_detail_after_update_status, company_detail_after_update_json) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/company/{company_id}"),
+        Some(&admin_token),
+        "",
+    )
+    .await;
+    assert_eq!(company_detail_after_update_status, StatusCode::OK);
+    assert_eq!(
+        company_detail_after_update_json["data"][0]["name"],
+        renamed_company
+    );
+    assert_eq!(
+        company_detail_after_update_json["data"][0]["Countorder"], 0,
+        "company rename must keep old weak company_order.com_name text unchanged"
+    );
+    assert_eq!(
+        scope
+            .count_company_order_by_name(&scope.company_order_name())
+            .await,
+        1
+    );
+    assert_eq!(scope.count_company_order_by_name(&renamed_company).await, 0);
+
+    let (company_delete_status, company_delete_json) = json_request(
+        app.clone(),
+        "DELETE",
+        &format!("/api/company/{company_id}"),
+        Some(&admin_token),
+        "",
+    )
+    .await;
+    assert_eq!(company_delete_status, StatusCode::OK);
+    assert_eq!(company_delete_json["code"], 0);
+    assert_eq!(company_delete_json["message"], "删除发货公司成功！");
+
+    let (company_detail_after_delete_status, company_detail_after_delete_json) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/company/{company_id}"),
+        Some(&admin_token),
+        "",
+    )
+    .await;
+    assert_eq!(company_detail_after_delete_status, StatusCode::OK);
+    assert!(company_detail_after_delete_json["data"]
+        .as_array()
+        .expect("deleted company detail should remain old array shape")
+        .is_empty());
+
     let (resources_status, resources_json) =
         json_request(app, "GET", "/api/admin/resources", Some(&admin_token), "").await;
     assert_eq!(resources_status, StatusCode::OK);
@@ -443,6 +572,10 @@ impl<'a> TestScope<'a> {
         )
     }
 
+    fn company_order_name(&self) -> String {
+        format!("{}-发货公司", self.prefix)
+    }
+
     async fn user_password(&self, name: &str) -> String {
         sqlx::query("SELECT `password` FROM `user` WHERE `name` = ?")
             .bind(name)
@@ -461,6 +594,26 @@ impl<'a> TestScope<'a> {
             .expect("company_order count should load")
             .try_get("total")
             .expect("total should exist")
+    }
+
+    async fn count_company_order_by_name(&self, name: &str) -> i64 {
+        sqlx::query("SELECT COUNT(*) AS total FROM `company_order` WHERE `com_name` = ?")
+            .bind(name)
+            .fetch_one(self.pool)
+            .await
+            .expect("company_order name count should load")
+            .try_get("total")
+            .expect("total should exist")
+    }
+
+    async fn company_id_by_name(&self, name: &str) -> i64 {
+        sqlx::query("SELECT `id` FROM `company` WHERE `name` = ?")
+            .bind(name)
+            .fetch_one(self.pool)
+            .await
+            .expect("company id should load")
+            .try_get("id")
+            .expect("company id should exist")
     }
 
     async fn table_count(&self, table: &str) -> u64 {
@@ -589,6 +742,13 @@ fn resource_field<'a>(resources: &'a [Value], key: &str, field: &str) -> &'a str
         .get(field)
         .and_then(Value::as_str)
         .unwrap_or_else(|| panic!("resource {key}.{field} should be string"))
+}
+
+fn find_company(companies: &[Value], company_id: i64) -> &Value {
+    companies
+        .iter()
+        .find(|company| company["id"] == company_id)
+        .unwrap_or_else(|| panic!("company {company_id} should exist in list"))
 }
 
 async fn next_id(pool: &MySqlPool, table: &str) -> i64 {
