@@ -75,15 +75,19 @@ impl OrderStore for MySqlOrderRepository {
 
     fn create_order<'a>(&'a self, input: NormalizedOrderInput) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let mut tx = begin_mysql_transaction(&self.pool, "order.create").await?;
-            let order_id = insert_order(&mut tx, &input).await?;
-            insert_company_order(&mut tx, &input.company, order_id).await?;
-            if input.receiptnum > 0 {
-                insert_receipt_from_order(&mut tx, &input).await?;
-            }
-            insert_memory_if_missing(&mut tx, &input.consignee).await?;
-            insert_memory_if_missing(&mut tx, &input.consignor).await?;
-            commit_mysql_transaction(tx).await
+            with_mysql_transaction(&self.pool, "order.create", |tx| {
+                Box::pin(async move {
+                    let order_id = insert_order(tx, &input).await?;
+                    insert_company_order(tx, &input.company, order_id).await?;
+                    if input.receiptnum > 0 {
+                        insert_receipt_from_order(tx, &input).await?;
+                    }
+                    insert_memory_if_missing(tx, &input.consignee).await?;
+                    insert_memory_if_missing(tx, &input.consignor).await?;
+                    Ok(())
+                })
+            })
+            .await
         })
     }
 
@@ -542,6 +546,7 @@ async fn insert_order(
     tx: &mut MySqlTransaction<'_>,
     input: &NormalizedOrderInput,
 ) -> AppResult<i64> {
+    let scope = tx.scope();
     let result = sqlx::query(
         r#"
         INSERT INTO `order_list` (
@@ -555,7 +560,7 @@ async fn insert_order(
     .bind_order(input)
     .execute(tx.as_mut())
     .await
-    .map_err(db_error)?;
+    .map_err(|error| transaction_sql_error(scope, "insert_order", error))?;
     Ok(result.last_insert_id() as i64)
 }
 
@@ -634,13 +639,14 @@ async fn insert_company_order(
     company: &str,
     order_id: i64,
 ) -> AppResult<()> {
+    let scope = tx.scope();
     sqlx::query("INSERT INTO `company_order` (`com_name`, `order_id`) VALUES (?, ?)")
         .bind(company)
         .bind(order_id)
         .execute(tx.as_mut())
         .await
         .map(|_| ())
-        .map_err(db_error)
+        .map_err(|error| transaction_sql_error(scope, "insert_company_order", error))
 }
 
 async fn upsert_company_order(
@@ -664,6 +670,7 @@ async fn insert_receipt_from_order(
     tx: &mut MySqlTransaction<'_>,
     input: &NormalizedOrderInput,
 ) -> AppResult<()> {
+    let scope = tx.scope();
     sqlx::query(
         r#"
         INSERT INTO `receipt` (
@@ -682,7 +689,7 @@ async fn insert_receipt_from_order(
     .execute(tx.as_mut())
     .await
     .map(|_| ())
-    .map_err(db_error)
+    .map_err(|error| transaction_sql_error(scope, "insert_receipt_from_order", error))
 }
 
 async fn upsert_receipt_from_order(
@@ -775,18 +782,19 @@ async fn insert_memory_if_missing(tx: &mut MySqlTransaction<'_>, name: &str) -> 
     if name.trim().is_empty() {
         return Ok(());
     }
+    let scope = tx.scope();
     let exists = sqlx::query("SELECT `id` FROM `memory` WHERE `name` = ? LIMIT 1")
         .bind(name)
         .fetch_optional(tx.as_mut())
         .await
-        .map_err(db_error)?
+        .map_err(|error| transaction_sql_error(scope, "find_memory", error))?
         .is_some();
     if !exists {
         sqlx::query("INSERT INTO `memory` (`name`) VALUES (?)")
             .bind(name)
             .execute(tx.as_mut())
             .await
-            .map_err(db_error)?;
+            .map_err(|error| transaction_sql_error(scope, "insert_memory", error))?;
     }
     Ok(())
 }

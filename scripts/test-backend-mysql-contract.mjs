@@ -304,6 +304,40 @@ assertIncludes(
 )
 assertIncludes(
   orderRepository,
+  'with_mysql_transaction(&self.pool, "order.create"',
+  'order.create must use the shared transaction runner',
+)
+assert(
+  !orderRepository.includes('begin_mysql_transaction(&self.pool, "order.create"'),
+  'order.create must not hand-roll begin/commit after runner migration',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "insert_order"',
+  'order.create must include scoped SQL error context for order insert',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "insert_company_order"',
+  'order.create must include scoped SQL error context for company_order insert',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "insert_receipt_from_order"',
+  'order.create must include scoped SQL error context for receipt insert',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "find_memory"',
+  'order.create must include scoped SQL error context for memory lookup',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "insert_memory"',
+  'order.create must include scoped SQL error context for memory insert',
+)
+assertIncludes(
+  orderRepository,
   'with_mysql_transaction(&self.pool, "receipt.batch_status"',
   'receipt.batch_status must use the shared transaction runner',
 )
