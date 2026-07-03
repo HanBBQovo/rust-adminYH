@@ -57,6 +57,8 @@ const releaseContract = read('scripts/test-release-contract.mjs')
 const rebuildPlan = read('docs/rebuild-plan.md')
 const apiCompatibility = read('docs/api-compatibility.md')
 const transactionHelper = read('crates/admin-db/src/transaction.rs')
+const orderRepository = read('crates/admin-db/src/repositories/order.rs')
+const roleRepository = read('crates/admin-db/src/repositories/role.rs')
 const repositoryFiles = listFilesRecursive('crates/admin-db/src/repositories', (file) => file.endsWith('.rs'))
 
 const testFiles = [
@@ -130,6 +132,21 @@ assertIncludes(
 )
 assertIncludes(
   transactionHelper,
+  'with_mysql_transaction',
+  'admin-db must expose a transaction runner for begin/body/commit blocks',
+)
+assertIncludes(
+  transactionHelper,
+  'rollback_on_drop',
+  'transaction runner must emit rollback-on-drop diagnostics when the body fails',
+)
+assertIncludes(
+  transactionHelper,
+  'transaction_sql_error',
+  'transaction runner must provide scoped SQL operation error mapping',
+)
+assertIncludes(
+  transactionHelper,
   'transaction {scope} {phase} failed',
   'transaction helper errors must include the repository scope and transaction phase',
 )
@@ -137,6 +154,49 @@ assertIncludes(
   rebuildPlan,
   'admin-db::transaction',
   'rebuild plan must document the shared admin-db transaction helper requirement',
+)
+assertIncludes(
+  rebuildPlan,
+  'with_mysql_transaction',
+  'rebuild plan must document the shared transaction runner requirement',
+)
+assertIncludes(
+  roleRepository,
+  'with_mysql_transaction(&self.pool, "role.replace_menu_ids"',
+  'role.replace_menu_ids must use the shared transaction runner',
+)
+assert(
+  !roleRepository.includes('begin_mysql_transaction(&self.pool, "role.replace_menu_ids"'),
+  'role.replace_menu_ids must not hand-roll begin/commit after runner migration',
+)
+assertIncludes(
+  roleRepository,
+  'transaction_sql_error(scope, "delete_role_permissions"',
+  'role.replace_menu_ids must include scoped SQL error context for delete',
+)
+assertIncludes(
+  roleRepository,
+  'transaction_sql_error(scope, "insert_role_permission"',
+  'role.replace_menu_ids must include scoped SQL error context for insert',
+)
+assertIncludes(
+  orderRepository,
+  'with_mysql_transaction(&self.pool, "receipt.batch_status"',
+  'receipt.batch_status must use the shared transaction runner',
+)
+assert(
+  !orderRepository.includes('begin_mysql_transaction(&self.pool, "receipt.batch_status"'),
+  'receipt.batch_status must not hand-roll begin/commit after runner migration',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(tx.scope(), "fetch_existing_receipt_ids"',
+  'receipt.batch_status must include scoped SQL error context for locked receipt lookup',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(tx.scope(), "update_receipt_status_rows"',
+  'receipt.batch_status must include scoped SQL error context for batch update',
 )
 
 for (const file of repositoryFiles) {

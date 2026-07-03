@@ -7,7 +7,10 @@ use admin_core::{
 };
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row};
 
-use crate::transaction::{begin_mysql_transaction, commit_mysql_transaction, MySqlTransaction};
+use crate::transaction::{
+    begin_mysql_transaction, commit_mysql_transaction, transaction_sql_error,
+    with_mysql_transaction, MySqlTransaction,
+};
 
 #[derive(Debug, Clone)]
 pub struct MySqlRoleRepository {
@@ -119,25 +122,30 @@ impl RoleStore for MySqlRoleRepository {
         menu_ids: Vec<i64>,
     ) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let mut tx = begin_mysql_transaction(&self.pool, "role.replace_menu_ids").await?;
-            ensure_role_exists(&mut tx, role_id).await?;
-            sqlx::query("DELETE FROM `role_permission` WHERE `role_id` = ?")
-                .bind(role_id)
-                .execute(tx.as_mut())
-                .await
-                .map_err(db_error)?;
-            let mut seen = HashSet::new();
-            for menu_id in menu_ids.into_iter().filter(|menu_id| seen.insert(*menu_id)) {
-                sqlx::query(
-                    "INSERT INTO `role_permission` (`role_id`, `permission_id`) VALUES (?, ?)",
-                )
-                .bind(role_id)
-                .bind(menu_id)
-                .execute(tx.as_mut())
-                .await
-                .map_err(db_error)?;
-            }
-            commit_mysql_transaction(tx).await
+            with_mysql_transaction(&self.pool, "role.replace_menu_ids", |tx| {
+                Box::pin(async move {
+                    ensure_role_exists(tx, role_id).await?;
+                    let scope = tx.scope();
+                    sqlx::query("DELETE FROM `role_permission` WHERE `role_id` = ?")
+                        .bind(role_id)
+                        .execute(tx.as_mut())
+                        .await
+                        .map_err(|error| transaction_sql_error(scope, "delete_role_permissions", error))?;
+                    let mut seen = HashSet::new();
+                    for menu_id in menu_ids.into_iter().filter(|menu_id| seen.insert(*menu_id)) {
+                        sqlx::query(
+                            "INSERT INTO `role_permission` (`role_id`, `permission_id`) VALUES (?, ?)",
+                        )
+                        .bind(role_id)
+                        .bind(menu_id)
+                        .execute(tx.as_mut())
+                        .await
+                        .map_err(|error| transaction_sql_error(scope, "insert_role_permission", error))?;
+                    }
+                    Ok(())
+                })
+            })
+            .await
         })
     }
 

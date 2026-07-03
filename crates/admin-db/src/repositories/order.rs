@@ -11,7 +11,10 @@ use admin_core::{
 };
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row};
 
-use crate::transaction::{begin_mysql_transaction, commit_mysql_transaction, MySqlTransaction};
+use crate::transaction::{
+    begin_mysql_transaction, commit_mysql_transaction, transaction_sql_error,
+    with_mysql_transaction, MySqlTransaction,
+};
 
 const RECEIPT_STATUS_ISSUE_DONE: &str = "已接收";
 const RECEIPT_STATUS_ISSUE_LEGACY_DONE: &str = "已发放";
@@ -213,16 +216,20 @@ impl OrderStore for MySqlOrderRepository {
     ) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
             let (column, value) = receipt_status_column_value(input);
-            let mut tx = begin_mysql_transaction(&self.pool, "receipt.batch_status").await?;
-            let existing_ids = fetch_existing_receipt_ids(&mut tx, &receipt_ids).await?;
-            if let Some(missing_id) = receipt_ids
-                .iter()
-                .find(|receipt_id| !existing_ids.contains(receipt_id))
-            {
-                return Err(AppError::NotFound(format!("receipt {missing_id}")));
-            }
-            update_receipt_status_rows(&mut tx, &receipt_ids, column, value).await?;
-            commit_mysql_transaction(tx).await
+            with_mysql_transaction(&self.pool, "receipt.batch_status", |tx| {
+                Box::pin(async move {
+                    let existing_ids = fetch_existing_receipt_ids(tx, &receipt_ids).await?;
+                    if let Some(missing_id) = receipt_ids
+                        .iter()
+                        .find(|receipt_id| !existing_ids.contains(receipt_id))
+                    {
+                        return Err(AppError::NotFound(format!("receipt {missing_id}")));
+                    }
+                    update_receipt_status_rows(tx, &receipt_ids, column, value).await?;
+                    Ok(())
+                })
+            })
+            .await
         })
     }
 
@@ -266,9 +273,13 @@ async fn fetch_existing_receipt_ids(
         .build()
         .fetch_all(tx.as_mut())
         .await
-        .map_err(db_error)?
+        .map_err(|error| transaction_sql_error(tx.scope(), "fetch_existing_receipt_ids", error))?
         .into_iter()
-        .map(|row| row.try_get::<i64, _>("id").map_err(db_error))
+        .map(|row| {
+            row.try_get::<i64, _>("id").map_err(|error| {
+                transaction_sql_error(tx.scope(), "read_existing_receipt_id", error)
+            })
+        })
         .collect()
 }
 
@@ -293,7 +304,11 @@ async fn update_receipt_status_rows(
     }
     separated.push_unseparated(")");
 
-    query.build().execute(tx.as_mut()).await.map_err(db_error)?;
+    query
+        .build()
+        .execute(tx.as_mut())
+        .await
+        .map_err(|error| transaction_sql_error(tx.scope(), "update_receipt_status_rows", error))?;
     Ok(())
 }
 
