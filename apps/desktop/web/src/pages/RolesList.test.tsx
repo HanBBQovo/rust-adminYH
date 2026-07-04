@@ -182,6 +182,22 @@ describe('RolesList', () => {
     expect(within(dialog).queryByRole('button', { name: '保存' })).not.toBeInTheDocument()
   })
 
+  it('keeps the optimistic role row when detail loading fails', async () => {
+    getRoleMock.mockRejectedValueOnce(new Error('角色详情接口失败'))
+    const user = userEvent.setup()
+    const { showToast } = renderRolesList()
+
+    await screen.findByText('超级管理员')
+    await user.click(screen.getByRole('button', { name: '查看角色' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(roleField(dialog, 'name')).toHaveValue('超级管理员')
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith('error', '角色详情接口失败', { translate: false })
+    })
+    expect(dialog).toBeInTheDocument()
+  })
+
   it('updates roles through the API wrapper', async () => {
     const user = userEvent.setup()
     const { showToast } = renderRolesList()

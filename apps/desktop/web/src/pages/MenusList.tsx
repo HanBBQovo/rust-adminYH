@@ -45,7 +45,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useGlobalToast } from '@/components/ui/use-global-toast'
+import { useDetailLoader } from '@/lib/use-detail-loader'
 import { useMutationAction } from '@/lib/use-mutation-action'
 import { useResource } from '@/lib/use-resource'
 
@@ -224,7 +224,7 @@ function MenuFormDialog({ mode, open, menu, rootMenus, submitting = false, onOpe
 }
 
 export default function MenusList() {
-  const { showToast } = useGlobalToast()
+  const { loadDetail, resetDetail } = useDetailLoader()
   const { pending: submitting, runMutation, runConfirmedMutation } = useMutationAction()
   const [dialogMode, setDialogMode] = useState<MenuFormMode>('create')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -236,23 +236,30 @@ export default function MenusList() {
   const childCount = flatRows.filter((node) => node.depth > 0).length
 
   const openCreateDialog = () => {
+    resetDetail()
     setDialogMode('create')
     setSelectedMenu(null)
     setDialogOpen(true)
+  }
+
+  const closeDialog = () => {
+    resetDetail()
+    setDialogOpen(false)
+  }
+
+  const handleDialogOpenChange = (open: boolean) => {
+    if (!open) resetDetail()
+    setDialogOpen(open)
   }
 
   const openEditDialog = async (menu: MenuTreeItem) => {
     setDialogMode('edit')
     setSelectedMenu(menu)
     setDialogOpen(true)
-    try {
-      const detail = await getMenu(menu.id)
-      if (detail) {
-        setSelectedMenu(normalizeMenuTree([detail])[0] ?? menu)
-      }
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '菜单详情加载失败', { translate: false })
-    }
+    await loadDetail(() => getMenu(menu.id), {
+      fallbackMessage: '菜单详情加载失败',
+      onLoaded: (detail) => setSelectedMenu(normalizeMenuTree([detail])[0] ?? menu),
+    })
   }
 
   const submitMenu = async (values: MenuCreatePayload) => {
@@ -263,7 +270,7 @@ export default function MenusList() {
         successMessage: menuId ? '修改菜单成功！' : '创建菜单成功！',
         errorMessage: '菜单保存失败',
         onSuccess: () => {
-          setDialogOpen(false)
+          closeDialog()
           refresh()
         },
       },
@@ -379,7 +386,7 @@ export default function MenusList() {
         menu={selectedMenu}
         rootMenus={rootMenus}
         submitting={submitting}
-        onOpenChange={setDialogOpen}
+        onOpenChange={handleDialogOpenChange}
         onSubmit={submitMenu}
       />
     </PageShell>

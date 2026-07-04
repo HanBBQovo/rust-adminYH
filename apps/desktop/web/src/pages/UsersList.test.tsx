@@ -321,6 +321,22 @@ describe('UsersList', () => {
     expect(within(dialog).queryByRole('button', { name: '保存' })).not.toBeInTheDocument()
   })
 
+  it('keeps the optimistic user row when detail loading fails', async () => {
+    getUserMock.mockRejectedValueOnce(new Error('用户详情接口失败'))
+    const user = userEvent.setup()
+    const { showToast } = renderUsersList()
+
+    await screen.findByText('admin')
+    await user.click(screen.getByRole('button', { name: '查看用户' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(userField(dialog, 'name')).toHaveValue('admin')
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith('error', '用户详情接口失败', { translate: false })
+    })
+    expect(dialog).toBeInTheDocument()
+  })
+
   it('updates users without password through the API wrapper', async () => {
     const user = userEvent.setup()
     const { showToast } = renderUsersList()

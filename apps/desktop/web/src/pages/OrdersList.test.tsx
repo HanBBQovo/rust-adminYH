@@ -249,6 +249,22 @@ describe('OrdersList', () => {
     expect(within(dialog).queryByRole('button', { name: '保存' })).not.toBeInTheDocument()
   })
 
+  it('keeps the optimistic order row when detail loading fails', async () => {
+    getOrderMock.mockRejectedValueOnce(new Error('订单详情接口失败'))
+    const user = userEvent.setup()
+    const { showToast } = renderOrdersList()
+
+    await screen.findByText('YD20260101001')
+    await user.click(screen.getByRole('button', { name: '查看订单' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(orderField(dialog, 'oddnumber')).toHaveValue('YD20260101001')
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith('error', '订单详情接口失败', { translate: false })
+    })
+    expect(dialog).toBeInTheDocument()
+  })
+
   it('updates orders through the API wrapper', async () => {
     const user = userEvent.setup()
     const { showToast } = renderOrdersList()

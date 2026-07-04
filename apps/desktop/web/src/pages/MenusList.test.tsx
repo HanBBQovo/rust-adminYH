@@ -227,6 +227,23 @@ describe('MenusList', () => {
     expect(listMenuTreeMock).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps the optimistic menu row when detail loading fails', async () => {
+    getMenuMock.mockRejectedValueOnce(new Error('菜单详情接口失败'))
+    const user = userEvent.setup()
+    const { showToast } = renderMenusList()
+
+    const row = (await screen.findByText('/main/system/menu')).closest('tr')
+    if (!row) throw new Error('missing menu row')
+    await user.click(within(row).getByRole('button', { name: '编辑菜单' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByLabelText('菜单名称')).toHaveValue('菜单管理')
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith('error', '菜单详情接口失败', { translate: false })
+    })
+    expect(dialog).toBeInTheDocument()
+  })
+
   it('confirms before deleting a menu and refreshes the tree', async () => {
     const user = userEvent.setup()
     const { confirm, showToast } = renderMenusList()

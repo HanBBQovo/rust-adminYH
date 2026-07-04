@@ -623,6 +623,7 @@ src/
 - 禁止每个页面各自实现表格、分页、弹窗、筛选、错误态；必须复用模板封装。
 - 分页列表必须通过 `src/lib/use-paginated-resource.ts` 的 `usePaginatedResource` 统一构造 `page/pageSize/query/rows/total/pagination`，页面不得手写 `const [page, setPage] = useState(...)`、`useResource(() => listX(...))` 或 `{ page, pageSize, total, onPageChange }` 分页 props；筛选/重置/Tab 切换等业务动作可以调用 hook 返回的 `setPage(1)`。默认前端门禁必须执行 `scripts/test-frontend-pagination-contract.mjs`，静态锁住 `CompaniesList`、`OrdersList`、`ReceiptsList`、`RolesList`、`UsersList` 等分页列表页继续复用封装，避免回退到页面级分页样板。
 - 页面保存、删除、批量状态流转、订单筛选导出、账户改密、头像上传和设置偏好保存/恢复等异步业务动作必须逐步收敛到 `src/lib/use-mutation-action.ts` 或更具体的业务 hook，由封装统一处理 pending、success/error toast、确认弹窗和成功后刷新；业务页面只保留实体参数、旧接口文案和特殊业务规则。当前 `AccountPreferences、CompaniesList、OrdersList、ReceiptsList、RolesList、MenusList、Settings、UsersList` 已作为样板迁入该 hook；其中 OrdersList 的新增/编辑/删除和筛选导出均由共享 mutation hook 管理 pending 与 toast。回单页仍保留 `updatingId` / `batchUpdating` 作为按钮粒度禁用状态，账户偏好仍保留头像类型/大小的前端本地校验，Settings 仍保留首屏偏好加载失败的页面级 message，但保存/恢复的成功/失败 toast 和刷新回调已由共享 mutation hook 收敛，避免每页/组件重复 `try/catch/finally + confirm + toast + refresh`。
+- 查看/编辑弹窗的详情补拉必须通过 `src/lib/use-detail-loader.ts` 统一处理，页面只负责先用列表行打开弹窗作为 optimistic seed，再把 `getCompany/getOrder/getRole/getMenu/getUser` 返回的详情覆盖进去。该 hook 统一错误 toast、空详情兜底、请求序号竞态保护和关闭/新建时的 `resetDetail()` 失效逻辑；`scripts/test-frontend-detail-loader-contract.mjs` 必须锁住 `CompaniesList、OrdersList、RolesList、MenusList、UsersList` 不回退到页面级 `try/catch + showToast` 详情加载样板。
 - 禁止为了快速完成页面而破坏模板暗色模式、响应式布局、字体和间距体系。
 
 ### 7.2 页面规划

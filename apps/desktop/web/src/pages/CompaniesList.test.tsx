@@ -131,6 +131,22 @@ describe('CompaniesList', () => {
     expect(within(dialog).queryByRole('button', { name: '保存' })).not.toBeInTheDocument()
   })
 
+  it('keeps the optimistic company row when detail loading fails', async () => {
+    getCompanyMock.mockRejectedValueOnce(new Error('公司详情接口失败'))
+    const user = userEvent.setup()
+    const { showToast } = renderCompaniesList()
+
+    await screen.findByText('顺丰速运')
+    await user.click(screen.getByRole('button', { name: '查看发货公司' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(companyNameField(dialog)).toHaveValue('顺丰速运')
+    await waitFor(() => {
+      expect(showToast).toHaveBeenCalledWith('error', '公司详情接口失败', { translate: false })
+    })
+    expect(dialog).toBeInTheDocument()
+  })
+
   it('updates companies through the API wrapper', async () => {
     const user = userEvent.setup()
     const { showToast } = renderCompaniesList()

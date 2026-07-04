@@ -45,7 +45,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState } from '@/components/ui/error-state'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useGlobalToast } from '@/components/ui/use-global-toast'
+import { useDetailLoader } from '@/lib/use-detail-loader'
 import { useMutationAction } from '@/lib/use-mutation-action'
 import { usePaginatedResource } from '@/lib/use-paginated-resource'
 import { useResource } from '@/lib/use-resource'
@@ -274,7 +274,7 @@ function AssignMenusDialog({ open, role, submitting = false, onOpenChange, onSub
 }
 
 export default function RolesList() {
-  const { showToast } = useGlobalToast()
+  const { loadDetail, resetDetail } = useDetailLoader()
   const { pending: submitting, runMutation, runConfirmedMutation } = useMutationAction()
   const [filterDraft, setFilterDraft] = useState<RoleFilterDraft>(() => emptyFilters())
   const [filters, setFilters] = useState<Pick<RoleListParams, 'name' | 'intro' | 'createAt'>>({})
@@ -302,21 +302,30 @@ export default function RolesList() {
   }
 
   const openCreateDialog = () => {
+    resetDetail()
     setSelectedRole(null)
     setDialogMode('create')
     setDialogOpen(true)
+  }
+
+  const closeDialog = () => {
+    resetDetail()
+    setDialogOpen(false)
+  }
+
+  const handleDialogOpenChange = (open: boolean) => {
+    if (!open) resetDetail()
+    setDialogOpen(open)
   }
 
   const openRoleDialog = async (mode: Extract<RoleFormMode, 'edit' | 'view'>, role: LegacyRole) => {
     setDialogMode(mode)
     setSelectedRole(role)
     setDialogOpen(true)
-    try {
-      const detail = await getRole(role.id)
-      if (detail) setSelectedRole(detail)
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '角色详情加载失败', { translate: false })
-    }
+    await loadDetail(() => getRole(role.id), {
+      fallbackMessage: '角色详情加载失败',
+      onLoaded: setSelectedRole,
+    })
   }
 
   const submitRole = async (values: RoleMutationPayload) => {
@@ -327,7 +336,7 @@ export default function RolesList() {
         successMessage: roleId ? '修改角色信息成功!' : '创建权限角色成功！',
         errorMessage: '角色保存失败',
         onSuccess: () => {
-          setDialogOpen(false)
+          closeDialog()
           refresh()
         },
       },
@@ -476,7 +485,7 @@ export default function RolesList() {
         open={dialogOpen}
         role={selectedRole}
         submitting={submitting}
-        onOpenChange={setDialogOpen}
+        onOpenChange={handleDialogOpenChange}
         onSubmit={submitRole}
       />
       <AssignMenusDialog

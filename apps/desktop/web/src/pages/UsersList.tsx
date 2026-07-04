@@ -51,6 +51,7 @@ import {
 } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
+import { useDetailLoader } from '@/lib/use-detail-loader'
 import { useMutationAction } from '@/lib/use-mutation-action'
 import { usePaginatedResource } from '@/lib/use-paginated-resource'
 import { useResource } from '@/lib/use-resource'
@@ -307,6 +308,7 @@ function PasswordDialog({
 
 export default function UsersList() {
   const { showToast } = useGlobalToast()
+  const { loadDetail, resetDetail } = useDetailLoader()
   const { pending: submitting, runMutation, runConfirmedMutation } = useMutationAction()
   const [draft, setDraft] = useState<UserFilterDraft>(() => emptyFilters())
   const [filters, setFilters] = useState<UserListFilters>({})
@@ -341,9 +343,20 @@ export default function UsersList() {
   }
 
   const openCreateDialog = () => {
+    resetDetail()
     setSelectedUser(null)
     setDialogMode('create')
     setDialogOpen(true)
+  }
+
+  const closeDialog = () => {
+    resetDetail()
+    setDialogOpen(false)
+  }
+
+  const handleDialogOpenChange = (open: boolean) => {
+    if (!open) resetDetail()
+    setDialogOpen(open)
   }
 
   const openUserDialog = async (mode: Extract<UserFormMode, 'edit' | 'view'>, user: LegacyUserListItem) => {
@@ -364,12 +377,10 @@ export default function UsersList() {
       },
     })
     setDialogOpen(true)
-    try {
-      const detail = await getUser(user.id)
-      if (detail) setSelectedUser(detail)
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '用户详情加载失败', { translate: false })
-    }
+    await loadDetail(() => getUser(user.id), {
+      fallbackMessage: '用户详情加载失败',
+      onLoaded: setSelectedUser,
+    })
   }
 
   const submitCreate = async (values: UserCreatePayload) => {
@@ -377,7 +388,7 @@ export default function UsersList() {
       successMessage: '创建用户成功！',
       errorMessage: '用户保存失败',
       onSuccess: () => {
-        setDialogOpen(false)
+        closeDialog()
         refresh()
       },
     })
@@ -389,7 +400,7 @@ export default function UsersList() {
       successMessage: '修改用户信息成功!',
       errorMessage: '用户保存失败',
       onSuccess: () => {
-        setDialogOpen(false)
+        closeDialog()
         refresh()
       },
     })
@@ -543,7 +554,7 @@ export default function UsersList() {
         user={selectedUser}
         roles={roleOptions}
         submitting={submitting}
-        onOpenChange={setDialogOpen}
+        onOpenChange={handleDialogOpenChange}
         onCreate={submitCreate}
         onUpdate={submitUpdate}
       />

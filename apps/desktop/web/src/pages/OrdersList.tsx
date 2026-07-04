@@ -28,7 +28,7 @@ import { Button } from '@/components/ui/button'
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useGlobalToast } from '@/components/ui/use-global-toast'
+import { useDetailLoader } from '@/lib/use-detail-loader'
 import { useMutationAction } from '@/lib/use-mutation-action'
 import { usePaginatedResource } from '@/lib/use-paginated-resource'
 import { OrderFormDialog } from '@/pages/orders/OrderFormDialog'
@@ -86,7 +86,7 @@ function renderCell(row: LegacyOrder, column: OrderColumn) {
 }
 
 export default function OrdersList() {
-  const { showToast } = useGlobalToast()
+  const { loadDetail, resetDetail } = useDetailLoader()
   const { pending: submitting, runMutation, runConfirmedMutation } = useMutationAction()
   const [draft, setDraft] = useState<OrderFilterDraft>(() => emptyFilters())
   const [filters, setFilters] = useState<OrderListFilters>({})
@@ -118,21 +118,30 @@ export default function OrdersList() {
   }
 
   const openCreateDialog = () => {
+    resetDetail()
     setSelectedOrder(undefined)
     setDialogMode('create')
     setDialogOpen(true)
+  }
+
+  const closeDialog = () => {
+    resetDetail()
+    setDialogOpen(false)
+  }
+
+  const handleDialogOpenChange = (open: boolean) => {
+    if (!open) resetDetail()
+    setDialogOpen(open)
   }
 
   const openOrderDialog = async (mode: Extract<OrderFormMode, 'edit' | 'view'>, order: LegacyOrder) => {
     setDialogMode(mode)
     setSelectedOrder(order)
     setDialogOpen(true)
-    try {
-      const detail = await getOrder(order.id)
-      if (detail) setSelectedOrder(detail)
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '订单详情加载失败', { translate: false })
-    }
+    await loadDetail(() => getOrder(order.id), {
+      fallbackMessage: '订单详情加载失败',
+      onLoaded: setSelectedOrder,
+    })
   }
 
   const submitOrder = async (values: OrderMutationPayload) => {
@@ -144,7 +153,7 @@ export default function OrdersList() {
         successMessage: isEditing ? '修改订单信息成功！' : '创建订单成功！',
         errorMessage: '订单保存失败',
         onSuccess: () => {
-          setDialogOpen(false)
+          closeDialog()
           refresh()
         },
       },
@@ -285,7 +294,7 @@ export default function OrdersList() {
         open={dialogOpen}
         order={selectedOrder}
         submitting={submitting}
-        onOpenChange={setDialogOpen}
+        onOpenChange={handleDialogOpenChange}
         onSubmit={submitOrder}
       />
     </PageShell>

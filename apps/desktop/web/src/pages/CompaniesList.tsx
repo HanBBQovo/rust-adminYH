@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useGlobalToast } from '@/components/ui/use-global-toast'
+import { useDetailLoader } from '@/lib/use-detail-loader'
 import { useMutationAction } from '@/lib/use-mutation-action'
 import { usePaginatedResource } from '@/lib/use-paginated-resource'
 
@@ -129,7 +129,7 @@ function CompanyFormDialog({
 }
 
 export default function CompaniesList() {
-  const { showToast } = useGlobalToast()
+  const { loadDetail, resetDetail } = useDetailLoader()
   const { pending: submitting, runMutation, runConfirmedMutation } = useMutationAction()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<CompanyFormMode>('create')
@@ -141,21 +141,30 @@ export default function CompaniesList() {
   })
 
   const openCreateDialog = () => {
+    resetDetail()
     setSelectedCompany(undefined)
     setDialogMode('create')
     setDialogOpen(true)
+  }
+
+  const closeDialog = () => {
+    resetDetail()
+    setDialogOpen(false)
+  }
+
+  const handleDialogOpenChange = (open: boolean) => {
+    if (!open) resetDetail()
+    setDialogOpen(open)
   }
 
   const openCompanyDialog = async (mode: Extract<CompanyFormMode, 'edit' | 'view'>, company: LegacyCompany) => {
     setDialogMode(mode)
     setSelectedCompany(company)
     setDialogOpen(true)
-    try {
-      const detail = await getCompany(company.id)
-      if (detail) setSelectedCompany(detail)
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '发货公司详情加载失败', { translate: false })
-    }
+    await loadDetail(() => getCompany(company.id), {
+      fallbackMessage: '发货公司详情加载失败',
+      onLoaded: setSelectedCompany,
+    })
   }
 
   const submitCompany = async (values: CompanyMutationPayload) => {
@@ -167,7 +176,7 @@ export default function CompaniesList() {
         successMessage: isEditing ? '修改发货公司成功！' : '创建发货公司成功！',
         errorMessage: '发货公司保存失败',
         onSuccess: () => {
-          setDialogOpen(false)
+          closeDialog()
           refresh()
         },
       },
@@ -259,7 +268,7 @@ export default function CompaniesList() {
         open={dialogOpen}
         company={selectedCompany}
         submitting={submitting}
-        onOpenChange={setDialogOpen}
+        onOpenChange={handleDialogOpenChange}
         onSubmit={submitCompany}
       />
     </PageShell>
