@@ -144,6 +144,27 @@ describe('MenusList', () => {
     expect(listMenuTreeMock).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps the create dialog open and avoids refresh when menu creation fails', async () => {
+    const user = userEvent.setup()
+    createMenuMock.mockRejectedValueOnce('create failed')
+    const { showToast } = renderMenusList()
+
+    await screen.findByText('系统管理')
+    await user.click(screen.getByRole('button', { name: '创建菜单' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText('菜单名称'), '报表中心')
+    await user.clear(within(dialog).getByLabelText('排序'))
+    await user.type(within(dialog).getByLabelText('排序'), '4')
+    await user.click(within(dialog).getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(createMenuMock).toHaveBeenCalled()
+      expect(showToast).toHaveBeenCalledWith('error', '菜单保存失败', { translate: false })
+    })
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(listMenuTreeMock).toHaveBeenCalledTimes(1)
+  })
+
   it('creates a child menu with old parentId semantics', async () => {
     const user = userEvent.setup()
     renderMenusList()
@@ -220,6 +241,38 @@ describe('MenusList', () => {
     })
     expect(showToast).toHaveBeenCalledWith('success', '删除菜单成功！', { translate: false })
     expect(listMenuTreeMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the tree unchanged and shows the fallback toast when menu deletion fails', async () => {
+    const user = userEvent.setup()
+    deleteMenuMock.mockRejectedValueOnce('delete failed')
+    const { showToast } = renderMenusList()
+
+    const row = (await screen.findByText('/main/system/menu')).closest('tr')
+    if (!row) throw new Error('missing menu row')
+    await user.click(within(row).getByRole('button', { name: '删除菜单' }))
+
+    await waitFor(() => {
+      expect(deleteMenuMock).toHaveBeenCalledWith(32)
+      expect(showToast).toHaveBeenCalledWith('error', '菜单删除失败', { translate: false })
+    })
+    expect(showToast).not.toHaveBeenCalledWith('success', '删除菜单成功！', { translate: false })
+    expect(listMenuTreeMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not delete a menu when the confirmation is cancelled', async () => {
+    const user = userEvent.setup()
+    const confirm = vi.fn().mockResolvedValue(false)
+    renderMenusList({ confirm })
+
+    const row = (await screen.findByText('/main/system/menu')).closest('tr')
+    if (!row) throw new Error('missing menu row')
+    await user.click(within(row).getByRole('button', { name: '删除菜单' }))
+
+    await waitFor(() => {
+      expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: '删除菜单', variant: 'destructive' }))
+    })
+    expect(deleteMenuMock).not.toHaveBeenCalled()
   })
 
   it('renders the empty state and keeps the create action available', async () => {

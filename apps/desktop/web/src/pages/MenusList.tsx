@@ -45,8 +45,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useConfirm } from '@/components/ui/use-confirm'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
+import { useMutationAction } from '@/lib/use-mutation-action'
 import { useResource } from '@/lib/use-resource'
 
 type MenuFormMode = 'create' | 'edit'
@@ -224,12 +224,11 @@ function MenuFormDialog({ mode, open, menu, rootMenus, submitting = false, onOpe
 }
 
 export default function MenusList() {
-  const confirm = useConfirm()
   const { showToast } = useGlobalToast()
+  const { pending: submitting, runMutation, runConfirmedMutation } = useMutationAction()
   const [dialogMode, setDialogMode] = useState<MenuFormMode>('create')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedMenu, setSelectedMenu] = useState<MenuTreeItem | null>(null)
-  const [submitting, setSubmitting] = useState(false)
   const { data, loading, error, refresh } = useResource(listMenuTree)
   const tree = useMemo(() => normalizeMenuTree(data ?? []), [data])
   const flatRows = useMemo(() => flattenMenuTree(tree), [tree])
@@ -257,40 +256,35 @@ export default function MenusList() {
   }
 
   const submitMenu = async (values: MenuCreatePayload) => {
-    setSubmitting(true)
-    try {
-      if (dialogMode === 'edit' && selectedMenu) {
-        await updateMenu(selectedMenu.id, values)
-        showToast('success', '修改菜单成功！', { translate: false })
-      } else {
-        await createMenu(values)
-        showToast('success', '创建菜单成功！', { translate: false })
-      }
-      setDialogOpen(false)
-      refresh()
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '菜单保存失败', { translate: false })
-    } finally {
-      setSubmitting(false)
-    }
+    const menuId = dialogMode === 'edit' ? selectedMenu?.id : undefined
+    await runMutation(
+      () => (menuId ? updateMenu(menuId, values) : createMenu(values)),
+      {
+        successMessage: menuId ? '修改菜单成功！' : '创建菜单成功！',
+        errorMessage: '菜单保存失败',
+        onSuccess: () => {
+          setDialogOpen(false)
+          refresh()
+        },
+      },
+    )
   }
 
   const removeMenu = async (menu: MenuTreeItem) => {
-    const confirmed = await confirm({
-      title: '删除菜单',
-      description: `确认删除菜单 ${menu.name}？存在子菜单时后端会拒绝删除，避免破坏权限树。`,
-      confirmText: '删除',
-      variant: 'destructive',
-    })
-    if (!confirmed) return
-
-    try {
-      await deleteMenu(menu.id)
-      showToast('success', '删除菜单成功！', { translate: false })
-      refresh()
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '菜单删除失败', { translate: false })
-    }
+    await runConfirmedMutation(
+      () => deleteMenu(menu.id),
+      {
+        confirm: {
+          title: '删除菜单',
+          description: `确认删除菜单 ${menu.name}？存在子菜单时后端会拒绝删除，避免破坏权限树。`,
+          confirmText: '删除',
+          variant: 'destructive',
+        },
+        successMessage: '删除菜单成功！',
+        errorMessage: '菜单删除失败',
+        onSuccess: refresh,
+      },
+    )
   }
 
   return (
