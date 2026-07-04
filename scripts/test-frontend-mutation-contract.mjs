@@ -27,6 +27,7 @@ function assertNotMatches(content, pattern, message) {
 const mutationHook = read('apps/desktop/web/src/lib/use-mutation-action.ts')
 const mutationHookTest = read('apps/desktop/web/src/lib/use-mutation-action.test.tsx')
 const companiesList = read('apps/desktop/web/src/pages/CompaniesList.tsx')
+const ordersList = read('apps/desktop/web/src/pages/OrdersList.tsx')
 const rolesList = read('apps/desktop/web/src/pages/RolesList.tsx')
 const menusList = read('apps/desktop/web/src/pages/MenusList.tsx')
 const rebuildPlan = read('docs/rebuild-plan.md')
@@ -46,6 +47,7 @@ assertIncludes(mutationHookTest, 'shared pending state, success toast, and succe
 
 const migratedPages = [
   ['CompaniesList', companiesList],
+  ['OrdersList', ordersList],
   ['RolesList', rolesList],
   ['MenusList', menusList],
 ]
@@ -61,6 +63,6 @@ for (const [pageName, pageContent] of migratedPages) {
 }
 
 assertIncludes(rebuildPlan, 'src/lib/use-mutation-action.ts', 'rebuild plan must document the shared mutation action hook')
-assertIncludes(rebuildPlan, 'CompaniesList、RolesList、MenusList', 'rebuild plan must document the current migrated pages')
+assertIncludes(rebuildPlan, 'CompaniesList、OrdersList、RolesList、MenusList', 'rebuild plan must document the current migrated pages')
 
 console.log('Frontend mutation contract OK')

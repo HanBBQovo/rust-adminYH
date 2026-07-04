@@ -28,8 +28,8 @@ import { Button } from '@/components/ui/button'
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useConfirm } from '@/components/ui/use-confirm'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
+import { useMutationAction } from '@/lib/use-mutation-action'
 import { usePaginatedResource } from '@/lib/use-paginated-resource'
 import { OrderFormDialog } from '@/pages/orders/OrderFormDialog'
 import { ORDER_COLUMNS, exportOrdersCsv, type OrderColumn } from '@/pages/orders/order-export'
@@ -86,14 +86,13 @@ function renderCell(row: LegacyOrder, column: OrderColumn) {
 }
 
 export default function OrdersList() {
-  const confirm = useConfirm()
   const { showToast } = useGlobalToast()
+  const { pending: submitting, runMutation, runConfirmedMutation } = useMutationAction()
   const [draft, setDraft] = useState<OrderFilterDraft>(() => emptyFilters())
   const [filters, setFilters] = useState<OrderListFilters>({})
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<OrderFormMode>('create')
   const [selectedOrder, setSelectedOrder] = useState<LegacyOrder | undefined>()
-  const [submitting, setSubmitting] = useState(false)
   const [exporting, setExporting] = useState(false)
 
   const { data, loading, error, refresh, page, pageSize, setPage, rows, total, pagination } = usePaginatedResource({
@@ -137,40 +136,36 @@ export default function OrdersList() {
   }
 
   const submitOrder = async (values: OrderMutationPayload) => {
-    setSubmitting(true)
-    try {
-      if (dialogMode === 'edit' && selectedOrder) {
-        await updateOrder(selectedOrder.id, values)
-        showToast('success', '修改订单信息成功！', { translate: false })
-      } else {
-        await createOrder(values)
-        showToast('success', '创建订单成功！', { translate: false })
-      }
-      setDialogOpen(false)
-      refresh()
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '订单保存失败', { translate: false })
-    } finally {
-      setSubmitting(false)
-    }
+    const selectedOrderId = dialogMode === 'edit' ? selectedOrder?.id : undefined
+    const isEditing = selectedOrderId != null
+    await runMutation(
+      () => (isEditing ? updateOrder(selectedOrderId, values) : createOrder(values)),
+      {
+        successMessage: isEditing ? '修改订单信息成功！' : '创建订单成功！',
+        errorMessage: '订单保存失败',
+        onSuccess: () => {
+          setDialogOpen(false)
+          refresh()
+        },
+      },
+    )
   }
 
   const removeOrder = async (order: LegacyOrder) => {
-    const confirmed = await confirm({
-      title: '删除订单',
-      description: `确认删除运单 ${order.oddnumber}？该操作会按后端兼容逻辑删除订单。`,
-      confirmText: '删除',
-      variant: 'destructive',
-    })
-    if (!confirmed) return
-
-    try {
-      await deleteOrder(order.id)
-      showToast('success', '删除订单成功！', { translate: false })
-      refresh()
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '订单删除失败', { translate: false })
-    }
+    await runConfirmedMutation(
+      () => deleteOrder(order.id),
+      {
+        confirm: {
+          title: '删除订单',
+          description: `确认删除运单 ${order.oddnumber}？该操作会按后端兼容逻辑删除订单。`,
+          confirmText: '删除',
+          variant: 'destructive',
+        },
+        successMessage: '删除订单成功！',
+        errorMessage: '订单删除失败',
+        onSuccess: refresh,
+      },
+    )
   }
 
   const exportFilteredOrders = async () => {
