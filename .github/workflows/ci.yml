@@ -306,3 +306,65 @@ jobs:
           name: release-gate-docker
           path: tmp/release-gate
           if-no-files-found: ignore
+
+  release-gate-summary:
+    name: Release candidate summary
+    needs:
+      - release-candidate-preflight
+      - backend
+      - frontend
+      - frontend-e2e
+      - migration
+      - tauri-app
+      - docker-release
+    runs-on: ubuntu-latest
+    if: ${{ always() && inputs.release_candidate }}
+    steps:
+      - name: Summarize required release gates
+        env:
+          PREFLIGHT_RESULT: ${{ needs.release-candidate-preflight.result }}
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          FRONTEND_E2E_RESULT: ${{ needs.frontend-e2e.result }}
+          MIGRATION_RESULT: ${{ needs.migration.result }}
+          TAURI_RESULT: ${{ needs.tauri-app.result }}
+          DOCKER_RESULT: ${{ needs.docker-release.result }}
+        run: |
+          failed=0
+
+          require_success() {
+            local result="$1"
+            local label="$2"
+            if [[ "$result" != "success" ]]; then
+              echo "FAIL: ${label} result is ${result}; release candidate is not shippable."
+              failed=1
+            fi
+          }
+
+          {
+            echo "## Release candidate gate summary"
+            echo
+            echo "| Required job | Result |"
+            echo "| --- | --- |"
+            echo "| release-candidate-preflight | ${PREFLIGHT_RESULT} |"
+            echo "| backend | ${BACKEND_RESULT} |"
+            echo "| frontend | ${FRONTEND_RESULT} |"
+            echo "| frontend-e2e | ${FRONTEND_E2E_RESULT} |"
+            echo "| migration | ${MIGRATION_RESULT} |"
+            echo "| tauri-app | ${TAURI_RESULT} |"
+            echo "| docker-release | ${DOCKER_RESULT} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          require_success "$PREFLIGHT_RESULT" "release-candidate-preflight"
+          require_success "$BACKEND_RESULT" "backend"
+          require_success "$FRONTEND_RESULT" "frontend"
+          require_success "$FRONTEND_E2E_RESULT" "frontend-e2e"
+          require_success "$MIGRATION_RESULT" "migration"
+          require_success "$TAURI_RESULT" "tauri-app"
+          require_success "$DOCKER_RESULT" "docker-release"
+
+          if [[ "$failed" -ne 0 ]]; then
+            exit 1
+          fi
+
+          echo "GitHub release candidate summary passed."
