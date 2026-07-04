@@ -1352,13 +1352,13 @@ fn inspect_avatar_files_blocking(dir: &Path) -> Result<AvatarFileInventory> {
         let bytes =
             std::fs::read(path).with_context(|| format!("failed read {}", path.display()))?;
         total_bytes += metadata.len();
+        let relative_path = path
+            .strip_prefix(dir)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .to_string();
         files.push(AvatarFileHash {
-            relative_path: path
-                .strip_prefix(dir)
-                .unwrap_or(path)
-                .to_string_lossy()
-                .trim_start_matches('/')
-                .to_owned(),
+            relative_path: normalize_avatar_relative_path(&relative_path),
             bytes: metadata.len(),
             sha256: format!("{:x}", Sha256::digest(&bytes)),
         });
@@ -1379,18 +1379,28 @@ fn file_hash_map(files: &AvatarFileInventory) -> BTreeMap<String, String> {
         .iter()
         .map(|file| {
             (
-                normalize_avatar_name(&file.relative_path),
+                normalize_avatar_relative_path(&file.relative_path),
                 file.sha256.clone(),
             )
         })
         .collect()
 }
 
+fn normalize_avatar_relative_path(value: &str) -> String {
+    let mut normalized = value.replace('\\', "/");
+    normalized = normalized.trim_start_matches('/').to_owned();
+    while let Some(stripped) = normalized.strip_prefix("./") {
+        normalized = stripped.to_owned();
+    }
+    normalized
+}
+
 fn normalize_avatar_name(value: &str) -> String {
-    value
+    let normalized = value.replace('\\', "/");
+    normalized
         .rsplit('/')
         .next()
-        .unwrap_or(value)
+        .unwrap_or(normalized.as_str())
         .trim_start_matches('\\')
         .to_owned()
 }
@@ -2206,10 +2216,33 @@ mod tests {
 
         let report = verify_files(&old_root, &new_root).await.unwrap();
         assert_eq!(report.status, "failed");
-        assert_eq!(report.missing_in_new, vec!["user.jpg"]);
+        assert_eq!(report.missing_in_new, vec!["nested/user.jpg"]);
         assert_eq!(report.extra_in_new, vec!["extra.jpg"]);
         assert_eq!(report.changed, vec!["changed.jpg"]);
         assert!(report.to_text().contains("status=failed"));
+
+        fs::remove_dir_all(old_root).await.unwrap();
+        fs::remove_dir_all(new_root).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn verify_files_preserves_relative_paths_for_same_name_collisions() {
+        let old_root = unique_temp_dir();
+        let new_root = unique_temp_dir();
+        fs::create_dir_all(old_root.join("a")).await.unwrap();
+        fs::create_dir_all(new_root.join("b")).await.unwrap();
+        fs::write(old_root.join("a").join("user.jpg"), b"same")
+            .await
+            .unwrap();
+        fs::write(new_root.join("b").join("user.jpg"), b"same")
+            .await
+            .unwrap();
+
+        let report = verify_files(&old_root, &new_root).await.unwrap();
+        assert_eq!(report.status, "failed");
+        assert_eq!(report.missing_in_new, vec!["a/user.jpg"]);
+        assert_eq!(report.extra_in_new, vec!["b/user.jpg"]);
+        assert!(report.changed.is_empty());
 
         fs::remove_dir_all(old_root).await.unwrap();
         fs::remove_dir_all(new_root).await.unwrap();
