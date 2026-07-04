@@ -75,7 +75,7 @@ describe('Settings page preferences', () => {
       )
     })
     await waitFor(() => {
-      expect(showToast).toHaveBeenCalledWith('success', '系统偏好已保存')
+      expect(showToast).toHaveBeenCalledWith('success', '系统偏好已保存', { translate: false })
     })
     expect(JSON.parse(window.localStorage.getItem(appPreferencesStorageKey()) || '{}')).toEqual(
       expect.objectContaining({
@@ -122,7 +122,7 @@ describe('Settings page preferences', () => {
 
     await waitFor(() => {
       expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: '恢复默认外观', variant: 'destructive' }))
-      expect(showToast).toHaveBeenCalledWith('success', '外观偏好已恢复默认')
+      expect(showToast).toHaveBeenCalledWith('success', '外观偏好已恢复默认', { translate: false })
     })
     expect(JSON.parse(window.localStorage.getItem(appPreferencesStorageKey()) || '{}')).toEqual(
       expect.objectContaining({

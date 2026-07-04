@@ -32,6 +32,7 @@ const rolesList = read('apps/desktop/web/src/pages/RolesList.tsx')
 const menusList = read('apps/desktop/web/src/pages/MenusList.tsx')
 const usersList = read('apps/desktop/web/src/pages/UsersList.tsx')
 const receiptsList = read('apps/desktop/web/src/pages/ReceiptsList.tsx')
+const settingsPage = read('apps/desktop/web/src/pages/Settings.tsx')
 const accountPreferences = read('apps/desktop/web/src/components/account/AccountPreferences.tsx')
 const rebuildPlan = read('docs/rebuild-plan.md')
 
@@ -59,6 +60,8 @@ const migratedPages = [
 const unconfirmedMigratedPages = [['ReceiptsList', receiptsList]]
 
 const migratedComponents = [['AccountPreferences', accountPreferences]]
+
+const confirmedOnlyMigratedPages = [['Settings', settingsPage]]
 
 for (const [pageName, pageContent] of migratedPages) {
   assertIncludes(pageContent, "import { useMutationAction } from '@/lib/use-mutation-action'", `${pageName} must import the shared mutation hook`)
@@ -90,7 +93,18 @@ for (const [componentName, componentContent] of migratedComponents) {
   assertNotMatches(componentContent, /err instanceof Error \? err\.message/, `${componentName} must not hand-roll mutation error normalization`)
 }
 
+for (const [pageName, pageContent] of confirmedOnlyMigratedPages) {
+  assertIncludes(pageContent, "import { useMutationAction } from '@/lib/use-mutation-action'", `${pageName} must import the shared mutation hook`)
+  assertIncludes(pageContent, 'runSavePreferencesMutation(', `${pageName} save preferences path must use the shared confirmed mutation runner`)
+  assertIncludes(pageContent, 'runResetAppearanceMutation(', `${pageName} reset appearance path must use the shared confirmed mutation runner`)
+  assertIncludes(pageContent, 'pending: savingPreferences', `${pageName} must derive save pending state from the shared mutation hook`)
+  assertIncludes(pageContent, 'pending: resettingAppearance', `${pageName} must derive reset pending state from the shared mutation hook`)
+  assertNotMatches(pageContent, /useConfirm/, `${pageName} must not wire confirm directly after migrating settings mutations to the hook`)
+  assertNotMatches(pageContent, /setMessage\(\{\s*type:\s*'success'/, `${pageName} must not hand-roll success messages for migrated mutation paths`)
+  assertNotMatches(pageContent, /err instanceof Error \? err\.message/, `${pageName} must not hand-roll mutation error normalization`)
+}
+
 assertIncludes(rebuildPlan, 'src/lib/use-mutation-action.ts', 'rebuild plan must document the shared mutation action hook')
-assertIncludes(rebuildPlan, 'AccountPreferences、CompaniesList、OrdersList、ReceiptsList、RolesList、MenusList、UsersList', 'rebuild plan must document the current migrated pages and account component')
+assertIncludes(rebuildPlan, 'AccountPreferences、CompaniesList、OrdersList、ReceiptsList、RolesList、MenusList、Settings、UsersList', 'rebuild plan must document the current migrated pages and account component')
 
 console.log('Frontend mutation contract OK')

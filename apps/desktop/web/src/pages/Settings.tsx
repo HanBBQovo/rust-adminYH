@@ -17,7 +17,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { Input } from '@/components/ui/input'
 import { MultiSelect } from '@/components/ui/multi-select'
 import { Switch } from '@/components/ui/switch'
-import { useConfirm } from '@/components/ui/use-confirm'
+import { useMutationAction } from '@/lib/use-mutation-action'
 import type { SessionUser } from '@/session/types'
 
 type Tab = 'account' | 'general' | 'appearance'
@@ -49,7 +49,8 @@ interface SettingsProps {
 export default function Settings({ user, onAvatarUploaded }: SettingsProps) {
   const [activeTab, setActiveTab] = useState<Tab>('account')
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const confirm = useConfirm()
+  const { pending: savingPreferences, runConfirmedMutation: runSavePreferencesMutation } = useMutationAction()
+  const { pending: resettingAppearance, runConfirmedMutation: runResetAppearanceMutation } = useMutationAction()
   const [preferences, setPreferences] = useState<AppPreferences>(DEFAULT_APP_PREFERENCES)
 
   useEffect(() => {
@@ -73,36 +74,30 @@ export default function Settings({ user, onAvatarUploaded }: SettingsProps) {
   }
 
   const save = async () => {
-    const confirmed = await confirm({
-      title: '保存系统偏好',
-      description: '确认保存当前系统偏好? 仅保存站点展示、负责团队、能力开关和界面偏好等非敏感配置。',
-      confirmText: '保存',
+    await runSavePreferencesMutation(() => saveAppPreferences(preferences), {
+      confirm: {
+        title: '保存系统偏好',
+        description: '确认保存当前系统偏好? 仅保存站点展示、负责团队、能力开关和界面偏好等非敏感配置。',
+        confirmText: '保存',
+      },
+      successMessage: '系统偏好已保存',
+      errorMessage: '系统偏好保存失败',
+      onSuccess: setPreferences,
     })
-    if (!confirmed) return
-    try {
-      const saved = await saveAppPreferences(preferences)
-      setPreferences(saved)
-      setMessage({ type: 'success', text: '系统偏好已保存' })
-    } catch (error: unknown) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : '系统偏好保存失败' })
-    }
   }
 
   const resetAppearance = async () => {
-    const confirmed = await confirm({
-      title: '恢复默认外观',
-      description: '将关闭紧凑模式并重新启用页面动效。这个动作会覆盖当前外观偏好。',
-      confirmText: '恢复默认',
-      variant: 'destructive',
+    await runResetAppearanceMutation(() => resetAppearancePreferences(preferences), {
+      confirm: {
+        title: '恢复默认外观',
+        description: '将关闭紧凑模式并重新启用页面动效。这个动作会覆盖当前外观偏好。',
+        confirmText: '恢复默认',
+        variant: 'destructive',
+      },
+      successMessage: '外观偏好已恢复默认',
+      errorMessage: '外观偏好恢复失败',
+      onSuccess: setPreferences,
     })
-    if (!confirmed) return
-    try {
-      const saved = await resetAppearancePreferences(preferences)
-      setPreferences(saved)
-      setMessage({ type: 'success', text: '外观偏好已恢复默认' })
-    } catch (error: unknown) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : '外观偏好恢复失败' })
-    }
   }
 
   return (
@@ -115,9 +110,9 @@ export default function Settings({ user, onAvatarUploaded }: SettingsProps) {
       indicatorId="settings-tabs"
       message={message}
       headerActions={
-        <Button type="button" className="gap-2" onClick={save}>
+        <Button type="button" className="gap-2" onClick={save} disabled={savingPreferences}>
           <Save className="h-4 w-4" />
-          保存
+          {savingPreferences ? '保存中...' : '保存'}
         </Button>
       }
     >
@@ -151,9 +146,16 @@ export default function Settings({ user, onAvatarUploaded }: SettingsProps) {
           title="界面偏好"
           description="影响布局密度与动效。"
           actions={
-            <Button type="button" variant="outline" size="sm" className="gap-2" onClick={resetAppearance}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={resetAppearance}
+              disabled={resettingAppearance}
+            >
               <RotateCcw className="h-4 w-4" />
-              恢复默认
+              {resettingAppearance ? '恢复中...' : '恢复默认'}
             </Button>
           }
         >
