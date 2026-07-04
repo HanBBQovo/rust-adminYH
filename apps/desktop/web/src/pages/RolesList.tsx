@@ -47,6 +47,7 @@ import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useConfirm } from '@/components/ui/use-confirm'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
+import { usePaginatedResource } from '@/lib/use-paginated-resource'
 import { useResource } from '@/lib/use-resource'
 
 type RoleFormMode = 'create' | 'edit' | 'view'
@@ -275,7 +276,6 @@ function AssignMenusDialog({ open, role, submitting = false, onOpenChange, onSub
 export default function RolesList() {
   const confirm = useConfirm()
   const { showToast } = useGlobalToast()
-  const [page, setPage] = useState(1)
   const [filterDraft, setFilterDraft] = useState<RoleFilterDraft>(() => emptyFilters())
   const [filters, setFilters] = useState<Pick<RoleListParams, 'name' | 'intro' | 'createAt'>>({})
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -284,10 +284,12 @@ export default function RolesList() {
   const [selectedRole, setSelectedRole] = useState<LegacyRole | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const query = useMemo(() => ({ page, pageSize: PAGE_SIZE, ...filters }), [filters, page])
-  const { data, loading, error, refresh } = useResource(() => listRoles(query), [query])
-  const rows = data?.rows ?? []
-  const total = data?.total ?? 0
+  const { data, loading, error, refresh, page, pageSize, setPage, rows, pagination } = usePaginatedResource({
+    pageSize: PAGE_SIZE,
+    queryDeps: [filters],
+    buildQuery: ({ page, pageSize }) => ({ page, pageSize, ...filters }),
+    fetcher: listRoles,
+  })
 
   const applyFilters = () => {
     setPage(1)
@@ -431,7 +433,7 @@ export default function RolesList() {
         emptyTitle="暂无角色"
         emptyDescription="当前筛选没有匹配旧角色数据。"
         onRetry={refresh}
-        pagination={data ? { page, pageSize: PAGE_SIZE, total, onPageChange: setPage } : undefined}
+        pagination={pagination}
         emptyActions={
           <Button type="button" className="gap-2" onClick={openCreateDialog}>
             <Plus className="h-4 w-4" />
@@ -453,7 +455,7 @@ export default function RolesList() {
           <TableBody>
             {rows.map((row, index) => (
               <TableRow key={row.id}>
-                <DataTableRowNumberCell value={(page - 1) * PAGE_SIZE + index + 1} />
+                <DataTableRowNumberCell value={(page - 1) * pageSize + index + 1} />
                 <StickyActionCell>
                   <DataTableActionGroup>
                     <DataTableIconAction label="查看角色" icon={Eye} onClick={() => openRoleDialog('view', row)} />
