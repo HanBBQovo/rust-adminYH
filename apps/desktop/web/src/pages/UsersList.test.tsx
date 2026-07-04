@@ -195,6 +195,47 @@ describe('UsersList', () => {
     })
   })
 
+  it('returns to the first page when applying or resetting filters', async () => {
+    const user = userEvent.setup()
+    renderUsersList()
+
+    await screen.findByText('admin')
+    await user.click(screen.getByRole('button', { name: /下一页/ }))
+    await waitFor(() => {
+      expect(listUsersMock).toHaveBeenLastCalledWith({ page: 2, pageSize: 10 })
+    })
+
+    await user.type(screen.getByLabelText('用户名'), 'operator')
+    await user.click(screen.getByRole('button', { name: '查询' }))
+
+    await waitFor(() => {
+      expect(listUsersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          page: 1,
+          pageSize: 10,
+          name: 'operator',
+        }),
+      )
+    })
+
+    await user.click(screen.getByRole('button', { name: /下一页/ }))
+    await waitFor(() => {
+      expect(listUsersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          page: 2,
+          pageSize: 10,
+          name: 'operator',
+        }),
+      )
+    })
+
+    await user.click(screen.getByRole('button', { name: '重置' }))
+
+    await waitFor(() => {
+      expect(listUsersMock).toHaveBeenLastCalledWith({ page: 1, pageSize: 10 })
+    })
+  })
+
   it('uses every returned role as a user filter and create option', async () => {
     const user = userEvent.setup()
     renderUsersList()

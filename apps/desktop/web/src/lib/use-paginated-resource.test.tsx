@@ -49,6 +49,26 @@ describe('usePaginatedResource', () => {
     expect(fetcher).toHaveBeenLastCalledWith({ page: 2, pageSize: 10 })
   })
 
+  it('rebuilds the query when external query dependencies change', async () => {
+    const { rerender, result } = renderHook(
+      ({ keyword }) =>
+        usePaginatedResource({
+          pageSize: 10,
+          queryDeps: [keyword],
+          buildQuery: ({ page, pageSize }) => ({ page, pageSize, keyword }),
+          fetcher,
+        }),
+      { initialProps: { keyword: 'admin' } },
+    )
+    await waitFor(() => expect(result.current.rows).toEqual(['page-1']))
+    expect(fetcher).toHaveBeenLastCalledWith({ page: 1, pageSize: 10, keyword: 'admin' })
+
+    rerender({ keyword: 'operator' })
+
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
+    expect(fetcher).toHaveBeenLastCalledWith({ page: 1, pageSize: 10, keyword: 'operator' })
+  })
+
   it('refreshes the current page without changing pagination state', async () => {
     const { result } = renderHook(() =>
       usePaginatedResource({

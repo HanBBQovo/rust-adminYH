@@ -1,5 +1,5 @@
 import { Eye, KeyRound, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { listAssignableRoles, type LegacyRole } from '@/api/roles'
 import {
@@ -13,7 +13,6 @@ import {
   type LegacyUserListItem,
   type UserCreatePayload,
   type UserListFilters,
-  type UserListParams,
   type UserUpdatePayload,
 } from '@/api/users'
 import {
@@ -53,6 +52,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useConfirm } from '@/components/ui/use-confirm'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
+import { usePaginatedResource } from '@/lib/use-paginated-resource'
 import { useResource } from '@/lib/use-resource'
 
 type UserFormMode = 'create' | 'edit' | 'view'
@@ -310,7 +310,6 @@ export default function UsersList() {
   const { showToast } = useGlobalToast()
   const [draft, setDraft] = useState<UserFilterDraft>(() => emptyFilters())
   const [filters, setFilters] = useState<UserListFilters>({})
-  const [page, setPage] = useState(1)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<UserFormMode>('create')
   const [selectedUser, setSelectedUser] = useState<LegacyUserDetail | null>()
@@ -318,12 +317,14 @@ export default function UsersList() {
   const [passwordUser, setPasswordUser] = useState<LegacyUserListItem | undefined>()
   const [submitting, setSubmitting] = useState(false)
 
-  const query = useMemo<UserListParams>(() => ({ page, pageSize: PAGE_SIZE, ...filters }), [filters, page])
-  const { data, loading, error, refresh } = useResource(() => listUsers(query), [query])
+  const { data, loading, error, refresh, page, pageSize, setPage, rows, pagination } = usePaginatedResource({
+    pageSize: PAGE_SIZE,
+    queryDeps: [filters],
+    buildQuery: ({ page, pageSize }) => ({ page, pageSize, ...filters }),
+    fetcher: listUsers,
+  })
   const { data: rawRoleOptions, error: roleError, refresh: refreshRoles } = useResource(listAssignableRoles, [])
   const roleOptions = rawRoleOptions ?? []
-  const rows = data?.rows ?? []
-  const total = data?.total ?? 0
 
   const updateDraft = <K extends keyof UserFilterDraft>(key: K, value: UserFilterDraft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -506,7 +507,7 @@ export default function UsersList() {
         emptyTitle="暂无用户"
         emptyDescription="调整筛选条件后重新查询，或新建用户补充账号。"
         onRetry={refresh}
-        pagination={data ? { page, pageSize: PAGE_SIZE, total, onPageChange: setPage } : undefined}
+        pagination={pagination}
       >
         <Table>
           <TableHeader>
@@ -524,7 +525,7 @@ export default function UsersList() {
           <TableBody>
             {rows.map((row, index) => (
               <TableRow key={row.id}>
-                <DataTableRowNumberCell value={(page - 1) * PAGE_SIZE + index + 1} />
+                <DataTableRowNumberCell value={(page - 1) * pageSize + index + 1} />
                 <StickyActionCell>
                   <DataTableActionGroup>
                     <DataTableIconAction label="查看用户" icon={Eye} onClick={() => openUserDialog('view', row)} />
