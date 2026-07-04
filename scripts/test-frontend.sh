@@ -38,7 +38,7 @@ if [[ "$RELEASE_GATE" == "true" && "$RUN_COVERAGE" != "true" ]]; then
   exit 1
 fi
 
-if [[ "$RELEASE_GATE" == "true" && "$RUN_E2E" != "true" ]]; then
+if [[ "$RELEASE_GATE" == "true" && "$RUN_E2E" != "true" && "${GITHUB_FRONTEND_E2E_SEPARATE_JOB:-false}" != "true" ]]; then
   echo "FAIL: RELEASE_GATE=true 需要 RUN_E2E=true，发布候选不能跳过 Playwright E2E。"
   exit 1
 fi

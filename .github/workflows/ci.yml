@@ -147,9 +147,6 @@ jobs:
     name: Frontend gates
     needs: release-candidate-preflight
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/desktop/web
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -159,19 +156,13 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/desktop/web/package-lock.json
-      - name: Install dependencies
-        run: bash ../../../scripts/install-frontend-deps.sh
-      - name: Lint
-        run: npm run lint
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Unit and component tests
-        run: npm run test
-      - name: Coverage gate
-        if: ${{ inputs.release_candidate }}
-        run: npm run test:coverage
-      - name: Production build
-        run: npm run build
+      - name: Run frontend gates
+        env:
+          RELEASE_GATE: ${{ inputs.release_candidate }}
+          RUN_COVERAGE: ${{ inputs.release_candidate }}
+          RUN_E2E: "false"
+          GITHUB_FRONTEND_E2E_SEPARATE_JOB: "true"
+        run: scripts/test-frontend.sh
 
   frontend-e2e:
     name: Frontend E2E

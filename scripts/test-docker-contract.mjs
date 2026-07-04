@@ -163,7 +163,12 @@ assertIncludes(ciWorkflow, 'if: ${{ inputs.run_docker }}', 'Docker release gate 
 assertIncludes(ciWorkflow, 'RUN_DOCKER_E2E=${{ inputs.run_docker_e2e }} scripts/test-docker.sh', 'Docker job must run the existing diagnostic Docker gate')
 assertIncludes(ciWorkflow, 'npx --prefix apps/desktop/web playwright install --with-deps chromium', 'Docker E2E job must install Chromium when real browser validation is requested')
 assertIncludes(ciWorkflow, 'NPM_REGISTRY: https://registry.npmjs.org', 'GitHub workflow must define a stable npm registry override')
-assertOccurrences(ciWorkflow, 'install-frontend-deps.sh', 4, 'GitHub workflow npm installs must delegate to the shared frontend dependency installer')
+assertOccurrences(
+  ciWorkflow,
+  'install-frontend-deps.sh',
+  3,
+  'GitHub workflow direct npm installs must delegate to the shared frontend dependency installer; frontend gates use scripts/test-frontend.sh',
+)
 
 assertIncludes(dockerSeed, "INSERT INTO `user`", 'Docker E2E seed must create a login user')
 assertIncludes(dockerSeed, '0192023a7bbd73250516f069df18b500', 'Docker E2E seed must use the legacy admin123 MD5 hash')
