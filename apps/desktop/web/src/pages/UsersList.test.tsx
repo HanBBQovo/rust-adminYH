@@ -131,6 +131,10 @@ describe('UsersList', () => {
 
     await screen.findByText('admin')
     await user.type(screen.getByLabelText('用户名'), 'admin')
+    await user.click(screen.getByRole('combobox', { name: '权限名称' }))
+    await user.click(await screen.findByRole('option', { name: '财务' }))
+    await user.click(screen.getByRole('combobox', { name: '用户状态' }))
+    await user.click(await screen.findByRole('option', { name: '禁用' }))
     await user.click(screen.getByRole('button', { name: '查询' }))
 
     await waitFor(() => {
@@ -139,9 +143,45 @@ describe('UsersList', () => {
           page: 1,
           pageSize: 10,
           name: 'admin',
+          roleId: 3,
+          enable: 0,
         }),
       )
     })
+
+    await user.click(screen.getByRole('combobox', { name: '用户状态' }))
+    await user.click(await screen.findByRole('option', { name: '启用' }))
+    await user.click(screen.getByRole('button', { name: '查询' }))
+
+    await waitFor(() => {
+      expect(listUsersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          roleId: 3,
+          enable: 1,
+        }),
+      )
+    })
+
+    await user.click(screen.getByRole('combobox', { name: '权限名称' }))
+    await user.click(await screen.findByRole('option', { name: '全部' }))
+    await user.click(screen.getByRole('combobox', { name: '用户状态' }))
+    await user.click(await screen.findByRole('option', { name: '全部' }))
+    await user.click(screen.getByRole('button', { name: '查询' }))
+
+    await waitFor(() => {
+      expect(listUsersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          page: 1,
+          pageSize: 10,
+          name: 'admin',
+          roleId: undefined,
+          enable: undefined,
+        }),
+      )
+    })
+    const lastListUsersCall = listUsersMock.mock.calls[listUsersMock.mock.calls.length - 1]?.[0]
+    expect(lastListUsersCall).not.toEqual(expect.objectContaining({ roleId: '__any__' }))
+    expect(lastListUsersCall).not.toEqual(expect.objectContaining({ enable: '__any__' }))
 
     await user.click(screen.getByRole('button', { name: /下一页/ }))
     await waitFor(() => {

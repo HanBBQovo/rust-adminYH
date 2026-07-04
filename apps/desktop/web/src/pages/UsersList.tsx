@@ -26,7 +26,7 @@ import {
   StickyActionCell,
   StickyActionHead,
 } from '@/components/layout/DataTableSurface'
-import { FilterBar, FilterField } from '@/components/layout/FilterBar'
+import { FilterBar, FilterField, SelectFilterField } from '@/components/layout/FilterBar'
 import { FormField, FormSection } from '@/components/layout/FormScaffold'
 import { PageShell } from '@/components/layout/PageScaffold'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -473,33 +473,23 @@ export default function UsersList() {
         <FilterField label="用户名">
           <Input aria-label="用户名" value={draft.name} placeholder="请输入用户名" onChange={(event) => updateDraft('name', event.target.value)} />
         </FilterField>
-        <FilterField label="权限名称">
-          <Select value={draft.roleId || ANY_VALUE} onValueChange={(value) => updateDraft('roleId', value === ANY_VALUE ? '' : value)}>
-            <SelectTrigger aria-label="权限名称">
-              <SelectValue placeholder="请选择权限名称" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ANY_VALUE}>全部</SelectItem>
-              {roleOptions.map((role) => (
-                <SelectItem key={role.id} value={String(role.id)}>
-                  {role.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FilterField>
-        <FilterField label="用户状态">
-          <Select value={draft.enable || ANY_VALUE} onValueChange={(value) => updateDraft('enable', value === ANY_VALUE ? '' : value)}>
-            <SelectTrigger aria-label="用户状态">
-              <SelectValue placeholder="请选择用户状态" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ANY_VALUE}>全部</SelectItem>
-              <SelectItem value="1">启用</SelectItem>
-              <SelectItem value="0">禁用</SelectItem>
-            </SelectContent>
-          </Select>
-        </FilterField>
+        <SelectFilterField
+          label="权限名称"
+          value={draft.roleId}
+          allValue={ANY_VALUE}
+          options={roleOptions.map((role) => ({ value: String(role.id), label: role.name }))}
+          onValueChange={(value) => updateDraft('roleId', value)}
+        />
+        <SelectFilterField
+          label="用户状态"
+          value={draft.enable}
+          allValue={ANY_VALUE}
+          options={[
+            { value: '1', label: '启用' },
+            { value: '0', label: '禁用' },
+          ]}
+          onValueChange={(value) => updateDraft('enable', value)}
+        />
         <FilterField label="创建时间">
           <DateRangePicker value={draft.createAt} onChange={(value) => updateDraft('createAt', value)} />
         </FilterField>
