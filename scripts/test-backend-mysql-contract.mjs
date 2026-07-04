@@ -265,6 +265,35 @@ assertIncludes(
 )
 assertIncludes(
   userRepository,
+  'with_mysql_transaction(&self.pool, "user.create",',
+  'user.create must use the shared transaction runner',
+)
+assert(
+  !userRepository.includes('begin_mysql_transaction(&self.pool, "user.create"'),
+  'user.create must not hand-roll begin/commit after runner migration',
+)
+assertIncludes(
+  userRepository,
+  'transaction_sql_error(scope, "insert_user",',
+  'user.create must include scoped SQL error context for user insert',
+)
+assertIncludes(
+  userRepository,
+  'transaction_sql_error(scope, "update_created_user_avatar_url",',
+  'user.create must include scoped SQL error context for created user avatar URL update',
+)
+assertIncludes(
+  userRepository,
+  'transaction_sql_error(scope, "insert_user_role",',
+  'user.create must include scoped SQL error context for user role insert',
+)
+assertIncludes(
+  userRepository,
+  'transaction_sql_error(scope, "insert_default_avatar",',
+  'user.create must include scoped SQL error context for default avatar insert',
+)
+assertIncludes(
+  userRepository,
   'with_mysql_transaction(&self.pool, "user.update",',
   'user.update must use the shared transaction runner',
 )

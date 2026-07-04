@@ -13,10 +13,7 @@ use admin_core::{
 };
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row};
 
-use crate::transaction::{
-    begin_mysql_transaction, commit_mysql_transaction, transaction_sql_error,
-    with_mysql_transaction, MySqlTransaction,
-};
+use crate::transaction::{transaction_sql_error, with_mysql_transaction, MySqlTransaction};
 
 #[derive(Debug, Clone)]
 pub struct MySqlUserRepository {
@@ -178,30 +175,37 @@ impl UserStore for MySqlUserRepository {
 
     fn create<'a>(&'a self, input: UserCreateRequest) -> UserServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let mut tx = begin_mysql_transaction(&self.pool, "user.create").await?;
-            let result = sqlx::query(
-                r#"
-                INSERT INTO `user` (`name`, `password`, `avatar_url`, `enable`)
-                VALUES (?, ?, '', 1)
-                "#,
-            )
-            .bind(&input.name)
-            .bind(&input.password)
-            .execute(tx.as_mut())
-            .await
-            .map_err(db_error)?;
+            with_mysql_transaction(&self.pool, "user.create", |tx| {
+                Box::pin(async move {
+                    let scope = tx.scope();
+                    let result = sqlx::query(
+                        r#"
+                        INSERT INTO `user` (`name`, `password`, `avatar_url`, `enable`)
+                        VALUES (?, ?, '', 1)
+                        "#,
+                    )
+                    .bind(&input.name)
+                    .bind(&input.password)
+                    .execute(tx.as_mut())
+                    .await
+                    .map_err(|error| transaction_sql_error(scope, "insert_user", error))?;
 
-            let user_id = result.last_insert_id() as i64;
-            let avatar_url = format!("/users/{user_id}/avatar");
-            sqlx::query("UPDATE `user` SET `avatar_url` = ? WHERE `id` = ?")
-                .bind(&avatar_url)
-                .bind(user_id)
-                .execute(tx.as_mut())
-                .await
-                .map_err(db_error)?;
-            insert_user_role(&mut tx, user_id, input.role_id).await?;
-            insert_default_avatar(&mut tx, user_id).await?;
-            commit_mysql_transaction(tx).await
+                    let user_id = result.last_insert_id() as i64;
+                    let avatar_url = format!("/users/{user_id}/avatar");
+                    sqlx::query("UPDATE `user` SET `avatar_url` = ? WHERE `id` = ?")
+                        .bind(&avatar_url)
+                        .bind(user_id)
+                        .execute(tx.as_mut())
+                        .await
+                        .map_err(|error| {
+                            transaction_sql_error(scope, "update_created_user_avatar_url", error)
+                        })?;
+                    insert_user_role(tx, user_id, input.role_id).await?;
+                    insert_default_avatar(tx, user_id).await?;
+                    Ok(())
+                })
+            })
+            .await
         })
     }
 
@@ -540,6 +544,7 @@ async fn upsert_user_role(
 }
 
 async fn insert_default_avatar(tx: &mut MySqlTransaction<'_>, user_id: i64) -> AppResult<()> {
+    let scope = tx.scope();
     let default = AvatarInfo::default_for_user(user_id);
     sqlx::query(
         r#"
@@ -554,7 +559,7 @@ async fn insert_default_avatar(tx: &mut MySqlTransaction<'_>, user_id: i64) -> A
     .execute(tx.as_mut())
     .await
     .map(|_| ())
-    .map_err(db_error)
+    .map_err(|error| transaction_sql_error(scope, "insert_default_avatar", error))
 }
 
 fn auth_user_from_row(row: sqlx::mysql::MySqlRow) -> AuthUser {
