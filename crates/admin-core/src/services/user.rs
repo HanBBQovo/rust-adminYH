@@ -11,6 +11,7 @@ use crate::{
         UserListItemResponse, UserListRequest, UserListResponse, UserPasswordRequest,
         UserRoleRecord, UserUpdateRequest,
     },
+    validation::{normalize_user_create, normalize_user_password, normalize_user_update},
     AppError, AppResult,
 };
 
@@ -149,14 +150,14 @@ impl UserService for CompatUserService {
         let store = Arc::clone(&self.store);
         let password_hasher = Arc::clone(&self.password_hasher);
         Box::pin(async move {
-            normalize_new_user(&input)?;
-            if store.find_by_name(input.name.trim()).await?.is_some() {
+            let input = normalize_user_create(input)?;
+            if store.find_by_name(&input.name).await?.is_some() {
                 return Err(AppError::Validation("用户已存在".to_owned()));
             }
             let password_hash = password_hasher.hash_password(&input.password)?;
             store
                 .create(UserCreateRequest {
-                    name: input.name.trim().to_owned(),
+                    name: input.name,
                     password: password_hash.as_str().to_owned(),
                     role_id: input.role_id,
                 })
@@ -171,17 +172,12 @@ impl UserService for CompatUserService {
     ) -> ServiceFuture<'a, AppResult<()>> {
         let store = Arc::clone(&self.store);
         Box::pin(async move {
-            if input.name.trim().is_empty() {
-                return Err(AppError::Validation("用户名不能为空！".to_owned()));
-            }
-            if input.role_id <= 0 {
-                return Err(AppError::Validation("权限角色不能为空！".to_owned()));
-            }
+            let input = normalize_user_update(input)?;
             store
                 .update(
                     user_id,
                     UserUpdateRequest {
-                        name: input.name.trim().to_owned(),
+                        name: input.name,
                         role_id: input.role_id,
                     },
                 )
@@ -197,10 +193,7 @@ impl UserService for CompatUserService {
         let store = Arc::clone(&self.store);
         let password_hasher = Arc::clone(&self.password_hasher);
         Box::pin(async move {
-            let password = input.password();
-            if password.is_empty() {
-                return Err(AppError::Validation("密码不能为空！".to_owned()));
-            }
+            let password = normalize_user_password(&input)?;
             let password_hash = password_hasher.hash_password(password)?;
             store.update_password(user_id, password_hash.as_str()).await
         })
@@ -504,16 +497,6 @@ impl UserStore for InMemoryUserStore {
 
 pub fn development_user_service() -> CompatUserService {
     CompatUserService::new(Arc::new(InMemoryUserStore::with_seed_data()))
-}
-
-fn normalize_new_user(input: &UserCreateRequest) -> AppResult<()> {
-    if input.name.trim().is_empty() || input.password.is_empty() {
-        return Err(AppError::Validation("用户名或密码不能为空！".to_owned()));
-    }
-    if input.role_id <= 0 {
-        return Err(AppError::Validation("权限角色不能为空！".to_owned()));
-    }
-    Ok(())
 }
 
 fn role_for_id(role_id: i64) -> AppResult<UserRoleRecord> {

@@ -1,5 +1,4 @@
 use std::{
-    collections::HashSet,
     future::Future,
     pin::Pin,
     sync::{Arc, Mutex},
@@ -7,6 +6,7 @@ use std::{
 
 use crate::{
     dto::{RoleAssignRequest, RoleListRequest, RoleListResponse, RoleMutationRequest, RoleRecord},
+    validation::{normalize_role_assignment, normalize_role_mutation},
     AppError, AppResult,
 };
 
@@ -94,13 +94,8 @@ impl RoleService for CompatRoleService {
     fn create<'a>(&'a self, input: RoleMutationRequest) -> ServiceFuture<'a, AppResult<()>> {
         let store = Arc::clone(&self.store);
         Box::pin(async move {
-            normalize_role(&input)?;
-            store
-                .create(RoleMutationRequest {
-                    name: input.name.trim().to_owned(),
-                    intro: input.intro.trim().to_owned(),
-                })
-                .await
+            let input = normalize_role_mutation(input)?;
+            store.create(input).await
         })
     }
 
@@ -111,16 +106,8 @@ impl RoleService for CompatRoleService {
     ) -> ServiceFuture<'a, AppResult<()>> {
         let store = Arc::clone(&self.store);
         Box::pin(async move {
-            normalize_role(&input)?;
-            store
-                .update(
-                    role_id,
-                    RoleMutationRequest {
-                        name: input.name.trim().to_owned(),
-                        intro: input.intro.trim().to_owned(),
-                    },
-                )
-                .await
+            let input = normalize_role_mutation(input)?;
+            store.update(role_id, input).await
         })
     }
 
@@ -132,10 +119,7 @@ impl RoleService for CompatRoleService {
     fn assign<'a>(&'a self, input: RoleAssignRequest) -> ServiceFuture<'a, AppResult<()>> {
         let store = Arc::clone(&self.store);
         Box::pin(async move {
-            if input.role_id <= 0 {
-                return Err(AppError::Validation("角色不能为空".to_owned()));
-            }
-            let menu_ids = normalize_menu_ids(input.menu_list)?;
+            let (role_id, menu_ids) = normalize_role_assignment(input)?;
             let missing_menu_ids = store.validate_menu_ids(&menu_ids).await?;
             if !missing_menu_ids.is_empty() {
                 return Err(AppError::Validation(format!(
@@ -147,7 +131,7 @@ impl RoleService for CompatRoleService {
                         .join(",")
                 )));
             }
-            store.replace_menu_ids(input.role_id, menu_ids).await
+            store.replace_menu_ids(role_id, menu_ids).await
         })
     }
 }
@@ -365,30 +349,6 @@ impl RoleStore for InMemoryRoleStore {
 
 pub fn development_role_service() -> CompatRoleService {
     CompatRoleService::new(Arc::new(InMemoryRoleStore::with_seed_data()))
-}
-
-fn normalize_role(input: &RoleMutationRequest) -> AppResult<()> {
-    if input.name.trim().is_empty() {
-        return Err(AppError::Validation("角色名不能为空".to_owned()));
-    }
-    if input.intro.trim().is_empty() {
-        return Err(AppError::Validation("权限介绍不能为空".to_owned()));
-    }
-    Ok(())
-}
-
-fn normalize_menu_ids(menu_ids: Vec<i64>) -> AppResult<Vec<i64>> {
-    let mut normalized = Vec::new();
-    let mut seen = HashSet::new();
-    for menu_id in menu_ids {
-        if menu_id <= 0 {
-            return Err(AppError::Validation("权限菜单不能为空".to_owned()));
-        }
-        if seen.insert(menu_id) {
-            normalized.push(menu_id);
-        }
-    }
-    Ok(normalized)
 }
 
 fn filter_roles(roles: &[RoleRecord], input: &RoleListRequest) -> Vec<RoleRecord> {

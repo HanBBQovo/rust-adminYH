@@ -64,6 +64,7 @@ run_if "Backend MySQL test coverage contract" node "$ROOT_DIR/scripts/test-backe
 run_if "Backend auth contract" node "$ROOT_DIR/scripts/test-backend-auth-contract.mjs"
 run_if "Backend SQL helper contract" node "$ROOT_DIR/scripts/test-backend-sql-helper-contract.mjs"
 run_if "Backend pagination contract" node "$ROOT_DIR/scripts/test-backend-pagination-contract.mjs"
+run_if "Backend validation contract" node "$ROOT_DIR/scripts/test-backend-validation-contract.mjs"
 run_if "Backend response contract" node "$ROOT_DIR/scripts/test-backend-response-contract.mjs"
 run_if "Rust format check" cargo fmt --all -- --check
 run_if "Rust check workspace" cargo check "${CARGO_FLAGS[@]}" --workspace --all-targets
