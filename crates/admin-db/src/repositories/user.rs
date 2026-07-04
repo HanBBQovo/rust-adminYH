@@ -211,18 +211,23 @@ impl UserStore for MySqlUserRepository {
         input: UserUpdateRequest,
     ) -> UserServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let mut tx = begin_mysql_transaction(&self.pool, "user.update").await?;
-            let result = sqlx::query("UPDATE `user` SET `name` = ? WHERE `id` = ?")
-                .bind(&input.name)
-                .bind(user_id)
-                .execute(tx.as_mut())
-                .await
-                .map_err(db_error)?;
-            if result.rows_affected() == 0 {
-                return Err(AppError::NotFound(format!("user {user_id}")));
-            }
-            upsert_user_role(&mut tx, user_id, input.role_id).await?;
-            commit_mysql_transaction(tx).await
+            with_mysql_transaction(&self.pool, "user.update", |tx| {
+                Box::pin(async move {
+                    let scope = tx.scope();
+                    let result = sqlx::query("UPDATE `user` SET `name` = ? WHERE `id` = ?")
+                        .bind(&input.name)
+                        .bind(user_id)
+                        .execute(tx.as_mut())
+                        .await
+                        .map_err(|error| transaction_sql_error(scope, "update_user", error))?;
+                    if result.rows_affected() == 0 {
+                        return Err(AppError::NotFound(format!("user {user_id}")));
+                    }
+                    upsert_user_role(tx, user_id, input.role_id).await?;
+                    Ok(())
+                })
+            })
+            .await
         })
     }
 
@@ -506,13 +511,14 @@ async fn insert_user_role(
     user_id: i64,
     role_id: i64,
 ) -> AppResult<()> {
+    let scope = tx.scope();
     sqlx::query("INSERT INTO `user_role` (`user_id`, `role_id`) VALUES (?, ?)")
         .bind(user_id)
         .bind(role_id)
         .execute(tx.as_mut())
         .await
         .map(|_| ())
-        .map_err(db_error)
+        .map_err(|error| transaction_sql_error(scope, "insert_user_role", error))
 }
 
 async fn upsert_user_role(
@@ -520,12 +526,13 @@ async fn upsert_user_role(
     user_id: i64,
     role_id: i64,
 ) -> AppResult<()> {
+    let scope = tx.scope();
     let result = sqlx::query("UPDATE `user_role` SET `role_id` = ? WHERE `user_id` = ?")
         .bind(role_id)
         .bind(user_id)
         .execute(tx.as_mut())
         .await
-        .map_err(db_error)?;
+        .map_err(|error| transaction_sql_error(scope, "update_user_role", error))?;
     if result.rows_affected() == 0 {
         insert_user_role(tx, user_id, role_id).await?;
     }
