@@ -48,6 +48,7 @@ assertIncludes(mutationHookTest, 'does not run confirmed mutations when the user
 assertIncludes(mutationHookTest, 'runs confirmed mutations after confirmation succeeds', 'mutation hook tests must cover confirmed execution')
 assertIncludes(mutationHookTest, 'normalizes mutation errors through the shared error toast', 'mutation hook tests must cover error toast behavior')
 assertIncludes(mutationHookTest, 'shared pending state, success toast, and success callback', 'mutation hook tests must cover pending/success callback behavior')
+assertIncludes(mutationHookTest, 'successMessage: (value) => `完成 ${value}`', 'mutation hook tests must cover result-based success messages')
 
 const migratedPages = [
   ['CompaniesList', companiesList],
@@ -68,6 +69,11 @@ for (const [pageName, pageContent] of migratedPages) {
   assertIncludes(pageContent, 'pending: submitting', `${pageName} must derive submitting state from the shared mutation hook`)
   assertIncludes(pageContent, 'runMutation(', `${pageName} create/update or assignment path must use the shared mutation runner`)
   assertIncludes(pageContent, 'runConfirmedMutation(', `${pageName} destructive action path must use the shared confirmed mutation runner`)
+  if (pageName === 'OrdersList') {
+    assertIncludes(pageContent, 'pending: exporting', 'OrdersList export action must derive exporting state from the shared mutation hook')
+    assertIncludes(pageContent, 'runExportMutation(', 'OrdersList filtered export path must use the shared mutation runner')
+    assertNotMatches(pageContent, /setExporting\s*\(/, 'OrdersList must not manually toggle export pending state')
+  }
   assertNotMatches(pageContent, /useConfirm/, `${pageName} must not wire confirm directly after migrating destructive actions to the hook`)
   assertNotMatches(pageContent, /const\s+\[\s*submitting\s*,\s*setSubmitting\s*\]\s*=\s*useState\s*\(/, `${pageName} must not keep local submitting state`)
   assertNotMatches(pageContent, /setSubmitting\s*\(/, `${pageName} must not manually toggle submitting state`)

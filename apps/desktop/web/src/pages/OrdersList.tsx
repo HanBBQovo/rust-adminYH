@@ -93,7 +93,7 @@ export default function OrdersList() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<OrderFormMode>('create')
   const [selectedOrder, setSelectedOrder] = useState<LegacyOrder | undefined>()
-  const [exporting, setExporting] = useState(false)
+  const { pending: exporting, runMutation: runExportMutation } = useMutationAction()
 
   const { data, loading, error, refresh, page, pageSize, setPage, rows, total, pagination } = usePaginatedResource({
     pageSize: PAGE_SIZE,
@@ -170,16 +170,16 @@ export default function OrdersList() {
 
   const exportFilteredOrders = async () => {
     if (total <= 0) return
-    setExporting(true)
-    try {
-      const exportRows = await listOrdersForExport(filters, total)
-      const mode = await exportOrdersCsv(exportRows)
-      showToast('success', mode === 'desktop' ? '订单 CSV 已保存到所选位置。' : '订单 CSV 已开始下载。', { translate: false })
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '订单导出失败', { translate: false })
-    } finally {
-      setExporting(false)
-    }
+    await runExportMutation(
+      async () => {
+        const exportRows = await listOrdersForExport(filters, total)
+        return exportOrdersCsv(exportRows)
+      },
+      {
+        successMessage: (mode) => (mode === 'desktop' ? '订单 CSV 已保存到所选位置。' : '订单 CSV 已开始下载。'),
+        errorMessage: '订单导出失败',
+      },
+    )
   }
 
   return (

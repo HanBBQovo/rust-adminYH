@@ -328,6 +328,34 @@ describe('OrdersList', () => {
     expect(showToast).toHaveBeenCalledWith('success', '订单 CSV 已开始下载。', { translate: false })
   })
 
+  it('shows the desktop save message when filtered export is saved by Tauri', async () => {
+    exportOrdersCsvMock.mockResolvedValueOnce('desktop')
+    const user = userEvent.setup()
+    const { showToast } = renderOrdersList()
+
+    await screen.findByText('YD20260101001')
+    await user.click(screen.getByRole('button', { name: '导出筛选结果' }))
+
+    await waitFor(() => {
+      expect(exportOrdersCsvMock).toHaveBeenCalledWith([ORDER_ROW])
+      expect(showToast).toHaveBeenCalledWith('success', '订单 CSV 已保存到所选位置。', { translate: false })
+    })
+  })
+
+  it('keeps filtered export disabled while the export action is pending', async () => {
+    const user = userEvent.setup()
+    listOrdersForExportMock.mockImplementationOnce(() => new Promise(() => {}))
+    renderOrdersList()
+
+    await screen.findByText('YD20260101001')
+    await user.click(screen.getByRole('button', { name: '导出筛选结果' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '导出中' })).toBeDisabled()
+    })
+    expect(listOrdersForExportMock).toHaveBeenCalledWith({}, 11)
+  })
+
   it('keeps filtered export disabled while the list is refreshing', async () => {
     const user = userEvent.setup()
     renderOrdersList()
@@ -354,6 +382,20 @@ describe('OrdersList', () => {
 
     expect(listOrdersForExportMock).not.toHaveBeenCalled()
     expect(exportOrdersCsvMock).not.toHaveBeenCalled()
+  })
+
+  it('shows an error toast when CSV writing fails during filtered export', async () => {
+    exportOrdersCsvMock.mockRejectedValueOnce(new Error('CSV 写入失败'))
+    const user = userEvent.setup()
+    const { showToast } = renderOrdersList()
+
+    await screen.findByText('YD20260101001')
+    await user.click(screen.getByRole('button', { name: '导出筛选结果' }))
+
+    await waitFor(() => {
+      expect(listOrdersForExportMock).toHaveBeenCalledWith({}, 11)
+      expect(showToast).toHaveBeenCalledWith('error', 'CSV 写入失败', { translate: false })
+    })
   })
 
   it('shows an error toast when filtered export fails', async () => {
