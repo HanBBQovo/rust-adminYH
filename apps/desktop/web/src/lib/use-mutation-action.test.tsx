@@ -81,6 +81,43 @@ describe('useMutationAction', () => {
     expect(result.current.pending).toBe(false)
   })
 
+  it('runs the settled callback after failed mutations before clearing pending', async () => {
+    const onSettled = vi.fn()
+    const { Wrapper, showToast } = createWrapper()
+    const { result } = renderHook(() => useMutationAction(), { wrapper: Wrapper })
+
+    await act(async () => {
+      await result.current.runMutation(() => Promise.reject(new Error('上传失败')), {
+        successMessage: '上传成功',
+        errorMessage: '上传头像失败！',
+        onSettled,
+      })
+    })
+
+    expect(showToast).toHaveBeenCalledWith('error', '上传失败', { translate: false })
+    expect(onSettled).toHaveBeenCalledTimes(1)
+    expect(result.current.pending).toBe(false)
+  })
+
+  it('clears pending even when the settled callback fails', async () => {
+    const { Wrapper, showToast } = createWrapper()
+    const { result } = renderHook(() => useMutationAction(), { wrapper: Wrapper })
+
+    await expect(
+      act(async () => {
+        await result.current.runMutation(() => Promise.reject(new Error('上传失败')), {
+          errorMessage: '上传头像失败！',
+          onSettled: () => {
+            throw new Error('清理失败')
+          },
+        })
+      }),
+    ).rejects.toThrow('清理失败')
+
+    expect(showToast).toHaveBeenCalledWith('error', '上传失败', { translate: false })
+    expect(result.current.pending).toBe(false)
+  })
+
   it('does not run confirmed mutations when the user cancels', async () => {
     const operation = vi.fn().mockResolvedValue(undefined)
     const { Wrapper, confirm, showToast } = createWrapper({ confirm: vi.fn().mockResolvedValue(false) })

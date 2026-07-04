@@ -65,18 +65,17 @@ export function AccountPreferences({ user, onAvatarUploaded }: AccountPreference
       showToast('error', '头像不能超过 500kb！', { translate: false })
       return
     }
-    try {
-      await runAvatarMutation(() => uploadCurrentUserAvatar(file), {
-        successMessage: '上传头像成功！',
-        errorMessage: '上传头像失败！',
-        onSuccess: (result) => {
-          setAvatarCacheBust(result.uploadedAt)
-          onAvatarUploaded?.(result.uploadedAt)
-        },
-      })
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
+    await runAvatarMutation(() => uploadCurrentUserAvatar(file), {
+      successMessage: '上传头像成功！',
+      errorMessage: '上传头像失败！',
+      onSuccess: (result) => {
+        setAvatarCacheBust(result.uploadedAt)
+        onAvatarUploaded?.(result.uploadedAt)
+      },
+      onSettled: () => {
+        if (fileInputRef.current) fileInputRef.current.value = ''
+      },
+    })
   }
 
   return (

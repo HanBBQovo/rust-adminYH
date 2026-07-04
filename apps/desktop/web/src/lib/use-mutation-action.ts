@@ -10,6 +10,7 @@ export interface MutationActionOptions<TResult> {
   successMessage?: MutationMessage<TResult>
   errorMessage: string
   onSuccess?: (result: TResult) => void | Promise<void>
+  onSettled?: () => void | Promise<void>
 }
 
 export interface ConfirmedMutationActionOptions<TResult> extends MutationActionOptions<TResult> {
@@ -43,7 +44,11 @@ export function useMutationAction() {
         showToast('error', errorToMessage(error, options.errorMessage), { translate: false })
         return undefined
       } finally {
-        setPending(false)
+        try {
+          await options.onSettled?.()
+        } finally {
+          setPending(false)
+        }
       }
     },
     [showToast],

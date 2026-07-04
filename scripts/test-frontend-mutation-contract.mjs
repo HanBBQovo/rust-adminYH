@@ -42,6 +42,7 @@ assertIncludes(mutationHook, 'const { showToast } = useGlobalToast()', 'mutation
 assertIncludes(mutationHook, 'const [pending, setPending] = useState(false)', 'mutation hook must centralize pending state')
 assertIncludes(mutationHook, 'runMutation', 'mutation hook must expose the base mutation runner')
 assertIncludes(mutationHook, 'runConfirmedMutation', 'mutation hook must expose confirmed destructive action runner')
+assertIncludes(mutationHook, 'onSettled', 'mutation hook must centralize settled cleanup callbacks')
 assertIncludes(mutationHook, "{ translate: false }", 'mutation hook must preserve untranslated legacy Chinese messages')
 
 assertIncludes(mutationHookTest, 'does not run confirmed mutations when the user cancels', 'mutation hook tests must cover cancelled confirmation')
@@ -49,6 +50,7 @@ assertIncludes(mutationHookTest, 'runs confirmed mutations after confirmation su
 assertIncludes(mutationHookTest, 'normalizes mutation errors through the shared error toast', 'mutation hook tests must cover error toast behavior')
 assertIncludes(mutationHookTest, 'shared pending state, success toast, and success callback', 'mutation hook tests must cover pending/success callback behavior')
 assertIncludes(mutationHookTest, 'successMessage: (value) => `完成 ${value}`', 'mutation hook tests must cover result-based success messages')
+assertIncludes(mutationHookTest, 'runs the settled callback after failed mutations before clearing pending', 'mutation hook tests must cover settled cleanup behavior')
 
 const migratedPages = [
   ['CompaniesList', companiesList],
@@ -91,12 +93,14 @@ for (const [componentName, componentContent] of migratedComponents) {
   assertIncludes(componentContent, "import { useMutationAction } from '@/lib/use-mutation-action'", `${componentName} must import the shared mutation hook`)
   assertIncludes(componentContent, 'runPasswordMutation(', `${componentName} password mutation path must use the shared mutation runner`)
   assertIncludes(componentContent, 'runAvatarMutation(', `${componentName} avatar mutation path must use the shared mutation runner`)
+  assertIncludes(componentContent, 'onSettled', `${componentName} avatar upload cleanup must use the shared settled callback`)
   assertIncludes(componentContent, 'pending: submittingPassword', `${componentName} must derive password pending state from the shared mutation hook`)
   assertIncludes(componentContent, 'pending: uploadingAvatar', `${componentName} must derive avatar pending state from the shared mutation hook`)
   assertNotMatches(componentContent, /setSubmittingPassword\s*\(/, `${componentName} must not manually toggle password submitting state`)
   assertNotMatches(componentContent, /setUploadingAvatar\s*\(/, `${componentName} must not manually toggle avatar uploading state`)
   assertNotMatches(componentContent, /showToast\('success'/, `${componentName} must not hand-roll success toasts for migrated mutation paths`)
   assertNotMatches(componentContent, /err instanceof Error \? err\.message/, `${componentName} must not hand-roll mutation error normalization`)
+  assertNotMatches(componentContent, /try\s*\{[\s\S]{0,240}runAvatarMutation/, `${componentName} must not hand-roll avatar upload finally cleanup around the shared mutation runner`)
 }
 
 for (const [pageName, pageContent] of confirmedOnlyMigratedPages) {
