@@ -32,6 +32,7 @@ const rolesList = read('apps/desktop/web/src/pages/RolesList.tsx')
 const menusList = read('apps/desktop/web/src/pages/MenusList.tsx')
 const usersList = read('apps/desktop/web/src/pages/UsersList.tsx')
 const receiptsList = read('apps/desktop/web/src/pages/ReceiptsList.tsx')
+const accountPreferences = read('apps/desktop/web/src/components/account/AccountPreferences.tsx')
 const rebuildPlan = read('docs/rebuild-plan.md')
 
 assertIncludes(mutationHook, 'export function useMutationAction', 'shared mutation action hook must be exported')
@@ -57,6 +58,8 @@ const migratedPages = [
 
 const unconfirmedMigratedPages = [['ReceiptsList', receiptsList]]
 
+const migratedComponents = [['AccountPreferences', accountPreferences]]
+
 for (const [pageName, pageContent] of migratedPages) {
   assertIncludes(pageContent, "import { useMutationAction } from '@/lib/use-mutation-action'", `${pageName} must import the shared mutation hook`)
   assertIncludes(pageContent, 'pending: submitting', `${pageName} must derive submitting state from the shared mutation hook`)
@@ -75,7 +78,19 @@ for (const [pageName, pageContent] of unconfirmedMigratedPages) {
   assertNotMatches(pageContent, /err instanceof Error \? err\.message/, `${pageName} must not hand-roll mutation error normalization`)
 }
 
+for (const [componentName, componentContent] of migratedComponents) {
+  assertIncludes(componentContent, "import { useMutationAction } from '@/lib/use-mutation-action'", `${componentName} must import the shared mutation hook`)
+  assertIncludes(componentContent, 'runPasswordMutation(', `${componentName} password mutation path must use the shared mutation runner`)
+  assertIncludes(componentContent, 'runAvatarMutation(', `${componentName} avatar mutation path must use the shared mutation runner`)
+  assertIncludes(componentContent, 'pending: submittingPassword', `${componentName} must derive password pending state from the shared mutation hook`)
+  assertIncludes(componentContent, 'pending: uploadingAvatar', `${componentName} must derive avatar pending state from the shared mutation hook`)
+  assertNotMatches(componentContent, /setSubmittingPassword\s*\(/, `${componentName} must not manually toggle password submitting state`)
+  assertNotMatches(componentContent, /setUploadingAvatar\s*\(/, `${componentName} must not manually toggle avatar uploading state`)
+  assertNotMatches(componentContent, /showToast\('success'/, `${componentName} must not hand-roll success toasts for migrated mutation paths`)
+  assertNotMatches(componentContent, /err instanceof Error \? err\.message/, `${componentName} must not hand-roll mutation error normalization`)
+}
+
 assertIncludes(rebuildPlan, 'src/lib/use-mutation-action.ts', 'rebuild plan must document the shared mutation action hook')
-assertIncludes(rebuildPlan, 'CompaniesList、OrdersList、ReceiptsList、RolesList、MenusList、UsersList', 'rebuild plan must document the current migrated pages')
+assertIncludes(rebuildPlan, 'AccountPreferences、CompaniesList、OrdersList、ReceiptsList、RolesList、MenusList、UsersList', 'rebuild plan must document the current migrated pages and account component')
 
 console.log('Frontend mutation contract OK')

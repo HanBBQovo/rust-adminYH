@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
+import { useMutationAction } from '@/lib/use-mutation-action'
 import type { SessionUser } from '@/session/types'
 
 interface AccountPreferencesProps {
@@ -27,12 +28,12 @@ const ALLOWED_AVATAR_TYPES = new Set(['image/jpeg', 'image/png'])
 
 export function AccountPreferences({ user, onAvatarUploaded }: AccountPreferencesProps) {
   const { showToast } = useGlobalToast()
+  const { pending: submittingPassword, runMutation: runPasswordMutation } = useMutationAction()
+  const { pending: uploadingAvatar, runMutation: runAvatarMutation } = useMutationAction()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [passwordOpen, setPasswordOpen] = useState(false)
   const [password, setPassword] = useState('')
   const [passwordError, setPasswordError] = useState('')
-  const [submittingPassword, setSubmittingPassword] = useState(false)
-  const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarCacheBust, setAvatarCacheBust] = useState(() => Date.now())
 
   useEffect(() => {
@@ -48,16 +49,11 @@ export function AccountPreferences({ user, onAvatarUploaded }: AccountPreference
       setPasswordError('密码不能为空！')
       return
     }
-    setSubmittingPassword(true)
-    try {
-      await updateUserPassword(user.id, { password })
-      showToast('success', '修改密码成功！', { translate: false })
-      setPasswordOpen(false)
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '修改密码失败！', { translate: false })
-    } finally {
-      setSubmittingPassword(false)
-    }
+    await runPasswordMutation(() => updateUserPassword(user.id, { password }), {
+      successMessage: '修改密码成功！',
+      errorMessage: '修改密码失败！',
+      onSuccess: () => setPasswordOpen(false),
+    })
   }
 
   const uploadAvatar = async (file: File) => {
@@ -69,16 +65,16 @@ export function AccountPreferences({ user, onAvatarUploaded }: AccountPreference
       showToast('error', '头像不能超过 500kb！', { translate: false })
       return
     }
-    setUploadingAvatar(true)
     try {
-      const result = await uploadCurrentUserAvatar(file)
-      setAvatarCacheBust(result.uploadedAt)
-      onAvatarUploaded?.(result.uploadedAt)
-      showToast('success', '上传头像成功！', { translate: false })
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '上传头像失败！', { translate: false })
+      await runAvatarMutation(() => uploadCurrentUserAvatar(file), {
+        successMessage: '上传头像成功！',
+        errorMessage: '上传头像失败！',
+        onSuccess: (result) => {
+          setAvatarCacheBust(result.uploadedAt)
+          onAvatarUploaded?.(result.uploadedAt)
+        },
+      })
     } finally {
-      setUploadingAvatar(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }

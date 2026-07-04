@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AccountPreferences } from '@/components/account/AccountPreferences'
 import { ThemeProvider } from '@/components/theme'
+import { ConfirmDialogContext } from '@/components/ui/confirm-dialog-context'
 import { GlobalToastContext } from '@/components/ui/global-toast-context'
 
 const updateUserPasswordMock = vi.hoisted(() => vi.fn())
@@ -26,17 +27,24 @@ const SESSION_USER = {
   roleIds: [1],
 }
 
-function renderAccountPreferences(options?: { showToast?: ReturnType<typeof vi.fn>; onAvatarUploaded?: ReturnType<typeof vi.fn> }) {
+function renderAccountPreferences(options?: {
+  confirm?: () => Promise<boolean>
+  showToast?: ReturnType<typeof vi.fn>
+  onAvatarUploaded?: ReturnType<typeof vi.fn>
+}) {
+  const confirm = options?.confirm || vi.fn().mockResolvedValue(true)
   const showToast = options?.showToast || vi.fn()
   const onAvatarUploaded = options?.onAvatarUploaded || vi.fn()
   render(
     <ThemeProvider>
       <GlobalToastContext.Provider value={{ showToast }}>
-        <AccountPreferences user={SESSION_USER} onAvatarUploaded={onAvatarUploaded} />
+        <ConfirmDialogContext.Provider value={{ confirm }}>
+          <AccountPreferences user={SESSION_USER} onAvatarUploaded={onAvatarUploaded} />
+        </ConfirmDialogContext.Provider>
       </GlobalToastContext.Provider>
     </ThemeProvider>,
   )
-  return { showToast, onAvatarUploaded }
+  return { confirm, showToast, onAvatarUploaded }
 }
 
 describe('AccountPreferences', () => {
