@@ -72,6 +72,8 @@ section "Frontend mutation action contract"
 node "$ROOT_DIR/scripts/test-frontend-mutation-contract.mjs"
 section "Frontend detail loader contract"
 node "$ROOT_DIR/scripts/test-frontend-detail-loader-contract.mjs"
+section "Frontend async action contract"
+node "$ROOT_DIR/scripts/test-frontend-async-action-contract.mjs"
 run_required_script "typecheck" "Frontend typecheck"
 run_required_script "test" "Frontend unit/component tests"
 if [[ "$RUN_COVERAGE" == "true" ]]; then

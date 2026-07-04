@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BRAND_NAME, PRODUCT_SUBTITLE } from '@/config'
+import { useAsyncAction } from '@/lib/use-async-action'
 import { motion } from '@/lib/motion'
 import { clearRememberedLoginName, readRememberedLoginName, saveRememberedLoginName } from '@/session/session-store'
 import type { AdminSession } from '@/session/types'
@@ -24,8 +25,7 @@ export default function Login({ onAuthenticated }: LoginProps) {
   const [captchaSvg, setCaptchaSvg] = useState('')
   const [captchaError, setCaptchaError] = useState('')
   const [captchaLoading, setCaptchaLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const { pending: submitting, error, runAction: runLoginAction } = useAsyncAction()
   const captchaSrc = captchaSvg ? `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(captchaSvg)}` : ''
 
   const refreshCaptcha = useCallback(async () => {
@@ -47,22 +47,21 @@ export default function Login({ onAuthenticated }: LoginProps) {
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
-    setError('')
-    setSubmitting(true)
-    try {
-      const trimmedCode = code.trim()
-      const session = await loginSession({ name, password, ...(trimmedCode ? { code: trimmedCode } : {}) })
-      if (rememberName) {
-        saveRememberedLoginName(name)
-      } else {
-        clearRememberedLoginName()
-      }
-      onAuthenticated(session)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '登录失败')
-    } finally {
-      setSubmitting(false)
-    }
+    const trimmedCode = code.trim()
+    await runLoginAction(
+      () => loginSession({ name, password, ...(trimmedCode ? { code: trimmedCode } : {}) }),
+      {
+        errorMessage: '登录失败',
+        onSuccess: (session) => {
+          if (rememberName) {
+            saveRememberedLoginName(name)
+          } else {
+            clearRememberedLoginName()
+          }
+          onAuthenticated(session)
+        },
+      },
+    )
   }
 
   return (

@@ -109,6 +109,22 @@ describe('Login', () => {
     expect(window.localStorage.getItem(nsKey('password'))).toBeNull()
   })
 
+  it('does not persist any password-like key after a successful login', async () => {
+    const user = userEvent.setup()
+    loginMock.mockResolvedValueOnce(TEST_SESSION)
+
+    renderLogin()
+
+    await user.type(screen.getByLabelText('账号'), 'admin')
+    await user.type(screen.getByLabelText('密码'), 'secret')
+    await user.click(screen.getByLabelText('记住账号'))
+    await user.click(screen.getByRole('button', { name: /登录/ }))
+
+    const storedKeys = Array.from({ length: window.localStorage.length }, (_, index) => window.localStorage.key(index) || '')
+    expect(storedKeys).toEqual([nsKey('remembered-login-name')])
+    expect(storedKeys.some((key) => key.toLowerCase().includes('password'))).toBe(false)
+  })
+
   it('clears the remembered account when the user opts out', async () => {
     const user = userEvent.setup()
     loginMock.mockResolvedValueOnce(TEST_SESSION)
@@ -121,6 +137,27 @@ describe('Login', () => {
     await user.click(screen.getByRole('button', { name: /登录/ }))
 
     expect(window.localStorage.getItem(nsKey('remembered-login-name'))).toBeNull()
+  })
+
+  it('keeps the login button disabled while submit is pending', async () => {
+    const user = userEvent.setup()
+    let resolveLogin!: (session: AdminSession) => void
+    loginMock.mockReturnValueOnce(new Promise<AdminSession>((resolve) => {
+      resolveLogin = resolve
+    }))
+
+    renderLogin()
+
+    await user.type(screen.getByLabelText('账号'), 'admin')
+    await user.type(screen.getByLabelText('密码'), 'secret')
+    const submit = screen.getByRole('button', { name: /登录/ })
+    await user.click(submit)
+
+    expect(submit).toBeDisabled()
+    expect(loginMock).toHaveBeenCalledTimes(1)
+
+    resolveLogin(TEST_SESSION)
+    await screen.findByAltText('验证码')
   })
 
   it('keeps submit disabled until account and password are filled', async () => {
