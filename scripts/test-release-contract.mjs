@@ -305,6 +305,11 @@ assertIncludes(ciWorkflow, 'RELEASE_ARTIFACT_DIR: tmp/release-gate', 'migration 
 assertIncludes(ciWorkflow, 'name: release-gate-migration', 'GitHub workflow must upload migration release reports')
 assertIncludes(
   ciWorkflow,
+  'RELEASE_GATE=${{ inputs.release_candidate }} RUN_TAURI=true',
+  'Tauri workflow must pass the release candidate flag into the Tauri build gate',
+)
+assertIncludes(
+  ciWorkflow,
   'RUN_TAURI_SIDECAR_SMOKE=${{ inputs.run_tauri_sidecar_smoke }}',
   'Tauri workflow must pass the sidecar smoke input into the build gate',
 )

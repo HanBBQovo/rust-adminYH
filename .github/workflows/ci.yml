@@ -264,7 +264,7 @@ jobs:
         env:
           TAURI_SIDECAR_DATABASE_URL: ${{ secrets.TAURI_SIDECAR_DATABASE_URL || secrets.DATABASE_URL }}
           RELEASE_ARTIFACT_DIR: tmp/release-gate
-        run: CARGO_NET_OFFLINE=false RUN_TAURI=true RUN_TAURI_DMG=${{ inputs.run_tauri_dmg }} RUN_TAURI_SIDECAR_SMOKE=${{ inputs.run_tauri_sidecar_smoke }} scripts/test-tauri-build.sh
+        run: CARGO_NET_OFFLINE=false RELEASE_GATE=${{ inputs.release_candidate }} RUN_TAURI=true RUN_TAURI_DMG=${{ inputs.run_tauri_dmg }} RUN_TAURI_SIDECAR_SMOKE=${{ inputs.run_tauri_sidecar_smoke }} scripts/test-tauri-build.sh
       - name: Upload macOS app bundle
         uses: actions/upload-artifact@v4
         with:
