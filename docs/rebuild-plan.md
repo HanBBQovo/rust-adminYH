@@ -620,6 +620,7 @@ src/
 - 禁止业务组件直接操作 localStorage；必须通过 `config/nsKey`、auth client 或统一 store/hook。
 - 禁止每个页面各自实现表格、分页、弹窗、筛选、错误态；必须复用模板封装。
 - 分页列表必须通过 `src/lib/use-paginated-resource.ts` 的 `usePaginatedResource` 统一构造 `page/pageSize/query/rows/total/pagination`，页面不得手写 `const [page, setPage] = useState(...)`、`useResource(() => listX(...))` 或 `{ page, pageSize, total, onPageChange }` 分页 props；筛选/重置/Tab 切换等业务动作可以调用 hook 返回的 `setPage(1)`。默认前端门禁必须执行 `scripts/test-frontend-pagination-contract.mjs`，静态锁住 `CompaniesList`、`OrdersList`、`ReceiptsList`、`RolesList`、`UsersList` 等分页列表页继续复用封装，避免回退到页面级分页样板。
+- 页面保存、删除、批量状态流转等异步业务动作必须逐步收敛到 `src/lib/use-mutation-action.ts` 或更具体的业务 hook，由封装统一处理 pending、success/error toast、确认弹窗和成功后刷新；业务页面只保留实体参数、旧接口文案和特殊业务规则。当前 `CompaniesList` 已作为样板迁入该 hook，后续订单、用户、角色、菜单和回单动作必须按单功能提交继续迁移，避免每页重复 `try/catch/finally + confirm + toast + refresh`。
 - 禁止为了快速完成页面而破坏模板暗色模式、响应式布局、字体和间距体系。
 
 ### 7.2 页面规划

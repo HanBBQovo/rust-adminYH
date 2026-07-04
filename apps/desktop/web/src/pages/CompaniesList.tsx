@@ -34,8 +34,8 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useConfirm } from '@/components/ui/use-confirm'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
+import { useMutationAction } from '@/lib/use-mutation-action'
 import { usePaginatedResource } from '@/lib/use-paginated-resource'
 
 type CompanyFormMode = 'create' | 'edit' | 'view'
@@ -129,12 +129,11 @@ function CompanyFormDialog({
 }
 
 export default function CompaniesList() {
-  const confirm = useConfirm()
   const { showToast } = useGlobalToast()
+  const { pending: submitting, runMutation, runConfirmedMutation } = useMutationAction()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<CompanyFormMode>('create')
   const [selectedCompany, setSelectedCompany] = useState<LegacyCompany | undefined>()
-  const [submitting, setSubmitting] = useState(false)
   const { data, loading, error, refresh, page, pageSize, rows, pagination } = usePaginatedResource({
     pageSize: PAGE_SIZE,
     buildQuery: ({ page, pageSize }) => ({ page, pageSize }),
@@ -160,40 +159,36 @@ export default function CompaniesList() {
   }
 
   const submitCompany = async (values: CompanyMutationPayload) => {
-    setSubmitting(true)
-    try {
-      if (dialogMode === 'edit' && selectedCompany) {
-        await updateCompany(selectedCompany.id, values)
-        showToast('success', '修改发货公司成功！', { translate: false })
-      } else {
-        await createCompany(values)
-        showToast('success', '创建发货公司成功！', { translate: false })
-      }
-      setDialogOpen(false)
-      refresh()
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '发货公司保存失败', { translate: false })
-    } finally {
-      setSubmitting(false)
-    }
+    const selectedCompanyId = dialogMode === 'edit' ? selectedCompany?.id : undefined
+    const isEditing = selectedCompanyId != null
+    await runMutation(
+      () => (isEditing ? updateCompany(selectedCompanyId, values) : createCompany(values)),
+      {
+        successMessage: isEditing ? '修改发货公司成功！' : '创建发货公司成功！',
+        errorMessage: '发货公司保存失败',
+        onSuccess: () => {
+          setDialogOpen(false)
+          refresh()
+        },
+      },
+    )
   }
 
   const removeCompany = async (company: LegacyCompany) => {
-    const confirmed = await confirm({
-      title: '删除发货公司',
-      description: `确认删除发货公司 ${company.name}？该操作不会在前端承诺级联历史订单。`,
-      confirmText: '删除',
-      variant: 'destructive',
-    })
-    if (!confirmed) return
-
-    try {
-      await deleteCompany(company.id)
-      showToast('success', '删除发货公司成功！', { translate: false })
-      refresh()
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '发货公司删除失败', { translate: false })
-    }
+    await runConfirmedMutation(
+      () => deleteCompany(company.id),
+      {
+        confirm: {
+          title: '删除发货公司',
+          description: `确认删除发货公司 ${company.name}？该操作不会在前端承诺级联历史订单。`,
+          confirmText: '删除',
+          variant: 'destructive',
+        },
+        successMessage: '删除发货公司成功！',
+        errorMessage: '发货公司删除失败',
+        onSuccess: refresh,
+      },
+    )
   }
 
   return (
