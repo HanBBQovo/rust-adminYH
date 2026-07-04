@@ -3,8 +3,9 @@ use admin_core::{
     services::{company::ServiceFuture, CompanyStore},
     AppError, AppResult,
 };
-use sqlx::{MySql, MySqlPool, QueryBuilder, Row};
+use sqlx::{MySql, MySqlPool, QueryBuilder};
 
+use super::sql::{db_error, fetch_count, get_i64, get_string};
 use crate::pagination::{push_limit_offset, Page};
 
 #[derive(Debug, Clone)]
@@ -52,13 +53,11 @@ impl CompanyStore for MySqlCompanyRepository {
 
     fn count<'a>(&'a self) -> ServiceFuture<'a, AppResult<usize>> {
         Box::pin(async move {
-            sqlx::query("SELECT COUNT(*) AS total FROM `company`")
-                .fetch_one(&self.pool)
-                .await
-                .map_err(db_error)?
-                .try_get::<i64, _>("total")
-                .map(|value| value as usize)
-                .map_err(db_error)
+            fetch_count(
+                QueryBuilder::<MySql>::new("SELECT COUNT(*) AS total FROM `company`"),
+                &self.pool,
+            )
+            .await
         })
     }
 
@@ -165,23 +164,4 @@ fn company_from_row(row: sqlx::mysql::MySqlRow) -> Company {
         get_string(&row, "updateAt"),
         get_i64(&row, "Countorder"),
     )
-}
-
-fn get_string(row: &sqlx::mysql::MySqlRow, column: &str) -> String {
-    row.try_get::<String, _>(column).unwrap_or_default()
-}
-
-fn get_i64(row: &sqlx::mysql::MySqlRow, column: &str) -> i64 {
-    row.try_get::<i64, _>(column)
-        .ok()
-        .or_else(|| {
-            row.try_get::<u64, _>(column)
-                .ok()
-                .and_then(|value| value.try_into().ok())
-        })
-        .unwrap_or_default()
-}
-
-fn db_error(error: sqlx::Error) -> AppError {
-    AppError::Database(error.to_string())
 }

@@ -7,6 +7,7 @@ use admin_core::{
 };
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row};
 
+use super::sql::{db_error, fetch_count, get_i64, get_string};
 use crate::pagination::{push_limit_offset, Page};
 use crate::transaction::{transaction_sql_error, with_mysql_transaction, MySqlTransaction};
 
@@ -247,17 +248,6 @@ fn push_create_at_filter(
     }
 }
 
-async fn fetch_count(mut query: QueryBuilder<'_, MySql>, pool: &MySqlPool) -> AppResult<usize> {
-    query
-        .build()
-        .fetch_one(pool)
-        .await
-        .map_err(db_error)?
-        .try_get::<i64, _>("total")
-        .map(|value| value as usize)
-        .map_err(db_error)
-}
-
 async fn ensure_role_exists(tx: &mut MySqlTransaction<'_>, role_id: i64) -> AppResult<()> {
     let exists = sqlx::query("SELECT `id` FROM `role` WHERE `id` = ?")
         .bind(role_id)
@@ -320,29 +310,4 @@ fn role_from_row(row: sqlx::mysql::MySqlRow) -> RoleRecord {
         get_string(&row, "createAt"),
         get_string(&row, "updateAt"),
     )
-}
-
-fn get_nullable_string(row: &sqlx::mysql::MySqlRow, column: &str) -> Option<String> {
-    row.try_get::<Option<String>, _>(column).ok().flatten()
-}
-
-fn get_string(row: &sqlx::mysql::MySqlRow, column: &str) -> String {
-    get_nullable_string(row, column)
-        .or_else(|| row.try_get::<String, _>(column).ok())
-        .unwrap_or_default()
-}
-
-fn get_i64(row: &sqlx::mysql::MySqlRow, column: &str) -> i64 {
-    row.try_get::<i64, _>(column)
-        .ok()
-        .or_else(|| {
-            row.try_get::<u64, _>(column)
-                .ok()
-                .and_then(|value| value.try_into().ok())
-        })
-        .unwrap_or_default()
-}
-
-fn db_error(error: sqlx::Error) -> AppError {
-    AppError::Database(error.to_string())
 }

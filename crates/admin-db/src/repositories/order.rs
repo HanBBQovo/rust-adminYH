@@ -11,6 +11,7 @@ use admin_core::{
 };
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row};
 
+use super::sql::{db_error, fetch_count, get_i64, get_string};
 use crate::pagination::{push_limit_offset, Page};
 use crate::transaction::{transaction_sql_error, with_mysql_transaction, MySqlTransaction};
 
@@ -532,17 +533,6 @@ fn push_date_filter(
     }
 }
 
-async fn fetch_count(mut query: QueryBuilder<'_, MySql>, pool: &MySqlPool) -> AppResult<usize> {
-    query
-        .build()
-        .fetch_one(pool)
-        .await
-        .map_err(db_error)?
-        .try_get::<i64, _>("total")
-        .map(|value| value as usize)
-        .map_err(db_error)
-}
-
 async fn insert_order(
     tx: &mut MySqlTransaction<'_>,
     input: &NormalizedOrderInput,
@@ -852,23 +842,4 @@ fn receipt_from_row(row: sqlx::mysql::MySqlRow) -> ReceiptRecord {
         get_string(&row, "goodsname"),
         get_string(&row, "goodsnumber"),
     )
-}
-
-fn get_string(row: &sqlx::mysql::MySqlRow, column: &str) -> String {
-    row.try_get::<String, _>(column).unwrap_or_default()
-}
-
-fn get_i64(row: &sqlx::mysql::MySqlRow, column: &str) -> i64 {
-    row.try_get::<i64, _>(column)
-        .ok()
-        .or_else(|| {
-            row.try_get::<u64, _>(column)
-                .ok()
-                .and_then(|value| value.try_into().ok())
-        })
-        .unwrap_or_default()
-}
-
-fn db_error(error: sqlx::Error) -> AppError {
-    AppError::Database(error.to_string())
 }

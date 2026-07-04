@@ -4,9 +4,11 @@ use admin_core::{
         chart::{ChartSnapshot, ServiceFuture},
         ChartStore,
     },
-    AppError, AppResult,
+    AppResult,
 };
-use sqlx::{MySqlPool, Row};
+use sqlx::{MySql, MySqlPool, QueryBuilder};
+
+use super::sql::{db_error, fetch_count, get_i64, get_string};
 
 #[derive(Debug, Clone)]
 pub struct MySqlChartRepository {
@@ -49,12 +51,11 @@ impl ChartStore for MySqlChartRepository {
                 .await
                 .map_err(db_error)?;
 
-            let receipt_count = sqlx::query("SELECT COUNT(*) AS total FROM `receipt`")
-                .fetch_one(&self.pool)
-                .await
-                .map_err(db_error)?
-                .try_get::<i64, _>("total")
-                .map_err(db_error)?;
+            let receipt_count = fetch_count(
+                QueryBuilder::<MySql>::new("SELECT COUNT(*) AS total FROM `receipt`"),
+                &self.pool,
+            )
+            .await? as i64;
 
             Ok(ChartSnapshot {
                 companies,
@@ -64,23 +65,4 @@ impl ChartStore for MySqlChartRepository {
             })
         })
     }
-}
-
-fn get_string(row: &sqlx::mysql::MySqlRow, column: &str) -> String {
-    row.try_get::<String, _>(column).unwrap_or_default()
-}
-
-fn get_i64(row: &sqlx::mysql::MySqlRow, column: &str) -> i64 {
-    row.try_get::<i64, _>(column)
-        .ok()
-        .or_else(|| {
-            row.try_get::<u64, _>(column)
-                .ok()
-                .and_then(|value| value.try_into().ok())
-        })
-        .unwrap_or_default()
-}
-
-fn db_error(error: sqlx::Error) -> AppError {
-    AppError::Database(error.to_string())
 }

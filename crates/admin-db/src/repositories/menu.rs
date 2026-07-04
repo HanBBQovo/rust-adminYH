@@ -7,6 +7,7 @@ use admin_core::{
 };
 use sqlx::{MySqlPool, Row};
 
+use super::sql::{db_error, get_i32, get_i64, get_nullable_string, get_optional_i64, get_string};
 use crate::transaction::{transaction_sql_error, with_mysql_transaction};
 
 #[derive(Debug, Clone)]
@@ -252,52 +253,4 @@ fn flat_menu_from_row(row: sqlx::mysql::MySqlRow) -> FlatMenu {
         sort: get_i32(&row, "sort"),
         parent_id: get_optional_i64(&row, "pid").filter(|value| *value > 0),
     }
-}
-
-fn get_nullable_string(row: &sqlx::mysql::MySqlRow, column: &str) -> Option<String> {
-    row.try_get::<Option<String>, _>(column).ok().flatten()
-}
-
-fn get_string(row: &sqlx::mysql::MySqlRow, column: &str) -> String {
-    get_nullable_string(row, column)
-        .or_else(|| row.try_get::<String, _>(column).ok())
-        .unwrap_or_default()
-}
-
-fn get_i32(row: &sqlx::mysql::MySqlRow, column: &str) -> i32 {
-    row.try_get::<i32, _>(column)
-        .ok()
-        .or_else(|| {
-            row.try_get::<i64, _>(column)
-                .ok()
-                .and_then(|value| value.try_into().ok())
-        })
-        .unwrap_or_default()
-}
-
-fn get_i64(row: &sqlx::mysql::MySqlRow, column: &str) -> i64 {
-    row.try_get::<i64, _>(column)
-        .ok()
-        .or_else(|| {
-            row.try_get::<u64, _>(column)
-                .ok()
-                .and_then(|value| value.try_into().ok())
-        })
-        .unwrap_or_default()
-}
-
-fn get_optional_i64(row: &sqlx::mysql::MySqlRow, column: &str) -> Option<i64> {
-    row.try_get::<Option<i64>, _>(column)
-        .ok()
-        .flatten()
-        .or_else(|| row.try_get::<i64, _>(column).ok())
-        .or_else(|| {
-            row.try_get::<u64, _>(column)
-                .ok()
-                .and_then(|value| value.try_into().ok())
-        })
-}
-
-fn db_error(error: sqlx::Error) -> AppError {
-    AppError::Database(error.to_string())
 }

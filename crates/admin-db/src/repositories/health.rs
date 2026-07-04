@@ -1,9 +1,11 @@
 use admin_core::{
     domain::HealthCheck,
     services::{health::ServiceFuture, HealthCheckService},
-    AppError, AppResult,
+    AppResult,
 };
 use sqlx::MySqlPool;
+
+use super::sql::db_error;
 
 pub trait HealthRepository: Send + Sync {
     fn ping(&self) -> impl std::future::Future<Output = AppResult<()>> + Send;
@@ -39,8 +41,4 @@ impl HealthCheckService for MySqlHealthRepository {
             }
         })
     }
-}
-
-fn db_error(err: sqlx::Error) -> AppError {
-    AppError::Database(err.to_string())
 }

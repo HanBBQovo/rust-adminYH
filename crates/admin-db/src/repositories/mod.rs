@@ -6,6 +6,8 @@ pub mod order;
 pub mod role;
 pub mod user;
 
+mod sql;
+
 pub use chart::MySqlChartRepository;
 pub use company::MySqlCompanyRepository;
 pub use health::{HealthRepository, MySqlHealthRepository};
