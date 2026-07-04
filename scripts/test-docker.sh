@@ -50,8 +50,29 @@ require_command() {
   fi
 }
 
+run_with_timeout() {
+  local seconds="$1"
+  shift
+
+  python3 - "$seconds" "$@" <<'PY'
+import subprocess
+import sys
+
+seconds = int(sys.argv[1])
+cmd = sys.argv[2:]
+
+try:
+    result = subprocess.run(cmd, timeout=seconds)
+except subprocess.TimeoutExpired:
+    sys.exit(124)
+
+sys.exit(result.returncode)
+PY
+}
+
 require_docker_daemon() {
-  if docker info >/dev/null 2>&1; then
+  echo "Checking Docker daemon availability..."
+  if run_with_timeout 20 docker info >/dev/null 2>&1; then
     DOCKER_DAEMON_READY=true
     return 0
   fi
@@ -62,6 +83,7 @@ require_docker_daemon() {
   endpoint="$(docker context inspect "$context" --format '{{json .Endpoints.docker.Host}}' 2>/dev/null | tr -d '"' || true)"
 
   echo "ERROR: Docker daemon 不可用，无法执行 Docker 打包门禁。"
+  echo "docker info 在 20 秒内未成功返回，通常表示 Docker Desktop / OrbStack daemon 未启动或已卡死。"
   echo "当前 Docker context: ${context}"
   if [[ -n "$endpoint" ]]; then
     echo "当前 Docker endpoint: ${endpoint}"
@@ -168,7 +190,9 @@ diagnostics() {
   exit "$exit_code"
 }
 
+section "Docker daemon preflight"
 require_command docker
+require_command python3
 require_docker_daemon
 if [[ -n "$DOCKER_REPORT_DIR" ]]; then
   mkdir -p "$DOCKER_REPORT_DIR"
