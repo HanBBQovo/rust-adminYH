@@ -1,7 +1,7 @@
-use admin_core::{domain::ServiceStatus, dto::HealthResponse, ApiResponse};
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use admin_core::{domain::ServiceStatus, dto::HealthResponse};
+use axum::{extract::State, http::StatusCode, response::IntoResponse};
 
-use crate::AppState;
+use crate::{response::StatusJsonResponse, AppState};
 
 pub async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
     let report = state.health_service.report().await;
@@ -9,5 +9,5 @@ pub async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
         ServiceStatus::Ok => StatusCode::OK,
         ServiceStatus::Degraded => StatusCode::SERVICE_UNAVAILABLE,
     };
-    (status, Json(ApiResponse::ok(HealthResponse::from(report))))
+    StatusJsonResponse::new(status, HealthResponse::from(report))
 }

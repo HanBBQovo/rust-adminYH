@@ -63,6 +63,7 @@ cd "$BACKEND_WORKSPACE_DIR"
 run_if "Backend MySQL test coverage contract" node "$ROOT_DIR/scripts/test-backend-mysql-contract.mjs"
 run_if "Backend SQL helper contract" node "$ROOT_DIR/scripts/test-backend-sql-helper-contract.mjs"
 run_if "Backend pagination contract" node "$ROOT_DIR/scripts/test-backend-pagination-contract.mjs"
+run_if "Backend response contract" node "$ROOT_DIR/scripts/test-backend-response-contract.mjs"
 run_if "Rust format check" cargo fmt --all -- --check
 run_if "Rust check workspace" cargo check "${CARGO_FLAGS[@]}" --workspace --all-targets
 if cargo clippy --version >/dev/null 2>&1; then

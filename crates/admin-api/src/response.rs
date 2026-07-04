@@ -2,6 +2,29 @@ use admin_core::{ApiResponse, EmptyResponse};
 use axum::{http::StatusCode, response::IntoResponse, Json};
 use serde::Serialize;
 
+pub struct StatusJsonResponse<T> {
+    pub status: StatusCode,
+    pub data: T,
+}
+
+impl<T> StatusJsonResponse<T>
+where
+    T: Serialize,
+{
+    pub fn new(status: StatusCode, data: T) -> Self {
+        Self { status, data }
+    }
+}
+
+impl<T> IntoResponse for StatusJsonResponse<T>
+where
+    T: Serialize,
+{
+    fn into_response(self) -> axum::response::Response {
+        (self.status, Json(ApiResponse::ok(self.data))).into_response()
+    }
+}
+
 pub struct JsonResponse<T>(pub T)
 where
     T: Serialize;
@@ -36,6 +59,27 @@ impl IntoResponse for ErrorResponse {
             })),
         )
             .into_response()
+    }
+}
+
+#[derive(Serialize)]
+struct LegacyDataBody<T>
+where
+    T: Serialize,
+{
+    data: T,
+}
+
+pub struct LegacyDataResponse<T>(pub T)
+where
+    T: Serialize;
+
+impl<T> IntoResponse for LegacyDataResponse<T>
+where
+    T: Serialize,
+{
+    fn into_response(self) -> axum::response::Response {
+        (StatusCode::OK, Json(LegacyDataBody { data: self.0 })).into_response()
     }
 }
 
