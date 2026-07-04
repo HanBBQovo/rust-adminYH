@@ -51,6 +51,8 @@ run_required_script() {
 run_required_script "lint" "Frontend lint"
 section "Frontend architecture gate"
 node "$ROOT_DIR/scripts/test-frontend-architecture.mjs"
+section "Frontend pagination contract"
+node "$ROOT_DIR/scripts/test-frontend-pagination-contract.mjs"
 run_required_script "typecheck" "Frontend typecheck"
 run_required_script "test" "Frontend unit/component tests"
 if [[ "$RUN_COVERAGE" == "true" ]]; then

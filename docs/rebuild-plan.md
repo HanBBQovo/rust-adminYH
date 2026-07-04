@@ -619,6 +619,7 @@ src/
 - 禁止页面内写大块内联样式或临时 CSS class 来绕过模板规范。
 - 禁止业务组件直接操作 localStorage；必须通过 `config/nsKey`、auth client 或统一 store/hook。
 - 禁止每个页面各自实现表格、分页、弹窗、筛选、错误态；必须复用模板封装。
+- 分页列表必须通过 `src/lib/use-paginated-resource.ts` 的 `usePaginatedResource` 统一构造 `page/pageSize/query/rows/total/pagination`，页面不得手写 `const [page, setPage] = useState(...)`、`useResource(() => listX(...))` 或 `{ page, pageSize, total, onPageChange }` 分页 props；筛选/重置/Tab 切换等业务动作可以调用 hook 返回的 `setPage(1)`。默认前端门禁必须执行 `scripts/test-frontend-pagination-contract.mjs`，静态锁住 `CompaniesList`、`OrdersList`、`ReceiptsList`、`RolesList`、`UsersList` 等分页列表页继续复用封装，避免回退到页面级分页样板。
 - 禁止为了快速完成页面而破坏模板暗色模式、响应式布局、字体和间距体系。
 
 ### 7.2 页面规划
@@ -961,7 +962,7 @@ scripts/test-e2e.sh
 
 发布候选必须显式使用 `RELEASE_GATE=true scripts/check-all.sh`。该模式会在执行前阻断任何“看起来通过但实际跳过发布级验证”的组合：必须同时设置 `RUN_DB_TESTS=true`、`ADMIN_DB_TEST_DATABASE_URL`、`OLD_DATABASE_URL`、`NEW_DATABASE_URL`、`MIGRATION_APPLY=true`、`RUN_MIGRATION_SMOKE=true`、`NEW_AVATAR_DIR`、`RUN_E2E=true`、`RUN_COVERAGE=true`、`RUN_DOCKER=true`、`RUN_DOCKER_E2E=true`、`RUN_TAURI=true`、`RUN_TAURI_DMG=true`、`RUN_TAURI_SIDECAR_SMOKE=true`，并提供 `TAURI_SIDECAR_DATABASE_URL` 或 `DATABASE_URL` 指向可重建测试库。这样本地日常提交仍可运行轻量门禁，但发布前真实 MySQL repository、迁移 dry-run、可重建迁移 smoke、从旧库 apply 到 fresh 新库、迁移 verify、头像文件校验、mock/本地 Playwright、覆盖率、Docker compose 健康检查、Docker Web + Rust API + MySQL 真实浏览器 E2E、Tauri `.app`/DMG 打包和打包后 sidecar 真实 `/api/health` smoke 都不能被默认跳过。若本机 GUI/Finder/hdiutil 环境导致 DMG 失败，必须单独记录失败原因、命令和 `.app` 替代验证结果，不允许把 `RUN_TAURI_DMG=false` 当作发布级通过。
 
-前端质量门禁必须包含 `lint`、架构扫描、`typecheck`、`test`、`build` 五段；`scripts/test-frontend-architecture.mjs` 会阻断页面/业务组件直接 `fetch`、引入 `axios`、绕过 `src/api/*` 调用 `apiRequest`、在业务层直接引入 Radix 原语、在业务页面散写 inline style、业务代码直接读写 Web Storage，以及生产页面遗留“真实项目/模板演示/参考页”等假实现文案，确保请求封装、本地偏好封装和 `frontend-template` 组件风格不会在后续页面中退化。Dashboard 最近页面记忆也必须走 `src/session/session-store.ts` 的 `readStoredPage/saveStoredPage`，不得在页面层直接读写 `localStorage`。Playwright E2E 通过 `RUN_E2E=true scripts/test-frontend.sh` 显式开启，覆盖率通过 `RUN_COVERAGE=true scripts/test-frontend.sh` 显式开启，避免本地缺少浏览器二进制或覆盖率依赖时阻塞普通提交；发布候选版本必须同时开启 E2E 和 coverage。
+前端质量门禁必须包含 `lint`、架构扫描、分页封装契约、`typecheck`、`test`、`build` 六段；`scripts/test-frontend-architecture.mjs` 会阻断页面/业务组件直接 `fetch`、引入 `axios`、绕过 `src/api/*` 调用 `apiRequest`、在业务层直接引入 Radix 原语、在业务页面散写 inline style、业务代码直接读写 Web Storage，以及生产页面遗留“真实项目/模板演示/参考页”等假实现文案，确保请求封装、本地偏好封装和 `frontend-template` 组件风格不会在后续页面中退化。`scripts/test-frontend-pagination-contract.mjs` 会单独锁住分页列表封装：分页列表页必须导入并调用 `usePaginatedResource`，由 hook 返回 `rows/total/page/pageSize/pagination`，并把 `pagination={pagination}` 传给 `DataTableSurface`；脚本会禁止页面重新手写 `page` state、绕过 hook 用 `useResource(() => listUsers/listRoles/listCompanies/listOrders/listReceipts(...))` 拉分页列表、手写 `{ page, pageSize, total, onPageChange }`，同时放行菜单树、资源注册表、工作台统计、角色授权弹窗、用户角色下拉和订单导出这类非分页或非主列表场景。Dashboard 最近页面记忆也必须走 `src/session/session-store.ts` 的 `readStoredPage/saveStoredPage`，不得在页面层直接读写 `localStorage`。Playwright E2E 通过 `RUN_E2E=true scripts/test-frontend.sh` 显式开启，覆盖率通过 `RUN_COVERAGE=true scripts/test-frontend.sh` 显式开启，避免本地缺少浏览器二进制或覆盖率依赖时阻塞普通提交；发布候选版本必须同时开启 E2E 和 coverage。
 
 登录态恢复必须以当前后端权限为准：`src/api/auth.ts` 在 `/api/users/me` 成功后必须重新请求当前角色的 `/api/role/:roleId/menu` 并覆盖 session 菜单；角色菜单接口失败时降级为空菜单，不能复用旧缓存菜单继续展示已撤销页面。配套 `auth.test.ts` 必须覆盖“刷新后覆盖旧菜单”和“菜单接口失败不回退缓存”两个场景。
 
