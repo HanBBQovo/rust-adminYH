@@ -20,6 +20,37 @@ const allowedStyleFiles = new Set([
   'src/components/ui/chart.tsx',
   'src/components/ui/progress.tsx',
 ])
+const businessVisualTokenRoots = ['src/pages/', 'src/components/account/']
+const businessVisualTokenRules = [
+  {
+    pattern: /#[0-9a-fA-F]{3,8}\b/g,
+    message: '禁止业务页面/业务组件散写 raw hex 颜色；必须使用模板 token 或组件封装',
+  },
+  {
+    pattern: /\bbox-shadow\b/gi,
+    message: '禁止业务页面/业务组件散写 box-shadow；必须使用模板 shadow token 或组件封装',
+  },
+  {
+    pattern: /\bfont-family\b/gi,
+    message: '禁止业务页面/业务组件散写 font-family；必须使用模板字体 token',
+  },
+  {
+    pattern: /\bboxShadow\s*:/g,
+    message: '禁止业务页面/业务组件散写 React boxShadow；必须使用模板 shadow token 或组件封装',
+  },
+  {
+    pattern: /\bfontFamily\s*:/g,
+    message: '禁止业务页面/业务组件散写 React fontFamily；必须使用模板字体 token',
+  },
+  {
+    pattern: /\b(?:bg|text|border)-\[#/g,
+    message: '禁止业务页面/业务组件使用 Tailwind 任意颜色值；必须使用模板语义 token',
+  },
+  {
+    pattern: /\bshadow-\[/g,
+    message: '禁止业务页面/业务组件使用 Tailwind 任意阴影值；必须使用模板 shadow token',
+  },
+]
 const productionUiTextPattern = /真实项目|模板只演示|参考页|mock only|demo only|后续新增|本切片|开发期提交|src\/|scripts\//gi
 
 const violations = []
@@ -47,6 +78,10 @@ function toRelative(path) {
 
 function isTestFile(path) {
   return /\.(test|spec)\.(ts|tsx)$/.test(path) || path.includes('/test/')
+}
+
+function isBusinessVisualTokenFile(path) {
+  return businessVisualTokenRoots.some((root) => path.startsWith(root)) && !isTestFile(path)
 }
 
 function addViolation(file, line, message) {
@@ -107,6 +142,14 @@ for (const absolutePath of listSourceFiles(sourceRoot)) {
   if (!isTestFile(file) && !isApiModule) {
     for (const match of content.matchAll(/\bapiRequest\s*\(/g)) {
       addViolation(file, lineNumber(content, match.index), '业务层不得直接调用 apiRequest；必须通过 src/api/* 封装')
+    }
+  }
+
+  if (isBusinessVisualTokenFile(file)) {
+    for (const { pattern, message } of businessVisualTokenRules) {
+      for (const match of content.matchAll(pattern)) {
+        addViolation(file, lineNumber(content, match.index), message)
+      }
     }
   }
 }

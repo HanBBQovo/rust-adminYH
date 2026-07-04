@@ -579,7 +579,7 @@ crates/admin-db/src/
 - 列表数据加载必须优先使用模板的 `useResource` 或后续统一的数据 hook，不允许每个页面重复手写 loading/error/refresh。
 - 危险操作必须走 `useConfirm`，成功/失败反馈必须走全局 toast，不允许直接 `window.confirm` / `alert`。
 - 表格和列表外壳必须优先使用 `DataTableSurface` 管理 loading/error/empty/table/pagination 状态；非分页注册表页也必须复用该外壳。当前 `ResourceRegistry` 必须通过 `DataTableSurface` 的 `toolbar` 插槽保留搜索工具条，禁止回退到页面内手写 `PageSurface + loading/error/empty + Table` 分支。
-- 主题、颜色、圆角、阴影、字体必须从模板 token 和语义 class 获取；业务页面不得散写大段 hex 色值、box-shadow、border、font-family。
+- 主题、颜色、圆角、阴影、字体必须从模板 token 和语义 class 获取；业务页面不得散写大段 hex 色值、box-shadow、border、font-family。业务页面和业务组件不得散写 raw hex、`box-shadow`、`font-family`、React `boxShadow/fontFamily` 或 Tailwind 任意视觉值（例如 `bg-[#...]`、`text-[#...]`、`border-[#...]`、`shadow-[...]`）；必须使用 `frontend-template` 的语义 token、shadcn/Tailwind 约定 class 或二次封装组件。默认前端 architecture gate 会静态扫描 `src/pages/**` 和 `src/components/account/**`，防止后续绕过模板风格。
 - 图标统一使用 `lucide-react`，不要混用其它图标库。
 - 图表统一使用模板内的 recharts/chart 封装，不直接迁移旧 ECharts 风格。
 - 页面导航先通过 Dashboard 的 `navItems` / page registry 管理，后端菜单只做权限过滤，不动态 import 任意路径。
