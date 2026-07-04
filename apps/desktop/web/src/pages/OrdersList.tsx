@@ -1,5 +1,5 @@
 import { Download, Eye, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 
 import {
   createOrder,
@@ -10,7 +10,6 @@ import {
   updateOrder,
   type LegacyOrder,
   type OrderListFilters,
-  type OrderListParams,
   type OrderMutationPayload,
 } from '@/api/orders'
 import {
@@ -31,7 +30,7 @@ import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useConfirm } from '@/components/ui/use-confirm'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
-import { useResource } from '@/lib/use-resource'
+import { usePaginatedResource } from '@/lib/use-paginated-resource'
 import { OrderFormDialog } from '@/pages/orders/OrderFormDialog'
 import { ORDER_COLUMNS, exportOrdersCsv, type OrderColumn } from '@/pages/orders/order-export'
 import type { OrderFormMode } from '@/pages/orders/order-form-config'
@@ -91,17 +90,18 @@ export default function OrdersList() {
   const { showToast } = useGlobalToast()
   const [draft, setDraft] = useState<OrderFilterDraft>(() => emptyFilters())
   const [filters, setFilters] = useState<OrderListFilters>({})
-  const [page, setPage] = useState(1)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<OrderFormMode>('create')
   const [selectedOrder, setSelectedOrder] = useState<LegacyOrder | undefined>()
   const [submitting, setSubmitting] = useState(false)
   const [exporting, setExporting] = useState(false)
 
-  const query = useMemo<OrderListParams>(() => ({ page, pageSize: PAGE_SIZE, ...filters }), [filters, page])
-  const { data, loading, error, refresh } = useResource(() => listOrders(query), [query])
-  const rows = data?.rows ?? []
-  const total = data?.total ?? 0
+  const { data, loading, error, refresh, page, pageSize, setPage, rows, total, pagination } = usePaginatedResource({
+    pageSize: PAGE_SIZE,
+    queryDeps: [filters],
+    buildQuery: ({ page, pageSize }) => ({ page, pageSize, ...filters }),
+    fetcher: listOrders,
+  })
 
   const updateDraft = <K extends keyof OrderFilterDraft>(key: K, value: OrderFilterDraft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -253,7 +253,7 @@ export default function OrdersList() {
         emptyTitle="暂无订单"
         emptyDescription="调整筛选条件后重新查询，或点击新建订单录入运单。"
         onRetry={refresh}
-        pagination={data ? { page, pageSize: PAGE_SIZE, total, onPageChange: setPage } : undefined}
+        pagination={pagination}
       >
         <Table>
           <TableHeader>
@@ -268,7 +268,7 @@ export default function OrdersList() {
           <TableBody>
             {rows.map((row, index) => (
               <TableRow key={row.id}>
-                <DataTableRowNumberCell value={(page - 1) * PAGE_SIZE + index + 1} />
+                <DataTableRowNumberCell value={(page - 1) * pageSize + index + 1} />
                 <StickyActionCell>
                   <DataTableActionGroup>
                     <DataTableIconAction label="查看订单" icon={Eye} onClick={() => openOrderDialog('view', row)} />
