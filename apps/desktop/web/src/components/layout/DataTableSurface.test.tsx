@@ -8,8 +8,11 @@ import {
   DataTableIconAction,
   DataTableRowNumberCell,
   DataTableRowNumberHead,
+  DataTableSelectionCell,
+  DataTableSelectionHead,
   DataTableSequenceCell,
   DataTableSurface,
+  DataTableTextAction,
   StickyActionCell,
   StickyActionHead,
 } from '@/components/layout/DataTableSurface'
@@ -154,5 +157,59 @@ describe('DataTableSurface', () => {
     expect(screen.getByRole('columnheader', { name: '序号' })).toHaveClass('w-14', 'text-right')
     expect(screen.getByRole('columnheader', { name: 'ID' })).toHaveClass('w-14', 'text-right')
     expect(screen.getByText('3').closest('td')).toHaveClass('text-right', 'font-mono', 'text-xs')
+  })
+
+  it('centralizes table selection column styling and checkbox state', async () => {
+    const user = userEvent.setup()
+    const onHeadChange = vi.fn()
+    const onCellChange = vi.fn()
+
+    render(
+      <table>
+        <thead>
+          <tr>
+            <DataTableSelectionHead
+              checked="indeterminate"
+              label="选择当前页回单"
+              onCheckedChange={onHeadChange}
+            />
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <DataTableSelectionCell checked label="选择回单 YD20260101001" onCheckedChange={onCellChange} />
+          </tr>
+        </tbody>
+      </table>,
+    )
+
+    const headCheckbox = screen.getByRole('checkbox', { name: '选择当前页回单' })
+    const cellCheckbox = screen.getByRole('checkbox', { name: '选择回单 YD20260101001' })
+
+    expect(headCheckbox).toHaveAttribute('aria-checked', 'mixed')
+    expect(headCheckbox.closest('th')).toHaveClass('w-12')
+    expect(cellCheckbox).toBeChecked()
+
+    await user.click(headCheckbox)
+    await user.click(cellCheckbox)
+
+    expect(onHeadChange).toHaveBeenCalledWith(true)
+    expect(onCellChange).toHaveBeenCalledWith(false)
+  })
+
+  it('centralizes text action button styling and icon sizing', async () => {
+    const user = userEvent.setup()
+    const onClick = vi.fn()
+
+    render(<DataTableTextAction label="批量接收" icon={Pencil} onClick={onClick} />)
+
+    const action = screen.getByRole('button', { name: '批量接收' })
+    expect(action).toHaveTextContent('批量接收')
+    expect(action).toHaveClass('h-8', 'gap-1')
+    expect(action.querySelector('svg')).toHaveClass('h-3.5', 'w-3.5')
+
+    await user.click(action)
+
+    expect(onClick).toHaveBeenCalledTimes(1)
   })
 })

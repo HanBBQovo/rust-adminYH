@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react'
 import { InlineLoader } from '@/components/PageLoader'
 import { PageSurface } from '@/components/layout/PageScaffold'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState } from '@/components/ui/error-state'
 import { Pagination, type PaginationProps } from '@/components/ui/pagination'
@@ -94,6 +95,70 @@ export function DataTableIconAction({
     <Button type={type} variant="ghost" size="icon" aria-label={label} className={className} {...props}>
       <Icon className={cn('h-4 w-4', destructive && 'text-destructive')} />
     </Button>
+  )
+}
+
+export function DataTableTextAction({
+  children,
+  className,
+  icon: Icon,
+  iconClassName,
+  label,
+  size = 'sm',
+  type = 'button',
+  variant = 'ghost',
+  ...props
+}: Omit<ComponentProps<typeof Button>, 'aria-label' | 'children'> & {
+  icon: LucideIcon
+  iconClassName?: string
+  label: string
+  children?: ReactNode
+}) {
+  return (
+    <Button type={type} variant={variant} size={size} aria-label={label} className={cn('gap-1', className)} {...props}>
+      <Icon className={cn('h-3.5 w-3.5', iconClassName)} />
+      {children ?? label}
+    </Button>
+  )
+}
+
+export function DataTableSelectionHead({
+  checked,
+  className,
+  disabled,
+  label = '选择当前页',
+  onCheckedChange,
+}: {
+  checked?: ComponentProps<typeof Checkbox>['checked']
+  className?: string
+  disabled?: ComponentProps<typeof Checkbox>['disabled']
+  label?: string
+  onCheckedChange?: ComponentProps<typeof Checkbox>['onCheckedChange']
+}) {
+  return (
+    <TableHead className={cn('w-12', className)}>
+      <Checkbox checked={checked} disabled={disabled} aria-label={label} onCheckedChange={onCheckedChange} />
+    </TableHead>
+  )
+}
+
+export function DataTableSelectionCell({
+  checked,
+  className,
+  disabled,
+  label,
+  onCheckedChange,
+}: {
+  checked?: ComponentProps<typeof Checkbox>['checked']
+  className?: string
+  disabled?: ComponentProps<typeof Checkbox>['disabled']
+  label: string
+  onCheckedChange?: ComponentProps<typeof Checkbox>['onCheckedChange']
+}) {
+  return (
+    <TableCell className={className}>
+      <Checkbox checked={checked} disabled={disabled} aria-label={label} onCheckedChange={onCheckedChange} />
+    </TableCell>
   )
 }
 

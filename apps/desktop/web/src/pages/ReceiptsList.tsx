@@ -15,12 +15,21 @@ import {
   type ReceiptListParams,
   type ReceiptStatusAction,
 } from '@/api/receipts'
-import { DataTableSurface, StickyActionCell, StickyActionHead } from '@/components/layout/DataTableSurface'
+import {
+  DataTableActionGroup,
+  DataTableRowNumberCell,
+  DataTableRowNumberHead,
+  DataTableSelectionCell,
+  DataTableSelectionHead,
+  DataTableSurface,
+  DataTableTextAction,
+  StickyActionCell,
+  StickyActionHead,
+} from '@/components/layout/DataTableSurface'
 import { FilterBar, FilterField } from '@/components/layout/FilterBar'
 import { PageShell } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
 import { Input } from '@/components/ui/input'
 import {
@@ -223,41 +232,26 @@ export default function ReceiptsList() {
   const batchDisabled = loading || batchUpdating !== null || selectedRows.length === 0
 
   const renderStateActions = (row: LegacyReceipt) => (
-    <div className="flex items-center gap-1">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="gap-1"
+    <DataTableActionGroup>
+      <DataTableTextAction
+        label="回收"
+        icon={Undo2}
         disabled={updatingId === row.id || isReceiptActionComplete(row, 'recovery')}
         onClick={() => patchStatus(row, 'recovery')}
-      >
-        <Undo2 className="h-3.5 w-3.5" />
-        回收
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="gap-1"
+      />
+      <DataTableTextAction
+        label="接收"
+        icon={Warehouse}
         disabled={updatingId === row.id || isReceiptActionComplete(row, 'issue')}
         onClick={() => patchStatus(row, 'issue')}
-      >
-        <Warehouse className="h-3.5 w-3.5" />
-        接收
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="gap-1"
+      />
+      <DataTableTextAction
+        label="寄出"
+        icon={Send}
         disabled={updatingId === row.id || isReceiptActionComplete(row, 'post')}
         onClick={() => patchStatus(row, 'post')}
-      >
-        <Send className="h-3.5 w-3.5" />
-        寄出
-      </Button>
-    </div>
+      />
+    </DataTableActionGroup>
   )
 
   return (
@@ -348,18 +342,33 @@ export default function ReceiptsList() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-muted-foreground">已选 {selectedRows.length} 条</span>
-            <Button type="button" variant="outline" size="sm" className="gap-2" disabled={batchDisabled} onClick={() => patchSelectedStatuses('recovery')}>
-              <Undo2 className="h-4 w-4" />
-              批量回收
-            </Button>
-            <Button type="button" variant="outline" size="sm" className="gap-2" disabled={batchDisabled} onClick={() => patchSelectedStatuses('issue')}>
-              <Warehouse className="h-4 w-4" />
-              批量接收
-            </Button>
-            <Button type="button" variant="outline" size="sm" className="gap-2" disabled={batchDisabled} onClick={() => patchSelectedStatuses('post')}>
-              <Send className="h-4 w-4" />
-              批量寄出
-            </Button>
+            <DataTableTextAction
+              label="批量回收"
+              icon={Undo2}
+              variant="outline"
+              className="gap-2"
+              iconClassName="h-4 w-4"
+              disabled={batchDisabled}
+              onClick={() => patchSelectedStatuses('recovery')}
+            />
+            <DataTableTextAction
+              label="批量接收"
+              icon={Warehouse}
+              variant="outline"
+              className="gap-2"
+              iconClassName="h-4 w-4"
+              disabled={batchDisabled}
+              onClick={() => patchSelectedStatuses('issue')}
+            />
+            <DataTableTextAction
+              label="批量寄出"
+              icon={Send}
+              variant="outline"
+              className="gap-2"
+              iconClassName="h-4 w-4"
+              disabled={batchDisabled}
+              onClick={() => patchSelectedStatuses('post')}
+            />
           </div>
         }
         error={error}
@@ -373,14 +382,12 @@ export default function ReceiptsList() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-12">
-                <Checkbox
-                  checked={allVisibleSelected || (someVisibleSelected ? 'indeterminate' : false)}
-                  aria-label="选择当前页回单"
-                  onCheckedChange={(value) => toggleVisibleRows(Boolean(value))}
-                />
-              </TableHead>
-              <TableHead className="w-14 text-right">序号</TableHead>
+              <DataTableSelectionHead
+                checked={allVisibleSelected || (someVisibleSelected ? 'indeterminate' : false)}
+                label="选择当前页回单"
+                onCheckedChange={(value) => toggleVisibleRows(value === true)}
+              />
+              <DataTableRowNumberHead />
               <StickyActionHead className="min-w-[220px]">状态操作</StickyActionHead>
               {RECEIPT_COLUMNS.map((column) => (
                 <TableHead key={column.key} className={column.className}>{column.label}</TableHead>
@@ -390,14 +397,12 @@ export default function ReceiptsList() {
           <TableBody>
             {rows.map((row, index) => (
               <TableRow key={row.id}>
-                <TableCell>
-                  <Checkbox
-                    checked={selectedSet.has(row.id)}
-                    aria-label={`选择回单 ${row.oddnumber}`}
-                    onCheckedChange={(value) => toggleRow(row.id, Boolean(value))}
-                  />
-                </TableCell>
-                <TableCell className="text-right font-mono text-xs text-muted-foreground">{(page - 1) * PAGE_SIZE + index + 1}</TableCell>
+                <DataTableSelectionCell
+                  checked={selectedSet.has(row.id)}
+                  label={`选择回单 ${row.oddnumber}`}
+                  onCheckedChange={(value) => toggleRow(row.id, value === true)}
+                />
+                <DataTableRowNumberCell value={(page - 1) * PAGE_SIZE + index + 1} />
                 <StickyActionCell>{renderStateActions(row)}</StickyActionCell>
                 {RECEIPT_COLUMNS.map((column) => (
                   <TableCell key={column.key} className={column.className}>{renderCell(row, column)}</TableCell>
