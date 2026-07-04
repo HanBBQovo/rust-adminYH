@@ -6,6 +6,7 @@ WEB_DIR="${WEB_DIR:-$ROOT_DIR/apps/desktop/web}"
 RUN_E2E="${RUN_E2E:-false}"
 RUN_COVERAGE="${RUN_COVERAGE:-false}"
 RELEASE_GATE="${RELEASE_GATE:-false}"
+ALLOW_MISSING_FRONTEND="${ALLOW_MISSING_FRONTEND:-false}"
 
 section() {
   printf '\n==> %s\n' "$1"
@@ -24,13 +25,18 @@ run_script_if_present() {
 }
 
 if [[ ! -d "$WEB_DIR" || ! -f "$WEB_DIR/package.json" ]]; then
+  if [[ "$ALLOW_MISSING_FRONTEND" == "true" && "$RELEASE_GATE" != "true" ]]; then
+    echo "SKIP: ALLOW_MISSING_FRONTEND=true，跳过尚未初始化的前端质量门禁：$WEB_DIR"
+    exit 0
+  fi
   if [[ "$RELEASE_GATE" == "true" ]]; then
     echo "FAIL: RELEASE_GATE=true 需要前端 package.json，发布候选不能跳过前端质量门禁：$WEB_DIR"
     exit 1
   fi
-  echo "SKIP: 前端目录不存在或缺少 package.json：$WEB_DIR"
-  echo "TODO: 从 frontend-template/web 派生 apps/desktop/web 后启用前端质量门禁。"
-  exit 0
+  echo "FAIL: 前端目录不存在或缺少 package.json：$WEB_DIR"
+  echo "当前仓库已从 frontend-template/web 派生 apps/desktop/web；默认质量门禁不能跳过前端。"
+  echo "仅早期初始化场景可显式设置 ALLOW_MISSING_FRONTEND=true 临时跳过。"
+  exit 1
 fi
 
 if [[ "$RELEASE_GATE" == "true" && "$RUN_COVERAGE" != "true" ]]; then

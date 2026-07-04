@@ -93,6 +93,11 @@ assertIncludes(checkAll, 'FAIL: RUN_DOCKER_E2E=true 需要同时设置 RUN_DOCKE
 assertIncludes(checkAll, 'FAIL: RUN_TAURI_DMG=true 需要同时设置 RUN_TAURI=true', 'check-all must reject Tauri DMG when the Tauri parent gate is disabled')
 assertIncludes(checkAll, 'FAIL: RUN_TAURI_SIDECAR_SMOKE=true 需要同时设置 RUN_TAURI=true', 'check-all must reject Tauri sidecar smoke when the Tauri parent gate is disabled')
 assertIncludes(checkAll, 'FAIL: RUN_TAURI=true 需要 Tauri workspace Cargo.toml', 'check-all must reject an explicitly enabled Tauri gate when the workspace is missing')
+assertIncludes(frontendGate, 'ALLOW_MISSING_FRONTEND="${ALLOW_MISSING_FRONTEND:-false}"', 'frontend gate must make missing frontend opt-in only')
+assertIncludes(frontendGate, 'FAIL: 前端目录不存在或缺少 package.json', 'frontend gate must fail by default when the migrated frontend package is missing')
+assertIncludes(frontendGate, '当前仓库已从 frontend-template/web 派生 apps/desktop/web', 'frontend gate must document why missing frontend is no longer a default skip')
+assertIncludes(frontendGate, 'ALLOW_MISSING_FRONTEND=true', 'frontend gate must keep an explicit early-initialization escape hatch')
+assert(!frontendGate.includes('TODO: 从 frontend-template/web 派生 apps/desktop/web 后启用前端质量门禁。'), 'frontend gate must not keep stale post-migration TODO skip output')
 
 for (const [token, message] of releaseRequirements) {
   const variableName = token.split('=')[0]
@@ -122,6 +127,7 @@ assertIncludes(releasePreflight, 'missing backend workspace', 'release preflight
 assertIncludes(releasePreflight, 'missing frontend workspace', 'release preflight regression must execute a missing frontend workspace case')
 assertIncludes(releasePreflight, 'missing Tauri workspace', 'release preflight regression must execute a missing Tauri workspace case')
 assertIncludes(releasePreflight, 'missing backend direct gate', 'release preflight regression must directly execute the backend missing-workspace gate')
+assertIncludes(releasePreflight, 'missing frontend default direct gate', 'release preflight regression must directly reject missing frontend in non-release default mode')
 assertIncludes(releasePreflight, 'missing frontend direct gate', 'release preflight regression must directly execute the frontend missing-package gate')
 assertIncludes(releasePreflight, 'missing frontend coverage direct gate', 'release preflight regression must directly reject missing frontend coverage in release mode')
 assertIncludes(releasePreflight, 'missing frontend e2e direct gate', 'release preflight regression must directly reject missing frontend E2E in release mode')

@@ -229,6 +229,15 @@ const childGateCases = [
     tokens: ['FAIL: RELEASE_GATE=true', 'RUN_DB_TESTS_ISOLATED=true'],
   },
   {
+    name: 'missing frontend default direct gate',
+    script: 'scripts/test-frontend.sh',
+    env: {
+      RELEASE_GATE: 'false',
+      WEB_DIR: missingPath('frontend_default_direct'),
+    },
+    tokens: ['FAIL: 前端目录不存在或缺少 package.json', 'ALLOW_MISSING_FRONTEND=true'],
+  },
+  {
     name: 'missing frontend direct gate',
     script: 'scripts/test-frontend.sh',
     env: {
