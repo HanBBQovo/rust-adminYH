@@ -264,6 +264,30 @@ assertIncludes(
   'user.update_avatar must include scoped SQL error context for avatar insert',
 )
 assertIncludes(
+  userRepository,
+  'with_mysql_transaction(&self.pool, "user.remove"',
+  'user.remove must use the shared transaction runner',
+)
+assert(
+  !userRepository.includes('begin_mysql_transaction(&self.pool, "user.remove"'),
+  'user.remove must not hand-roll begin/commit after runner migration',
+)
+assertIncludes(
+  userRepository,
+  'transaction_sql_error(scope, "delete_user"',
+  'user.remove must include scoped SQL error context for user delete',
+)
+assertIncludes(
+  userRepository,
+  'transaction_sql_error(scope, "delete_user_roles"',
+  'user.remove must include scoped SQL error context for user role cleanup',
+)
+assertIncludes(
+  userRepository,
+  'transaction_sql_error(scope, "delete_user_avatar"',
+  'user.remove must include scoped SQL error context for avatar cleanup',
+)
+assertIncludes(
   orderRepository,
   'with_mysql_transaction(&self.pool, "order.remove"',
   'order.remove must use the shared transaction runner',

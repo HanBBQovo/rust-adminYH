@@ -247,26 +247,35 @@ impl UserStore for MySqlUserRepository {
 
     fn remove<'a>(&'a self, user_id: i64) -> UserServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let mut tx = begin_mysql_transaction(&self.pool, "user.remove").await?;
-            let result = sqlx::query("DELETE FROM `user` WHERE `id` = ?")
-                .bind(user_id)
-                .execute(tx.as_mut())
-                .await
-                .map_err(db_error)?;
-            if result.rows_affected() == 0 {
-                return Err(AppError::NotFound(format!("user {user_id}")));
-            }
-            sqlx::query("DELETE FROM `user_role` WHERE `user_id` = ?")
-                .bind(user_id)
-                .execute(tx.as_mut())
-                .await
-                .map_err(db_error)?;
-            sqlx::query("DELETE FROM `avatar` WHERE `user_id` = ?")
-                .bind(user_id)
-                .execute(tx.as_mut())
-                .await
-                .map_err(db_error)?;
-            commit_mysql_transaction(tx).await
+            with_mysql_transaction(&self.pool, "user.remove", |tx| {
+                Box::pin(async move {
+                    let scope = tx.scope();
+                    let result = sqlx::query("DELETE FROM `user` WHERE `id` = ?")
+                        .bind(user_id)
+                        .execute(tx.as_mut())
+                        .await
+                        .map_err(|error| transaction_sql_error(scope, "delete_user", error))?;
+                    if result.rows_affected() == 0 {
+                        return Err(AppError::NotFound(format!("user {user_id}")));
+                    }
+                    sqlx::query("DELETE FROM `user_role` WHERE `user_id` = ?")
+                        .bind(user_id)
+                        .execute(tx.as_mut())
+                        .await
+                        .map_err(|error| {
+                            transaction_sql_error(scope, "delete_user_roles", error)
+                        })?;
+                    sqlx::query("DELETE FROM `avatar` WHERE `user_id` = ?")
+                        .bind(user_id)
+                        .execute(tx.as_mut())
+                        .await
+                        .map_err(|error| {
+                            transaction_sql_error(scope, "delete_user_avatar", error)
+                        })?;
+                    Ok(())
+                })
+            })
+            .await
         })
     }
 
