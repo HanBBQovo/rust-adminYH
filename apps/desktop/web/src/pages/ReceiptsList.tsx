@@ -26,6 +26,7 @@ import {
   StickyActionHead,
 } from '@/components/layout/DataTableSurface'
 import { FilterBar, FilterField, SelectFilterField } from '@/components/layout/FilterBar'
+import { HeaderActionButton } from '@/components/layout/HeaderActionButton'
 import { PageShell } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -261,10 +262,15 @@ export default function ReceiptsList() {
       description="按旧 adminYh 三个回单页面重建列表、筛选、分页和状态流转；接口统一走回单 API 封装。"
       width="full"
       actions={
-        <Button type="button" variant="outline" className="gap-2" onClick={refresh} disabled={loading}>
-          <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-          刷新
-        </Button>
+        <HeaderActionButton
+          type="button"
+          variant="outline"
+          icon={RefreshCw}
+          iconClassName={loading ? 'animate-spin' : undefined}
+          label="刷新"
+          onClick={refresh}
+          disabled={loading}
+        />
       }
     >
       <Tabs value={mode} onValueChange={switchMode}>

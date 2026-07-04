@@ -27,6 +27,7 @@ import {
 } from '@/components/layout/DataTableSurface'
 import { FilterBar, FilterField, SelectFilterField } from '@/components/layout/FilterBar'
 import { FormField, FormSection } from '@/components/layout/FormScaffold'
+import { HeaderActionButton } from '@/components/layout/HeaderActionButton'
 import { PageShell } from '@/components/layout/PageScaffold'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -430,14 +431,16 @@ export default function UsersList() {
       width="full"
       actions={
         <>
-          <Button type="button" className="gap-2" onClick={openCreateDialog}>
-            <Plus className="h-4 w-4" />
-            新建用户
-          </Button>
-          <Button type="button" variant="outline" className="gap-2" onClick={() => { refresh(); refreshRoles() }} disabled={loading}>
-            <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-            刷新
-          </Button>
+          <HeaderActionButton type="button" icon={Plus} label="新建用户" onClick={openCreateDialog} />
+          <HeaderActionButton
+            type="button"
+            variant="outline"
+            icon={RefreshCw}
+            iconClassName={loading ? 'animate-spin' : undefined}
+            label="刷新"
+            onClick={() => { refresh(); refreshRoles() }}
+            disabled={loading}
+          />
         </>
       }
     >

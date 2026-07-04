@@ -3,9 +3,9 @@ import { RefreshCw } from 'lucide-react'
 import { listResourceSummaries, type ResourceSummary } from '@/api/registry'
 import { DataTableSurface } from '@/components/layout/DataTableSurface'
 import { DataTableToolbar } from '@/components/layout/DataTableToolbar'
+import { HeaderActionButton } from '@/components/layout/HeaderActionButton'
 import { PageShell } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatNumber } from '@/lib/formatters'
 import { useResource } from '@/lib/use-resource'
@@ -43,10 +43,15 @@ export default function ResourceRegistry() {
       description="前端导航、旧模块、兼容 API 和 Rust 服务边界的集中映射。"
       width="7xl"
       actions={
-        <Button type="button" variant="outline" className="gap-2" onClick={refresh} disabled={loading}>
-          <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-          刷新
-        </Button>
+        <HeaderActionButton
+          type="button"
+          variant="outline"
+          icon={RefreshCw}
+          iconClassName={loading ? 'animate-spin' : undefined}
+          label="刷新"
+          onClick={refresh}
+          disabled={loading}
+        />
       }
     >
       <DataTableSurface

@@ -21,6 +21,7 @@ import {
   StickyActionHead,
 } from '@/components/layout/DataTableSurface'
 import { FormField, FormSection } from '@/components/layout/FormScaffold'
+import { HeaderActionButton } from '@/components/layout/HeaderActionButton'
 import { PageShell } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -190,14 +191,16 @@ export default function CompaniesList() {
       width="7xl"
       actions={
         <>
-          <Button type="button" className="gap-2" onClick={openCreateDialog}>
-            <Plus className="h-4 w-4" />
-            新建发货公司
-          </Button>
-          <Button type="button" variant="outline" className="gap-2" onClick={refresh} disabled={loading}>
-            <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-            刷新
-          </Button>
+          <HeaderActionButton type="button" icon={Plus} label="新建发货公司" onClick={openCreateDialog} />
+          <HeaderActionButton
+            type="button"
+            variant="outline"
+            icon={RefreshCw}
+            iconClassName={loading ? 'animate-spin' : undefined}
+            label="刷新"
+            onClick={refresh}
+            disabled={loading}
+          />
         </>
       }
     >

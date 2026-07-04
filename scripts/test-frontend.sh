@@ -66,6 +66,8 @@ run_required_script() {
 run_required_script "lint" "Frontend lint"
 section "Frontend architecture gate"
 node "$ROOT_DIR/scripts/test-frontend-architecture.mjs"
+section "Frontend header action contract"
+node "$ROOT_DIR/scripts/test-frontend-header-action-contract.mjs"
 section "Frontend pagination contract"
 node "$ROOT_DIR/scripts/test-frontend-pagination-contract.mjs"
 section "Frontend mutation action contract"

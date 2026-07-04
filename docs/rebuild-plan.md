@@ -574,6 +574,7 @@ crates/admin-db/src/
 - 页面必须使用模板的 `PageShell`、`PageSurface`、`DataTableToolbar`、`FilterBar`、`FormSection`、`FormField` 等组合组件。
 - 基础控件必须优先使用 `src/components/ui/*`，包括 Button、Input、Select、Dialog、Table、Badge、Tabs、Tooltip、Pagination 等。
 - 所有接口请求必须封装在 `src/api/<domain>.ts`，页面禁止直接 `fetch`、禁止直接拼 URL。
+- 主页面 `PageShell actions` 里的顶部操作必须复用 `src/components/layout/HeaderActionButton.tsx`，包括列表页“新建 / 刷新 / 导出”等页头按钮；页面不得在页头散写 `Button + lucide icon + gap-2` 样板。默认前端门禁必须执行 `scripts/test-frontend-header-action-contract.mjs`，静态锁住 `CompaniesList`、`OrdersList`、`UsersList`、`MenusList`、`RolesList`、`ReceiptsList`、`ResourceRegistry`、`Workspace` 的页头 action 继续复用模板按钮，同时不约束筛选区、弹窗和空态内的业务按钮。
 - 所有请求必须走 `apiRequest`，由它统一处理 `/api` 前缀、token、request-id、错误结构和日志。
 - 列表数据加载必须优先使用模板的 `useResource` 或后续统一的数据 hook，不允许每个页面重复手写 loading/error/refresh。
 - 危险操作必须走 `useConfirm`，成功/失败反馈必须走全局 toast，不允许直接 `window.confirm` / `alert`。

@@ -3,6 +3,7 @@ import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 
 import { getDashboardSummary, type DashboardRange, type PendingTask } from '@/api/dashboard'
 import { InlineLoader } from '@/components/PageLoader'
+import { HeaderActionButton } from '@/components/layout/HeaderActionButton'
 import { PageShell, PageStat, PageStatStrip, PageSurface } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,7 +12,6 @@ import { ErrorState } from '@/components/ui/error-state'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatCurrency, formatNumber } from '@/lib/formatters'
 import { motion, staggerContainer, staggerItem } from '@/lib/motion'
-import { cn } from '@/lib/utils'
 import { useResource } from '@/lib/use-resource'
 import { useState } from 'react'
 
@@ -49,10 +49,15 @@ export default function Workspace() {
               </Button>
             ))}
           </div>
-          <Button type="button" variant="outline" className="gap-2" onClick={refresh} disabled={loading}>
-            <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
-            刷新
-          </Button>
+          <HeaderActionButton
+            type="button"
+            variant="outline"
+            icon={RefreshCw}
+            iconClassName={loading ? 'animate-spin' : undefined}
+            label="刷新"
+            onClick={refresh}
+            disabled={loading}
+          />
         </>
       }
     >
