@@ -17,6 +17,7 @@ const baseEnv = {
 
 const passingToggles = {
   RUN_DB_TESTS: 'true',
+  RUN_DB_TESTS_ISOLATED: 'true',
   ADMIN_DB_TEST_DATABASE_URL: 'mysql://release:test@127.0.0.1/admin_yh_release_test',
   OLD_DATABASE_URL: 'mysql://release:test@127.0.0.1/admin_yh_old_shadow',
   NEW_DATABASE_URL: 'mysql://release:test@127.0.0.1/admin_yh_new_shadow',
@@ -121,13 +122,19 @@ const cases = [
   },
   {
     name: 'missing ADMIN_DB_TEST_DATABASE_URL',
-    env: { RUN_DB_TESTS: 'true' },
+    env: { RUN_DB_TESTS: 'true', RUN_DB_TESTS_ISOLATED: 'true' },
     tokens: ['FAIL: RELEASE_GATE=true', 'ADMIN_DB_TEST_DATABASE_URL'],
+  },
+  {
+    name: 'missing RUN_DB_TESTS_ISOLATED',
+    env: { RUN_DB_TESTS: 'true' },
+    tokens: ['FAIL: RELEASE_GATE=true', 'RUN_DB_TESTS_ISOLATED=true'],
   },
   {
     name: 'missing migration URLs',
     env: {
       RUN_DB_TESTS: 'true',
+      RUN_DB_TESTS_ISOLATED: 'true',
       ADMIN_DB_TEST_DATABASE_URL: passingToggles.ADMIN_DB_TEST_DATABASE_URL,
     },
     tokens: ['FAIL: RELEASE_GATE=true', 'OLD_DATABASE_URL', 'NEW_DATABASE_URL'],
@@ -136,6 +143,7 @@ const cases = [
     name: 'missing MIGRATION_APPLY',
     env: {
       RUN_DB_TESTS: 'true',
+      RUN_DB_TESTS_ISOLATED: 'true',
       ADMIN_DB_TEST_DATABASE_URL: passingToggles.ADMIN_DB_TEST_DATABASE_URL,
       OLD_DATABASE_URL: passingToggles.OLD_DATABASE_URL,
       NEW_DATABASE_URL: passingToggles.NEW_DATABASE_URL,
@@ -146,6 +154,7 @@ const cases = [
     name: 'missing NEW_AVATAR_DIR',
     env: {
       RUN_DB_TESTS: 'true',
+      RUN_DB_TESTS_ISOLATED: 'true',
       ADMIN_DB_TEST_DATABASE_URL: passingToggles.ADMIN_DB_TEST_DATABASE_URL,
       OLD_DATABASE_URL: passingToggles.OLD_DATABASE_URL,
       NEW_DATABASE_URL: passingToggles.NEW_DATABASE_URL,
@@ -158,6 +167,7 @@ const cases = [
     name: 'missing RUN_MIGRATION_SMOKE',
     env: {
       RUN_DB_TESTS: 'true',
+      RUN_DB_TESTS_ISOLATED: 'true',
       ADMIN_DB_TEST_DATABASE_URL: passingToggles.ADMIN_DB_TEST_DATABASE_URL,
       OLD_DATABASE_URL: passingToggles.OLD_DATABASE_URL,
       NEW_DATABASE_URL: passingToggles.NEW_DATABASE_URL,
@@ -208,6 +218,15 @@ const childGateCases = [
       BACKEND_WORKSPACE_DIR: missingPath('backend_direct'),
     },
     tokens: ['FAIL: RELEASE_GATE=true', 'Rust workspace Cargo.toml'],
+  },
+  {
+    name: 'missing backend isolated MySQL direct gate',
+    script: 'scripts/test-backend.sh',
+    env: {
+      RUN_DB_TESTS: 'true',
+      ADMIN_DB_TEST_DATABASE_URL: passingToggles.ADMIN_DB_TEST_DATABASE_URL,
+    },
+    tokens: ['FAIL: RELEASE_GATE=true', 'RUN_DB_TESTS_ISOLATED=true'],
   },
   {
     name: 'missing frontend direct gate',

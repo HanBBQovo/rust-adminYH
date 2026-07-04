@@ -6,9 +6,9 @@ cd "$ROOT_DIR"
 
 CARGO_OFFLINE="${CARGO_OFFLINE:-true}"
 RELEASE_GATE="${RELEASE_GATE:-false}"
-CARGO_FLAGS=()
+CARGO_OFFLINE_FLAG=""
 if [[ "$CARGO_OFFLINE" == "true" ]]; then
-  CARGO_FLAGS+=(--offline)
+  CARGO_OFFLINE_FLAG="--offline"
 fi
 
 OLD_DATABASE_URL="${OLD_DATABASE_URL:-}"
@@ -21,6 +21,16 @@ RUN_MIGRATION_SMOKE="${RUN_MIGRATION_SMOKE:-false}"
 
 section() {
   printf '\n==> %s\n' "$1"
+}
+
+run_cargo() {
+  local subcommand="$1"
+  shift
+  if [[ -n "$CARGO_OFFLINE_FLAG" ]]; then
+    cargo "$subcommand" "$CARGO_OFFLINE_FLAG" "$@"
+  else
+    cargo "$subcommand" "$@"
+  fi
 }
 
 require_url_pair_for_apply() {
@@ -67,15 +77,15 @@ fi
 
 if [[ -f Cargo.toml ]] && cargo metadata --format-version=1 --no-deps 2>/dev/null | grep -q '"name":"admin-migration"'; then
   section "admin-migration unit tests"
-  cargo test "${CARGO_FLAGS[@]}" -p admin-migration
+  run_cargo test -p admin-migration
 
   section "admin-migration rollback plan"
-  cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- rollback-plan --format json
+  run_cargo run -p admin-migration -- rollback-plan --format json
 
   section "admin-migration dry-run/verify"
   if require_url_pair_for_apply; then
-    cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- inspect-old --old "$OLD_DATABASE_URL" --old-avatar-dir "$OLD_AVATAR_DIR" --format json
-    cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- migrate --dry-run --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL" --old-avatar-dir "$OLD_AVATAR_DIR" --format json
+    run_cargo run -p admin-migration -- inspect-old --old "$OLD_DATABASE_URL" --old-avatar-dir "$OLD_AVATAR_DIR" --format json
+    run_cargo run -p admin-migration -- migrate --dry-run --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL" --old-avatar-dir "$OLD_AVATAR_DIR" --format json
     if [[ "$MIGRATION_APPLY" == "true" ]]; then
       APPLY_ARGS=(migrate --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL" --old-avatar-dir "$OLD_AVATAR_DIR" --format json)
       if [[ -n "$NEW_AVATAR_DIR" ]]; then
@@ -84,13 +94,13 @@ if [[ -f Cargo.toml ]] && cargo metadata --format-version=1 --no-deps 2>/dev/nul
       if [[ "$MIGRATION_ALLOW_NON_EMPTY_TARGET" == "true" ]]; then
         APPLY_ARGS+=(--allow-non-empty-target)
       fi
-      cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- "${APPLY_ARGS[@]}"
+      run_cargo run -p admin-migration -- "${APPLY_ARGS[@]}"
     else
       echo "SKIP: MIGRATION_APPLY=true 未设置，跳过真实 apply。只允许在影子库/测试库开启。"
     fi
-    cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- verify --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL" --format json
+    run_cargo run -p admin-migration -- verify --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_URL" --format json
     if [[ -n "$NEW_AVATAR_DIR" ]]; then
-      cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- verify-files --old-avatar-dir "$OLD_AVATAR_DIR" --new-avatar-dir "$NEW_AVATAR_DIR" --format json
+      run_cargo run -p admin-migration -- verify-files --old-avatar-dir "$OLD_AVATAR_DIR" --new-avatar-dir "$NEW_AVATAR_DIR" --format json
     fi
   fi
 else

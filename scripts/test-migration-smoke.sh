@@ -29,9 +29,9 @@ NEW_DATABASE_URL="mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@127.0.0.1:${MYSQL_PORT
 SCHEMA_SQL="$ROOT_DIR/crates/admin-db/src/migrations/202607010001_init_compat_schema.sql"
 FIXTURE_SQL="$ROOT_DIR/scripts/seed-migration-fixture.sql"
 DOCKER_DAEMON_READY=false
-CARGO_FLAGS=()
+CARGO_OFFLINE_FLAG=""
 if [[ "$CARGO_OFFLINE" == "true" ]]; then
-  CARGO_FLAGS+=(--offline)
+  CARGO_OFFLINE_FLAG="--offline"
 fi
 
 library_image() {
@@ -47,6 +47,16 @@ MYSQL_IMAGE="${MYSQL_IMAGE:-$(library_image "mysql:8.0")}"
 
 section() {
   printf '\n==> %s\n' "$1"
+}
+
+run_cargo() {
+  local subcommand="$1"
+  shift
+  if [[ -n "$CARGO_OFFLINE_FLAG" ]]; then
+    cargo "$subcommand" "$CARGO_OFFLINE_FLAG" "$@"
+  else
+    cargo "$subcommand" "$@"
+  fi
 }
 
 redact_url() {
@@ -99,7 +109,7 @@ run_migration_json() {
   local report_name="$1"
   shift
   local report_path="$MIGRATION_SMOKE_REPORT_DIR/${report_name}.json"
-  cargo run "${CARGO_FLAGS[@]}" -p admin-migration -- "$@" --format json >"$report_path"
+  run_cargo run -p admin-migration -- "$@" --format json >"$report_path"
   echo "report_${report_name}=$report_path"
 }
 

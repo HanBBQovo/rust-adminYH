@@ -57,6 +57,7 @@ const ciWorkflow = read('.github/workflows/ci.yml')
 
 const releaseRequirements = [
   ['RUN_DB_TESTS=true', '发布候选必须执行真实 MySQL repository/API 集成测试'],
+  ['RUN_DB_TESTS_ISOLATED=true', '发布候选必须重建隔离 MySQL 测试库后执行真实 MySQL 回归'],
   ['ADMIN_DB_TEST_DATABASE_URL', '发布候选必须显式指向可重建 MySQL 测试库'],
   ['OLD_DATABASE_URL', '发布候选必须提供旧库/影子旧库连接'],
   ['NEW_DATABASE_URL', '发布候选必须提供新库/影子新库连接'],
@@ -100,6 +101,7 @@ for (const [token, message] of releaseRequirements) {
 }
 
 assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 RUN_DB_TESTS=true', 'release preflight must fail if real DB tests are disabled')
+assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 RUN_DB_TESTS_ISOLATED=true', 'release preflight must fail if rebuildable isolated DB tests are disabled')
 assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 ADMIN_DB_TEST_DATABASE_URL', 'release preflight must fail without admin DB test URL')
 assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 OLD_DATABASE_URL 和 NEW_DATABASE_URL', 'release preflight must fail without migration DB URLs')
 assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 MIGRATION_APPLY=true', 'release preflight must fail if real migration apply is disabled')
@@ -130,6 +132,7 @@ assertIncludes(releasePreflight, 'migration apply without URLs direct gate', 're
 assertIncludes(releasePreflight, "!output.includes('SKIP:')", 'direct child gate regressions must reject release-mode SKIP output')
 assertIncludes(releasePreflight, "!output.includes('TODO:')", 'direct child gate regressions must reject release-mode TODO output')
 assertIncludes(releasePreflight, 'RUN_DB_TESTS=true', 'release preflight regression must execute a missing DB toggle case')
+assertIncludes(releasePreflight, 'RUN_DB_TESTS_ISOLATED=true', 'release preflight regression must execute a missing isolated DB toggle case')
 assertIncludes(releasePreflight, 'MIGRATION_APPLY=true', 'release preflight regression must execute a missing migration apply case')
 assertIncludes(releasePreflight, 'RUN_MIGRATION_SMOKE=true', 'release preflight regression must execute a missing reproducible migration smoke case')
 assertIncludes(releasePreflight, 'RUN_COVERAGE=true', 'release preflight regression must execute a missing coverage case')
@@ -148,6 +151,8 @@ assertBefore(
   'backend gate must check Cargo.toml before changing into the workspace',
 )
 assertIncludes(backendGate, 'FAIL: RELEASE_GATE=true 不允许跳过真实 MySQL repository 集成测试。', 'backend gate must not allow release builds to skip real MySQL tests')
+assertIncludes(backendGate, 'FAIL: RELEASE_GATE=true 需要 RUN_DB_TESTS_ISOLATED=true', 'backend gate must not allow release builds to skip rebuildable isolated MySQL tests')
+assertIncludes(backendGate, 'scripts/test-backend-mysql-smoke.sh', 'backend gate must run the rebuildable MySQL smoke harness when isolated DB tests are enabled')
 assertIncludes(backendGate, 'scripts/test-backend-mysql-contract.mjs', 'backend gate must always run the MySQL coverage contract')
 assertIncludes(backendGate, 'scripts/test-backend-auth-contract.mjs', 'backend gate must always run the auth contract')
 assertIncludes(backendGate, 'scripts/test-backend-sql-helper-contract.mjs', 'backend gate must always run the SQL helper contract')
@@ -328,7 +333,6 @@ assertIncludes(ciWorkflow, 'RUN_DOCKER_E2E: ${{ inputs.run_docker_e2e }}', 'rele
 assertIncludes(ciWorkflow, 'RUN_TAURI: ${{ inputs.run_tauri }}', 'release candidate preflight must verify the Tauri toggle')
 assertIncludes(ciWorkflow, 'RUN_TAURI_DMG: ${{ inputs.run_tauri_dmg }}', 'release candidate preflight must verify the Tauri DMG toggle')
 assertIncludes(ciWorkflow, 'RUN_TAURI_SIDECAR_SMOKE: ${{ inputs.run_tauri_sidecar_smoke }}', 'release candidate preflight must verify the sidecar smoke toggle')
-assertIncludes(ciWorkflow, "ADMIN_DB_TEST_DATABASE_URL_SET: ${{ secrets.ADMIN_DB_TEST_DATABASE_URL != '' }}", 'release candidate preflight must verify the real MySQL test secret exists')
 assertIncludes(ciWorkflow, "OLD_DATABASE_URL_SET: ${{ secrets.OLD_DATABASE_URL != '' }}", 'release candidate preflight must verify the old migration DB secret exists')
 assertIncludes(ciWorkflow, "NEW_DATABASE_URL_SET: ${{ secrets.NEW_DATABASE_URL != '' }}", 'release candidate preflight must verify the new migration DB secret exists')
 assertIncludes(ciWorkflow, "NEW_AVATAR_DIR_SET: ${{ secrets.NEW_AVATAR_DIR != '' || vars.NEW_AVATAR_DIR != '' }}", 'release candidate preflight must verify the avatar target secret or variable exists')
@@ -342,7 +346,8 @@ assertIncludes(ciWorkflow, 'GitHub release candidate preflight passed.', 'releas
 assertIncludes(ciWorkflow, 'needs: release-candidate-preflight', 'all GitHub jobs must depend on the release candidate preflight')
 assertIncludes(ciWorkflow, 'RELEASE_GATE: ${{ inputs.release_candidate }}', 'backend and migration jobs must receive the release gate flag')
 assertIncludes(ciWorkflow, 'RUN_DB_TESTS: ${{ inputs.release_candidate }}', 'backend job must enable real MySQL tests for release candidates')
-assertIncludes(ciWorkflow, 'ADMIN_DB_TEST_DATABASE_URL: ${{ secrets.ADMIN_DB_TEST_DATABASE_URL }}', 'backend job must receive the real MySQL test secret')
+assertIncludes(ciWorkflow, 'RUN_DB_TESTS_ISOLATED: ${{ inputs.release_candidate }}', 'backend job must enable rebuildable isolated MySQL tests for release candidates')
+assertIncludes(ciWorkflow, 'ADMIN_DB_TEST_DATABASE_URL: mysql://admin_yh:admin_yh@127.0.0.1:33319/admin_yh_backend_smoke', 'backend job must use the local compose MySQL smoke database instead of an external DB secret')
 assertIncludes(ciWorkflow, 'run: scripts/test-frontend.sh', 'frontend job must run the shared frontend gate script')
 assertIncludes(ciWorkflow, 'RUN_COVERAGE: ${{ inputs.release_candidate }}', 'frontend job must enable coverage through the shared gate for release candidates')
 assertIncludes(ciWorkflow, 'GITHUB_FRONTEND_E2E_SEPARATE_JOB: "true"', 'frontend job must document that Playwright E2E is handled by the dedicated GitHub job')

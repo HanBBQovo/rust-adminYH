@@ -81,6 +81,26 @@ impl LegacyMenuNode {
             legacy_children,
         }
     }
+
+    pub fn from_full_menu_tree(value: MenuNode) -> Self {
+        let legacy_children = value
+            .children
+            .into_iter()
+            .map(Self::from_full_menu_tree)
+            .collect::<Vec<_>>();
+        Self {
+            id: value.id,
+            name: value.name,
+            menu_type: value.menu_type,
+            url: value.url,
+            icon: value.icon,
+            sort: value.sort,
+            parent_id: value.parent_id,
+            legacy_parent_id: value.parent_id,
+            children: Vec::new(),
+            legacy_children,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]

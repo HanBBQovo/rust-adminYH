@@ -53,8 +53,12 @@ if [[ "$RELEASE_GATE" == "true" ]]; then
     echo "FAIL: RELEASE_GATE=true 需要 RUN_DB_TESTS=true，发布候选必须执行真实 MySQL repository 集成测试。"
     exit 1
   fi
+  if [[ "${RUN_DB_TESTS_ISOLATED:-false}" != "true" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要 RUN_DB_TESTS_ISOLATED=true，发布候选必须重建隔离 MySQL 测试库后执行真实 repository/API 回归。"
+    exit 1
+  fi
   if [[ -z "${ADMIN_DB_TEST_DATABASE_URL:-}" ]]; then
-    echo "FAIL: RELEASE_GATE=true 需要 ADMIN_DB_TEST_DATABASE_URL 指向可重建的 MySQL 测试库。"
+    echo "FAIL: RELEASE_GATE=true 需要 ADMIN_DB_TEST_DATABASE_URL 指向可重建的 MySQL 测试库；GitHub backend job 会由 smoke 脚本生成本机 compose URL。"
     exit 1
   fi
   if [[ -z "${OLD_DATABASE_URL:-}" || -z "${NEW_DATABASE_URL:-}" ]]; then

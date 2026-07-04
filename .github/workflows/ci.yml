@@ -54,7 +54,6 @@ jobs:
           RUN_TAURI: ${{ inputs.run_tauri }}
           RUN_TAURI_DMG: ${{ inputs.run_tauri_dmg }}
           RUN_TAURI_SIDECAR_SMOKE: ${{ inputs.run_tauri_sidecar_smoke }}
-          ADMIN_DB_TEST_DATABASE_URL_SET: ${{ secrets.ADMIN_DB_TEST_DATABASE_URL != '' }}
           OLD_DATABASE_URL_SET: ${{ secrets.OLD_DATABASE_URL != '' }}
           NEW_DATABASE_URL_SET: ${{ secrets.NEW_DATABASE_URL != '' }}
           NEW_AVATAR_DIR_SET: ${{ secrets.NEW_AVATAR_DIR != '' || vars.NEW_AVATAR_DIR != '' }}
@@ -109,7 +108,6 @@ jobs:
           require_toggle "$RUN_TAURI" "run_tauri=true"
           require_toggle "$RUN_TAURI_DMG" "run_tauri_dmg=true"
           require_toggle "$RUN_TAURI_SIDECAR_SMOKE" "run_tauri_sidecar_smoke=true"
-          require_present "$ADMIN_DB_TEST_DATABASE_URL_SET" "ADMIN_DB_TEST_DATABASE_URL secret"
           require_present "$OLD_DATABASE_URL_SET" "OLD_DATABASE_URL secret"
           require_present "$NEW_DATABASE_URL_SET" "NEW_DATABASE_URL secret"
           require_present "$NEW_AVATAR_DIR_SET" "NEW_AVATAR_DIR secret or variable"
@@ -123,11 +121,12 @@ jobs:
   backend:
     name: Backend Rust gates
     needs: release-candidate-preflight
-    runs-on: macos-14
+    runs-on: ubuntu-latest
     env:
       RELEASE_GATE: ${{ inputs.release_candidate }}
       RUN_DB_TESTS: ${{ inputs.release_candidate }}
-      ADMIN_DB_TEST_DATABASE_URL: ${{ secrets.ADMIN_DB_TEST_DATABASE_URL }}
+      RUN_DB_TESTS_ISOLATED: ${{ inputs.release_candidate }}
+      ADMIN_DB_TEST_DATABASE_URL: mysql://admin_yh:admin_yh@127.0.0.1:33319/admin_yh_backend_smoke
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -1081,7 +1081,7 @@ async fn mysql_api_order_patch_delete_reconciles_legacy_side_effects_through_htt
     );
     assert_eq!(batch_receipt_json["data"]["list"][0]["poststate"], "已寄出");
 
-    let updated_oddnumber = scope.oddnumber("PATCH-DELETE-UPDATED");
+    let updated_oddnumber = scope.oddnumber("PATCH-UPDATED");
     let updated_company = format!("{}-发货公司-订单更新", scope.prefix);
     let updated_consignee = format!("{}-更新收货人", scope.prefix);
     let updated_consignor = format!("{}-更新发货人", scope.prefix);
@@ -1171,12 +1171,17 @@ async fn mysql_api_order_patch_delete_reconciles_legacy_side_effects_through_htt
     assert_eq!(scope.count_company_order(order_id).await, 1);
     assert_eq!(
         scope
-            .count_company_order_by_name(&scope.company_order_name())
+            .count_company_order_by_order_and_name(order_id, &scope.company_order_name())
             .await,
         0,
         "order update must move the weak company_order.com_name link"
     );
-    assert_eq!(scope.count_company_order_by_name(&updated_company).await, 1);
+    assert_eq!(
+        scope
+            .count_company_order_by_order_and_name(order_id, &updated_company)
+            .await,
+        1
+    );
 
     let (old_receipt_status, old_receipt_json) = json_request(
         app.clone(),
@@ -1592,6 +1597,19 @@ impl<'a> TestScope<'a> {
             .expect("company_order name count should load")
             .try_get("total")
             .expect("total should exist")
+    }
+
+    async fn count_company_order_by_order_and_name(&self, order_id: i64, name: &str) -> i64 {
+        sqlx::query(
+            "SELECT COUNT(*) AS total FROM `company_order` WHERE `order_id` = ? AND `com_name` = ?",
+        )
+        .bind(order_id)
+        .bind(name)
+        .fetch_one(self.pool)
+        .await
+        .expect("company_order order/name count should load")
+        .try_get("total")
+        .expect("total should exist")
     }
 
     async fn count_receipts_by_oddnumber(&self, oddnumber: &str) -> i64 {

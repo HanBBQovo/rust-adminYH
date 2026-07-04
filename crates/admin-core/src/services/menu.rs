@@ -113,7 +113,7 @@ impl MenuService for CompatMenuService {
                 .menu_tree()
                 .await?
                 .into_iter()
-                .map(LegacyMenuNode::from_menu_tree)
+                .map(LegacyMenuNode::from_full_menu_tree)
                 .collect())
         })
     }
@@ -544,6 +544,10 @@ mod tests {
 
         assert_eq!(menus[1].name, "订单管理");
         assert_eq!(menus[1].legacy_children[0].name, "运单列表");
+        assert_eq!(
+            menus[1].legacy_children[0].legacy_parent_id,
+            Some(menus[1].id)
+        );
         assert!(menus[1].children.is_empty());
     }
 

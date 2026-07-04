@@ -52,6 +52,7 @@ function assertIncludes(content, expected, message) {
 }
 
 const backendGate = read('scripts/test-backend.sh')
+const backendMysqlSmoke = read('scripts/test-backend-mysql-smoke.sh')
 const checkAll = read('scripts/check-all.sh')
 const releaseContract = read('scripts/test-release-contract.mjs')
 const rebuildPlan = read('docs/rebuild-plan.md')
@@ -72,8 +73,11 @@ assert(testFiles.length > 0, 'at least one real MySQL integration test file must
 assertIncludes(checkAll, 'scripts/test-backend.sh', 'check-all must run the backend gate')
 assertIncludes(backendGate, 'scripts/test-backend-mysql-contract.mjs', 'backend gate must run this contract before optional DB tests')
 assertIncludes(backendGate, 'RUN_DB_TESTS:-false', 'backend gate must keep real MySQL tests behind RUN_DB_TESTS=true')
+assertIncludes(backendGate, 'RUN_DB_TESTS_ISOLATED', 'backend gate must expose a rebuildable isolated MySQL test switch')
 assertIncludes(backendGate, 'ADMIN_DB_TEST_DATABASE_URL', 'backend gate must require an explicit rebuildable MySQL test database URL')
 assertIncludes(backendGate, 'FAIL: RELEASE_GATE=true 不允许跳过真实 MySQL repository 集成测试。', 'release gate must fail if real MySQL tests are skipped')
+assertIncludes(backendGate, 'FAIL: RELEASE_GATE=true 需要 RUN_DB_TESTS_ISOLATED=true', 'release gate must fail if rebuildable isolated MySQL tests are skipped')
+assertIncludes(backendGate, 'scripts/test-backend-mysql-smoke.sh', 'backend gate must delegate rebuildable isolated MySQL tests to the smoke harness')
 assertIncludes(backendGate, '-- --ignored', 'backend gate must run ignored MySQL tests explicitly when DB tests are enabled')
 assertIncludes(backendGate, 'run_mysql_tests()', 'backend gate must centralize real MySQL test execution')
 assertIncludes(backendGate, 'find "$test_dir" -maxdepth 1 -type f -name \'mysql_*.rs\' | sort', 'backend gate must auto-discover mysql_*.rs tests')
@@ -81,6 +85,14 @@ assertIncludes(backendGate, '-p "$package_name" --test "$test_name" -- --ignored
 assertIncludes(backendGate, 'run_mysql_tests "admin-db" "$ROOT_DIR/crates/admin-db/tests"', 'backend gate must auto-discover admin-db MySQL tests')
 assertIncludes(backendGate, 'run_mysql_tests "admin-api" "$ROOT_DIR/crates/admin-api/tests"', 'backend gate must auto-discover admin-api MySQL tests')
 assertIncludes(releaseContract, 'scripts/test-backend-mysql-contract.mjs', 'release contract must lock the backend MySQL contract into default gates')
+assertIncludes(backendMysqlSmoke, 'DROP DATABASE IF EXISTS', 'backend MySQL smoke must rebuild the test database before running integration tests')
+assertIncludes(backendMysqlSmoke, 'CREATE DATABASE', 'backend MySQL smoke must create a fresh test database before running integration tests')
+assertIncludes(backendMysqlSmoke, 'require_safe_mysql_database_name', 'backend MySQL smoke must guard against destructive writes to unsafe database names')
+assertIncludes(backendMysqlSmoke, 'test|smoke|ci|shadow', 'backend MySQL smoke must only allow clearly named test databases')
+assertIncludes(backendMysqlSmoke, '127.0.0.1:${MYSQL_PORT}', 'backend MySQL smoke must target local compose MySQL, not production hosts')
+assertIncludes(backendMysqlSmoke, 'admin_yh_backend_smoke', 'backend MySQL smoke must default to an isolated backend smoke database')
+assertIncludes(backendMysqlSmoke, '--test-threads=1', 'backend MySQL smoke must serialize ignored MySQL test targets against the rebuilt database')
+assertIncludes(backendMysqlSmoke, 'docker_compose down --volumes --remove-orphans', 'backend MySQL smoke must clean up the compose database volume')
 
 for (const file of testFiles) {
   const content = read(file)
