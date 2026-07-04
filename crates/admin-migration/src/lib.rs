@@ -152,6 +152,11 @@ const DUPLICATE_CHECKS: &[DuplicateCheck] = &[
         label: "order_list.oddnumber",
     },
     DuplicateCheck {
+        table: "receipt",
+        column: "oddnumber",
+        label: "receipt.oddnumber",
+    },
+    DuplicateCheck {
         table: "memory",
         column: "name",
         label: "memory.name",
@@ -2042,6 +2047,23 @@ mod tests {
         assert_eq!(
             table_fingerprint_sql(&spec),
             "SELECT CAST(`id` AS CHAR) AS `id`, CAST(`oddnumber` AS CHAR) AS `oddnumber`, CAST(`recoverystate` AS CHAR) AS `recoverystate` FROM `receipt` ORDER BY `id` ASC"
+        );
+    }
+
+    #[test]
+    fn duplicate_checks_cover_order_and_receipt_weak_oddnumber_links() {
+        let labels = DUPLICATE_CHECKS
+            .iter()
+            .map(|check| check.label)
+            .collect::<BTreeSet<_>>();
+
+        assert!(
+            labels.contains("order_list.oddnumber"),
+            "migration preflight must audit duplicate order oddnumbers before receipt reconciliation"
+        );
+        assert!(
+            labels.contains("receipt.oddnumber"),
+            "migration preflight must audit duplicate receipt oddnumbers before weak-link reconciliation"
         );
     }
 

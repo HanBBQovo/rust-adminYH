@@ -194,6 +194,7 @@ ORDER BY recoverystate, issuestate, poststate;
 SELECT name, COUNT(*) total FROM user GROUP BY name HAVING COUNT(*) > 1;
 SELECT name, COUNT(*) total FROM company GROUP BY name HAVING COUNT(*) > 1;
 SELECT oddnumber, COUNT(*) total FROM order_list GROUP BY oddnumber HAVING COUNT(*) > 1;
+SELECT oddnumber, COUNT(*) total FROM receipt GROUP BY oddnumber HAVING COUNT(*) > 1;
 
 SELECT ur.* FROM user_role ur LEFT JOIN user u ON u.id = ur.user_id WHERE u.id IS NULL;
 SELECT ur.* FROM user_role ur LEFT JOIN role r ON r.id = ur.role_id WHERE r.id IS NULL;
