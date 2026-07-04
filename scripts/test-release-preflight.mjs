@@ -33,6 +33,10 @@ const passingToggles = {
   TAURI_SIDECAR_DATABASE_URL: 'mysql://release:test@127.0.0.1/admin_yh_tauri_shadow',
 }
 
+function missingPath(name) {
+  return `${process.cwd()}/tmp/__missing_release_${name}_${process.pid}`
+}
+
 function runPreflight(envPatch) {
   return spawnSync('bash', ['scripts/check-all.sh'], {
     cwd: process.cwd(),
@@ -59,7 +63,57 @@ function expectPreflightFailure(name, envPatch, expectedTokens) {
   }
 }
 
+function runChildGate(script, envPatch) {
+  return spawnSync('bash', [script], {
+    cwd: process.cwd(),
+    env: {
+      ...baseEnv,
+      ...envPatch,
+    },
+    encoding: 'utf8',
+    timeout: 30_000,
+  })
+}
+
+function expectChildGateFailure(name, script, envPatch, expectedTokens) {
+  const result = runChildGate(script, envPatch)
+  const output = `${result.stdout || ''}\n${result.stderr || ''}`
+
+  assert(result.error === undefined, `${name} must execute ${script} without spawn errors: ${result.error?.message || ''}`)
+  assert(result.status !== 0, `${name} must fail in release mode`)
+  assert(!output.includes('SKIP:'), `${name} must not emit SKIP in release mode`)
+  assert(!output.includes('TODO:'), `${name} must not emit TODO in release mode`)
+
+  for (const token of expectedTokens) {
+    assert(output.includes(token), `${name} must mention ${token}`)
+  }
+}
+
 const cases = [
+  {
+    name: 'missing backend workspace',
+    env: {
+      ...passingToggles,
+      BACKEND_WORKSPACE_DIR: missingPath('backend'),
+    },
+    tokens: ['FAIL: RELEASE_GATE=true', 'Rust workspace Cargo.toml'],
+  },
+  {
+    name: 'missing frontend workspace',
+    env: {
+      ...passingToggles,
+      WEB_DIR: missingPath('frontend'),
+    },
+    tokens: ['FAIL: RELEASE_GATE=true', '前端 package.json'],
+  },
+  {
+    name: 'missing Tauri workspace',
+    env: {
+      ...passingToggles,
+      TAURI_DIR: missingPath('tauri'),
+    },
+    tokens: ['FAIL: RELEASE_GATE=true', 'Tauri workspace Cargo.toml'],
+  },
   {
     name: 'missing RUN_DB_TESTS',
     env: {},
@@ -144,6 +198,76 @@ const cases = [
 
 for (const testCase of cases) {
   expectPreflightFailure(testCase.name, testCase.env, testCase.tokens)
+}
+
+const childGateCases = [
+  {
+    name: 'missing backend direct gate',
+    script: 'scripts/test-backend.sh',
+    env: {
+      BACKEND_WORKSPACE_DIR: missingPath('backend_direct'),
+    },
+    tokens: ['FAIL: RELEASE_GATE=true', 'Rust workspace Cargo.toml'],
+  },
+  {
+    name: 'missing frontend direct gate',
+    script: 'scripts/test-frontend.sh',
+    env: {
+      WEB_DIR: missingPath('frontend_direct'),
+    },
+    tokens: ['FAIL: RELEASE_GATE=true', '前端 package.json'],
+  },
+  {
+    name: 'missing frontend coverage direct gate',
+    script: 'scripts/test-frontend.sh',
+    env: {
+      RUN_E2E: 'true',
+    },
+    tokens: ['FAIL: RELEASE_GATE=true', 'RUN_COVERAGE=true'],
+  },
+  {
+    name: 'missing frontend e2e direct gate',
+    script: 'scripts/test-frontend.sh',
+    env: {
+      RUN_COVERAGE: 'true',
+    },
+    tokens: ['FAIL: RELEASE_GATE=true', 'RUN_E2E=true'],
+  },
+  {
+    name: 'missing Docker E2E direct gate',
+    script: 'scripts/test-docker.sh',
+    env: {},
+    tokens: ['FAIL: RELEASE_GATE=true', 'RUN_DOCKER_E2E=true'],
+  },
+  {
+    name: 'missing Tauri DMG direct gate',
+    script: 'scripts/test-tauri-build.sh',
+    env: {},
+    tokens: ['FAIL: RELEASE_GATE=true', 'RUN_TAURI_DMG=true'],
+  },
+  {
+    name: 'missing Tauri sidecar direct gate',
+    script: 'scripts/test-tauri-build.sh',
+    env: {
+      RUN_TAURI_DMG: 'true',
+    },
+    tokens: ['FAIL: RELEASE_GATE=true', 'RUN_TAURI_SIDECAR_SMOKE=true'],
+  },
+  {
+    name: 'migration apply without URLs direct gate',
+    script: 'scripts/test-migration.sh',
+    env: {
+      RELEASE_GATE: 'false',
+      MIGRATION_APPLY: 'true',
+      OLD_DATABASE_URL: '',
+      NEW_DATABASE_URL: '',
+    },
+    tokens: ['ERROR: MIGRATION_APPLY=true', 'OLD_DATABASE_URL', 'NEW_DATABASE_URL'],
+  },
+]
+
+for (const testCase of childGateCases) {
+  expectChildGateFailure(testCase.name, testCase.script, testCase.env, testCase.tokens)
 }
 
 console.log('Release preflight regression OK')

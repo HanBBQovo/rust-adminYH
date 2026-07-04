@@ -10,9 +10,20 @@ SIDECAR_SMOKE_PID=""
 SIDECAR_SMOKE_LOG_DIR=""
 SIDECAR_SMOKE_PORT="${SIDECAR_SMOKE_PORT:-16824}"
 SIDECAR_SMOKE_URL="${SIDECAR_SMOKE_URL:-http://127.0.0.1:${SIDECAR_SMOKE_PORT}/api/health}"
+RELEASE_GATE="${RELEASE_GATE:-false}"
 TAURI_REPORT_DIR=""
 if [[ -n "${RELEASE_ARTIFACT_DIR:-}" ]]; then
   TAURI_REPORT_DIR="$RELEASE_ARTIFACT_DIR/tauri"
+fi
+
+if [[ "$RELEASE_GATE" == "true" && "${RUN_TAURI_DMG:-false}" != "true" ]]; then
+  echo "FAIL: RELEASE_GATE=true 需要 RUN_TAURI_DMG=true，发布候选不能跳过 macOS DMG 打包验证。"
+  exit 1
+fi
+
+if [[ "$RELEASE_GATE" == "true" && "${RUN_TAURI_SIDECAR_SMOKE:-false}" != "true" ]]; then
+  echo "FAIL: RELEASE_GATE=true 需要 RUN_TAURI_SIDECAR_SMOKE=true，发布候选不能跳过打包后 sidecar 真实启动健康检查。"
+  exit 1
 fi
 
 section() {

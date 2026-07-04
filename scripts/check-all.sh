@@ -5,6 +5,29 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 RELEASE_GATE="${RELEASE_GATE:-false}"
+BACKEND_WORKSPACE_DIR="${BACKEND_WORKSPACE_DIR:-$ROOT_DIR}"
+WEB_DIR="${WEB_DIR:-$ROOT_DIR/apps/desktop/web}"
+TAURI_DIR="${TAURI_DIR:-$ROOT_DIR/apps/desktop/src-tauri}"
+
+if [[ "${RUN_DOCKER_E2E:-false}" == "true" && "${RUN_DOCKER:-false}" != "true" ]]; then
+  echo "FAIL: RUN_DOCKER_E2E=true 需要同时设置 RUN_DOCKER=true，不能跳过 Docker 镜像构建和 compose 健康检查。"
+  exit 1
+fi
+
+if [[ "${RUN_TAURI_DMG:-false}" == "true" && "${RUN_TAURI:-false}" != "true" ]]; then
+  echo "FAIL: RUN_TAURI_DMG=true 需要同时设置 RUN_TAURI=true，不能跳过 Tauri .app 打包门禁。"
+  exit 1
+fi
+
+if [[ "${RUN_TAURI_SIDECAR_SMOKE:-false}" == "true" && "${RUN_TAURI:-false}" != "true" ]]; then
+  echo "FAIL: RUN_TAURI_SIDECAR_SMOKE=true 需要同时设置 RUN_TAURI=true，不能跳过 Tauri .app 打包门禁。"
+  exit 1
+fi
+
+if [[ "$RELEASE_GATE" != "true" && "${RUN_TAURI:-false}" == "true" && ! -f "$TAURI_DIR/Cargo.toml" ]]; then
+  echo "FAIL: RUN_TAURI=true 需要 Tauri workspace Cargo.toml，不能跳过桌面打包门禁：$TAURI_DIR"
+  exit 1
+fi
 
 section() {
   printf '\n========== %s ==========\n' "$1"
@@ -12,6 +35,19 @@ section() {
 
 if [[ "$RELEASE_GATE" == "true" ]]; then
   section "Release gate preflight"
+
+  if [[ ! -f "$BACKEND_WORKSPACE_DIR/Cargo.toml" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要 Rust workspace Cargo.toml，发布候选不能跳过后端门禁：$BACKEND_WORKSPACE_DIR"
+    exit 1
+  fi
+  if [[ ! -d "$WEB_DIR" || ! -f "$WEB_DIR/package.json" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要前端 package.json，发布候选不能跳过前端门禁：$WEB_DIR"
+    exit 1
+  fi
+  if [[ ! -f "$TAURI_DIR/Cargo.toml" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要 Tauri workspace Cargo.toml，发布候选不能跳过桌面打包门禁：$TAURI_DIR"
+    exit 1
+  fi
 
   if [[ "${RUN_DB_TESTS:-false}" != "true" ]]; then
     echo "FAIL: RELEASE_GATE=true 需要 RUN_DB_TESTS=true，发布候选必须执行真实 MySQL repository 集成测试。"
@@ -74,10 +110,10 @@ if [[ "$RELEASE_GATE" == "true" ]]; then
 fi
 
 section "Backend"
-"$ROOT_DIR/scripts/test-backend.sh"
+BACKEND_WORKSPACE_DIR="$BACKEND_WORKSPACE_DIR" "$ROOT_DIR/scripts/test-backend.sh"
 
 section "Frontend"
-"$ROOT_DIR/scripts/test-frontend.sh"
+WEB_DIR="$WEB_DIR" "$ROOT_DIR/scripts/test-frontend.sh"
 
 section "Migration"
 "$ROOT_DIR/scripts/test-migration.sh"
@@ -92,7 +128,7 @@ else
   node "$ROOT_DIR/scripts/test-release-preflight.mjs"
 fi
 
-if [[ -f "$ROOT_DIR/apps/desktop/src-tauri/Cargo.toml" ]]; then
+if [[ -f "$TAURI_DIR/Cargo.toml" ]]; then
   section "Tauri contract"
   "$ROOT_DIR/scripts/test-tauri-contract.sh"
 
@@ -104,6 +140,11 @@ if [[ -f "$ROOT_DIR/apps/desktop/src-tauri/Cargo.toml" ]]; then
     echo "SKIP: RUN_TAURI=true 未设置，跳过 Tauri build。发布前必须执行 RUN_TAURI=true scripts/check-all.sh。"
   fi
 else
+  if [[ "${RUN_TAURI:-false}" == "true" ]]; then
+    echo
+    echo "FAIL: RUN_TAURI=true 需要 Tauri workspace Cargo.toml，不能跳过桌面打包门禁：$TAURI_DIR"
+    exit 1
+  fi
   echo
   echo "SKIP: Tauri workspace 尚未初始化，暂不执行 cargo tauri build。"
 fi

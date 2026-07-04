@@ -308,7 +308,7 @@ jobs:
         if: ${{ inputs.run_docker_e2e }}
         run: npx --prefix apps/desktop/web playwright install --with-deps chromium
       - name: Build Docker images and run compose gate
-        run: RELEASE_ARTIFACT_DIR=tmp/release-gate RUN_DOCKER_E2E=${{ inputs.run_docker_e2e }} scripts/test-docker.sh
+        run: RELEASE_GATE=${{ inputs.release_candidate }} RELEASE_ARTIFACT_DIR=tmp/release-gate RUN_DOCKER_E2E=${{ inputs.run_docker_e2e }} scripts/test-docker.sh
       - name: Upload Docker release reports
         if: always()
         uses: actions/upload-artifact@v4

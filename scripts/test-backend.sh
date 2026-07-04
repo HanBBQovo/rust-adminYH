@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT_DIR"
+BACKEND_WORKSPACE_DIR="${BACKEND_WORKSPACE_DIR:-$ROOT_DIR}"
 
 CARGO_OFFLINE="${CARGO_OFFLINE:-true}"
 RELEASE_GATE="${RELEASE_GATE:-false}"
@@ -48,11 +48,17 @@ run_mysql_tests() {
   fi
 }
 
-if [[ ! -f Cargo.toml ]]; then
+if [[ ! -f "$BACKEND_WORKSPACE_DIR/Cargo.toml" ]]; then
+  if [[ "$RELEASE_GATE" == "true" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要 Rust workspace Cargo.toml，发布候选不能跳过后端质量门禁：$BACKEND_WORKSPACE_DIR"
+    exit 1
+  fi
   echo "SKIP: Cargo.toml 不存在，Rust workspace 尚未初始化。"
   echo "TODO: 初始化 crates/admin-api、admin-core、admin-db、admin-migration 后启用后端质量门禁。"
   exit 0
 fi
+
+cd "$BACKEND_WORKSPACE_DIR"
 
 run_if "Backend MySQL test coverage contract" node "$ROOT_DIR/scripts/test-backend-mysql-contract.mjs"
 run_if "Backend pagination contract" node "$ROOT_DIR/scripts/test-backend-pagination-contract.mjs"
@@ -61,6 +67,10 @@ run_if "Rust check workspace" cargo check "${CARGO_FLAGS[@]}" --workspace --all-
 if cargo clippy --version >/dev/null 2>&1; then
   run_if "Rust clippy workspace" cargo clippy "${CARGO_FLAGS[@]}" --workspace --all-targets -- -D warnings
 else
+  if [[ "$RELEASE_GATE" == "true" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要 cargo clippy，发布候选不能跳过 Rust clippy 门禁。"
+    exit 1
+  fi
   echo "SKIP: cargo clippy 未安装。"
 fi
 run_if "Rust test workspace" cargo test "${CARGO_FLAGS[@]}" --workspace

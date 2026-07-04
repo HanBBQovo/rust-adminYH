@@ -29,6 +29,10 @@ require_url_pair_for_apply() {
       echo "FAIL: RELEASE_GATE=true 不允许跳过真实数据库迁移 dry-run/verify；请设置 OLD_DATABASE_URL 和 NEW_DATABASE_URL。"
       exit 1
     fi
+    if [[ "$MIGRATION_APPLY" == "true" ]]; then
+      echo "ERROR: MIGRATION_APPLY=true 需要 OLD_DATABASE_URL 和 NEW_DATABASE_URL，不能在缺少数据库连接时跳过迁移 apply。"
+      exit 1
+    fi
     echo "SKIP: OLD_DATABASE_URL 或 NEW_DATABASE_URL 未设置，跳过需要真实数据库连接的迁移校验。"
     echo "示例：OLD_DATABASE_URL=mysql://user:pass@127.0.0.1/admin_yh_old NEW_DATABASE_URL=mysql://user:pass@127.0.0.1/admin_yh_new scripts/test-migration.sh"
     return 1

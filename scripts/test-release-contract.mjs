@@ -21,6 +21,14 @@ function assertOccurrences(content, expected, minCount, message) {
   assert(count >= minCount, `${message}; expected at least ${minCount}, found ${count}`)
 }
 
+function assertBefore(content, before, after, message) {
+  const beforeIndex = content.indexOf(before)
+  const afterIndex = content.indexOf(after)
+  assert(beforeIndex !== -1, `${message}; missing before marker: ${before}`)
+  assert(afterIndex !== -1, `${message}; missing after marker: ${after}`)
+  assert(beforeIndex < afterIndex, message)
+}
+
 const checkAll = read('scripts/check-all.sh')
 const backendGate = read('scripts/test-backend.sh')
 const backendMysqlContract = read('scripts/test-backend-mysql-contract.mjs')
@@ -60,11 +68,24 @@ const releaseRequirements = [
 ]
 
 assertIncludes(checkAll, 'RELEASE_GATE="${RELEASE_GATE:-false}"', 'check-all must expose the RELEASE_GATE switch')
+assertIncludes(checkAll, 'BACKEND_WORKSPACE_DIR="${BACKEND_WORKSPACE_DIR:-$ROOT_DIR}"', 'check-all must expose a backend workspace path for release preflight validation')
+assertIncludes(checkAll, 'WEB_DIR="${WEB_DIR:-$ROOT_DIR/apps/desktop/web}"', 'check-all must expose a frontend workspace path for release preflight validation')
+assertIncludes(checkAll, 'TAURI_DIR="${TAURI_DIR:-$ROOT_DIR/apps/desktop/src-tauri}"', 'check-all must expose a Tauri workspace path for release preflight validation')
 assertIncludes(checkAll, 'section "Release gate preflight"', 'check-all must run release gate preflight before ordinary gates')
 assertIncludes(checkAll, 'Release gate preflight passed.', 'check-all must print an explicit release preflight success message')
 assertIncludes(checkAll, 'scripts/test-release-contract.mjs', 'check-all must always run the release contract test')
 assertIncludes(checkAll, 'scripts/test-release-preflight.mjs', 'check-all must always run executable release preflight regressions')
 assertIncludes(checkAll, 'SKIP_RELEASE_PREFLIGHT_SELFTEST', 'check-all must expose a recursion guard for release preflight self-tests')
+assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 Rust workspace Cargo.toml', 'release preflight must fail if the backend workspace is missing')
+assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要前端 package.json', 'release preflight must fail if the frontend package is missing')
+assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 Tauri workspace Cargo.toml', 'release preflight must fail if the Tauri workspace is missing')
+assertIncludes(checkAll, 'BACKEND_WORKSPACE_DIR="$BACKEND_WORKSPACE_DIR" "$ROOT_DIR/scripts/test-backend.sh"', 'check-all must pass the backend workspace path into the backend gate')
+assertIncludes(checkAll, 'WEB_DIR="$WEB_DIR" "$ROOT_DIR/scripts/test-frontend.sh"', 'check-all must pass the frontend workspace path into the frontend gate')
+assertIncludes(checkAll, 'if [[ -f "$TAURI_DIR/Cargo.toml" ]]; then', 'check-all must use the configured Tauri workspace path for Tauri gates')
+assertIncludes(checkAll, 'FAIL: RUN_DOCKER_E2E=true 需要同时设置 RUN_DOCKER=true', 'check-all must reject Docker E2E when the Docker parent gate is disabled')
+assertIncludes(checkAll, 'FAIL: RUN_TAURI_DMG=true 需要同时设置 RUN_TAURI=true', 'check-all must reject Tauri DMG when the Tauri parent gate is disabled')
+assertIncludes(checkAll, 'FAIL: RUN_TAURI_SIDECAR_SMOKE=true 需要同时设置 RUN_TAURI=true', 'check-all must reject Tauri sidecar smoke when the Tauri parent gate is disabled')
+assertIncludes(checkAll, 'FAIL: RUN_TAURI=true 需要 Tauri workspace Cargo.toml', 'check-all must reject an explicitly enabled Tauri gate when the workspace is missing')
 
 for (const [token, message] of releaseRequirements) {
   const variableName = token.split('=')[0]
@@ -89,6 +110,19 @@ assertIncludes(checkAll, 'FAIL: RELEASE_GATE=true 需要 TAURI_SIDECAR_DATABASE_
 assertIncludes(releasePreflight, 'Release preflight regression OK', 'release preflight regression script must print an explicit success marker')
 assertIncludes(releasePreflight, 'SKIP_RELEASE_PREFLIGHT_SELFTEST', 'release preflight regression must guard nested check-all calls')
 assertIncludes(releasePreflight, '========== Backend ==========', 'release preflight regression must prove failures stop before backend gates')
+assertIncludes(releasePreflight, 'missing backend workspace', 'release preflight regression must execute a missing backend workspace case')
+assertIncludes(releasePreflight, 'missing frontend workspace', 'release preflight regression must execute a missing frontend workspace case')
+assertIncludes(releasePreflight, 'missing Tauri workspace', 'release preflight regression must execute a missing Tauri workspace case')
+assertIncludes(releasePreflight, 'missing backend direct gate', 'release preflight regression must directly execute the backend missing-workspace gate')
+assertIncludes(releasePreflight, 'missing frontend direct gate', 'release preflight regression must directly execute the frontend missing-package gate')
+assertIncludes(releasePreflight, 'missing frontend coverage direct gate', 'release preflight regression must directly reject missing frontend coverage in release mode')
+assertIncludes(releasePreflight, 'missing frontend e2e direct gate', 'release preflight regression must directly reject missing frontend E2E in release mode')
+assertIncludes(releasePreflight, 'missing Docker E2E direct gate', 'release preflight regression must directly reject missing Docker E2E in release mode')
+assertIncludes(releasePreflight, 'missing Tauri DMG direct gate', 'release preflight regression must directly reject missing Tauri DMG in release mode')
+assertIncludes(releasePreflight, 'missing Tauri sidecar direct gate', 'release preflight regression must directly reject missing Tauri sidecar smoke in release mode')
+assertIncludes(releasePreflight, 'migration apply without URLs direct gate', 'release preflight regression must directly reject MIGRATION_APPLY=true without database URLs')
+assertIncludes(releasePreflight, "!output.includes('SKIP:')", 'direct child gate regressions must reject release-mode SKIP output')
+assertIncludes(releasePreflight, "!output.includes('TODO:')", 'direct child gate regressions must reject release-mode TODO output')
 assertIncludes(releasePreflight, 'RUN_DB_TESTS=true', 'release preflight regression must execute a missing DB toggle case')
 assertIncludes(releasePreflight, 'MIGRATION_APPLY=true', 'release preflight regression must execute a missing migration apply case')
 assertIncludes(releasePreflight, 'RUN_MIGRATION_SMOKE=true', 'release preflight regression must execute a missing reproducible migration smoke case')
@@ -98,6 +132,15 @@ assertIncludes(releasePreflight, 'RUN_TAURI_DMG=true', 'release preflight regres
 assertIncludes(releasePreflight, 'RUN_TAURI_SIDECAR_SMOKE=true', 'release preflight regression must execute a missing sidecar smoke case')
 assertIncludes(releasePreflight, 'TAURI_SIDECAR_DATABASE_URL', 'release preflight regression must execute a missing sidecar database URL case')
 
+assertIncludes(backendGate, 'BACKEND_WORKSPACE_DIR="${BACKEND_WORKSPACE_DIR:-$ROOT_DIR}"', 'backend gate must expose a workspace override for release missing-workspace regressions')
+assertIncludes(backendGate, 'FAIL: RELEASE_GATE=true 需要 Rust workspace Cargo.toml', 'backend gate must not allow release builds to skip a missing Rust workspace')
+assertIncludes(backendGate, 'FAIL: RELEASE_GATE=true 需要 cargo clippy', 'backend gate must not allow release builds to skip clippy')
+assertBefore(
+  backendGate,
+  'if [[ ! -f "$BACKEND_WORKSPACE_DIR/Cargo.toml" ]]; then',
+  'cd "$BACKEND_WORKSPACE_DIR"',
+  'backend gate must check Cargo.toml before changing into the workspace',
+)
 assertIncludes(backendGate, 'FAIL: RELEASE_GATE=true 不允许跳过真实 MySQL repository 集成测试。', 'backend gate must not allow release builds to skip real MySQL tests')
 assertIncludes(backendGate, 'scripts/test-backend-mysql-contract.mjs', 'backend gate must always run the MySQL coverage contract')
 assertIncludes(backendGate, 'scripts/test-backend-pagination-contract.mjs', 'backend gate must always run the pagination contract')
@@ -115,6 +158,7 @@ assertIncludes(migrationGate, 'FAIL: RELEASE_GATE=true 不允许跳过真实数�
 assertIncludes(migrationGate, 'FAIL: RELEASE_GATE=true 需要 MIGRATION_APPLY=true', 'migration gate must not allow release builds to skip real migration apply')
 assertIncludes(migrationGate, 'FAIL: RELEASE_GATE=true 需要 RUN_MIGRATION_SMOKE=true', 'migration gate must not allow release builds to skip reproducible migration smoke')
 assertIncludes(migrationGate, 'FAIL: RELEASE_GATE=true 需要 NEW_AVATAR_DIR', 'migration gate must require avatar file verification for release')
+assertIncludes(migrationGate, 'ERROR: MIGRATION_APPLY=true 需要 OLD_DATABASE_URL 和 NEW_DATABASE_URL', 'migration gate must reject explicit apply when database URLs are missing')
 assertIncludes(migrationGate, 'migrate --dry-run', 'migration gate must run dry-run migration before any optional apply')
 assertIncludes(migrationSource, 'failed to connect to target database for dry-run preflight', 'migration dry-run must connect to the target database for schema preflight')
 assertIncludes(migrationSource, 'targetPreflight', 'migration report must expose target preflight details')
@@ -141,6 +185,8 @@ assertIncludes(migrationFixture, 'MIG-SMOKE-0002', 'migration fixture must seed 
 assertIncludes(migrationFixture, '已接收', 'migration fixture must preserve legacy received receipt status')
 
 assertIncludes(dockerGate, 'RUN_DOCKER_E2E="${RUN_DOCKER_E2E:-false}"', 'Docker gate must keep real browser E2E opt-in')
+assertIncludes(dockerGate, 'RELEASE_GATE="${RELEASE_GATE:-false}"', 'Docker gate must read the release gate flag')
+assertIncludes(dockerGate, 'FAIL: RELEASE_GATE=true 需要 RUN_DOCKER_E2E=true', 'Docker gate must not allow release builds to skip real browser E2E')
 assertIncludes(dockerGate, 'PLAYWRIGHT_BASE_URL="${WEB_URL%/}" REAL_API_E2E=true npm run e2e -- e2e/real-api.spec.ts', 'Docker gate must run browser E2E against compose nginx web URL')
 assertIncludes(dockerGate, 'scripts/seed-docker-e2e.sql', 'Docker gate must seed MySQL before real API E2E')
 assertIncludes(dockerGate, 'RELEASE_ARTIFACT_DIR', 'Docker gate must support shared release artifact reporting')
@@ -149,6 +195,10 @@ assertIncludes(dockerGate, 'web-api-health.json', 'Docker gate must save nginx p
 assertIncludes(dockerGate, 'image-inspect.json', 'Docker gate must save Docker image inspect metadata for release audit')
 assertIncludes(dockerGate, 'compose-ps.json', 'Docker gate must save compose status metadata for release audit')
 assertIncludes(frontendGate, 'scripts/install-frontend-deps.sh', 'frontend gate must install missing dependencies through the shared npm ci wrapper')
+assertIncludes(frontendGate, 'RELEASE_GATE="${RELEASE_GATE:-false}"', 'frontend gate must read the release gate flag')
+assertIncludes(frontendGate, 'FAIL: RELEASE_GATE=true 需要前端 package.json', 'frontend gate must not allow release builds to skip a missing frontend package')
+assertIncludes(frontendGate, 'FAIL: RELEASE_GATE=true 需要 RUN_COVERAGE=true', 'frontend gate must not allow release builds to skip coverage')
+assertIncludes(frontendGate, 'FAIL: RELEASE_GATE=true 需要 RUN_E2E=true', 'frontend gate must not allow release builds to skip E2E')
 assertIncludes(frontendDepsInstaller, 'NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmjs.org}"', 'shared frontend installer must pin the default npm registry')
 assertIncludes(frontendDepsInstaller, 'npm ci --prefix "$WEB_DIR"', 'shared frontend installer must install the web package through --prefix')
 assertIncludes(frontendDepsInstaller, '--registry="$NPM_REGISTRY"', 'shared frontend installer must use the configured npm registry')
@@ -178,6 +228,9 @@ assertIncludes(frontendMutationContract, 'CompaniesList', 'frontend mutation con
 assertIncludes(rebuildPlan, 'use-mutation-action.ts', 'rebuild plan must document the shared frontend mutation hook')
 
 assertIncludes(tauriGate, 'RUN_TAURI_SIDECAR_SMOKE', 'Tauri gate must keep bundled sidecar smoke explicit')
+assertIncludes(tauriGate, 'RELEASE_GATE="${RELEASE_GATE:-false}"', 'Tauri gate must read the release gate flag')
+assertIncludes(tauriGate, 'FAIL: RELEASE_GATE=true 需要 RUN_TAURI_DMG=true', 'Tauri gate must not allow release builds to skip DMG validation')
+assertIncludes(tauriGate, 'FAIL: RELEASE_GATE=true 需要 RUN_TAURI_SIDECAR_SMOKE=true', 'Tauri gate must not allow release builds to skip bundled sidecar smoke')
 assertIncludes(tauriGate, 'if [[ "${RUN_TAURI_SIDECAR_SMOKE:-false}" == "true" ]]; then', 'Tauri gate must keep bundled sidecar smoke as an explicit opt-in branch')
 assertIncludes(tauriGate, 'TAURI_SIDECAR_DATABASE_URL', 'Tauri gate must support an explicit sidecar smoke DB URL')
 assertIncludes(tauriGate, 'SIDECAR_SMOKE_PORT="${SIDECAR_SMOKE_PORT:-16824}"', 'Tauri gate must allow the bundled sidecar smoke port to be overridden')
@@ -256,7 +309,11 @@ assertIncludes(
   'if: ${{ inputs.run_tauri_dmg }}',
   'Tauri workflow must only require a DMG artifact when the DMG input is enabled',
 )
-assertIncludes(ciWorkflow, 'RELEASE_ARTIFACT_DIR=tmp/release-gate RUN_DOCKER_E2E=${{ inputs.run_docker_e2e }} scripts/test-docker.sh', 'Docker workflow must pass the shared artifact directory into the Docker gate')
+assertIncludes(
+  ciWorkflow,
+  'RELEASE_GATE=${{ inputs.release_candidate }} RELEASE_ARTIFACT_DIR=tmp/release-gate RUN_DOCKER_E2E=${{ inputs.run_docker_e2e }} scripts/test-docker.sh',
+  'Docker workflow must pass the release flag and shared artifact directory into the Docker gate',
+)
 assertIncludes(ciWorkflow, 'name: release-gate-docker', 'Docker workflow must upload release audit reports')
 
 assertIncludes(databaseMigration, 'verify-files', 'database migration docs must include avatar file verification')

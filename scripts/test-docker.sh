@@ -32,10 +32,16 @@ WEB_URL="${WEB_URL:-http://127.0.0.1:${WEB_PORT}/}"
 WEB_API_URL="${WEB_API_URL:-http://127.0.0.1:${WEB_PORT}/api/health}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-rust-adminyh-ci}"
 RUN_DOCKER_E2E="${RUN_DOCKER_E2E:-false}"
+RELEASE_GATE="${RELEASE_GATE:-false}"
 DOCKER_DAEMON_READY=false
 DOCKER_REPORT_DIR=""
 if [[ -n "${RELEASE_ARTIFACT_DIR:-}" ]]; then
   DOCKER_REPORT_DIR="$RELEASE_ARTIFACT_DIR/docker"
+fi
+
+if [[ "$RELEASE_GATE" == "true" && "$RUN_DOCKER_E2E" != "true" ]]; then
+  echo "FAIL: RELEASE_GATE=true 需要 RUN_DOCKER_E2E=true，发布候选不能跳过 Docker Web + Rust API + MySQL 真实浏览器 E2E。"
+  exit 1
 fi
 
 section() {

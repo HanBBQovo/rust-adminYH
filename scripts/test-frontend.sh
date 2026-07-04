@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WEB_DIR="${WEB_DIR:-$ROOT_DIR/apps/desktop/web}"
 RUN_E2E="${RUN_E2E:-false}"
 RUN_COVERAGE="${RUN_COVERAGE:-false}"
+RELEASE_GATE="${RELEASE_GATE:-false}"
 
 section() {
   printf '\n==> %s\n' "$1"
@@ -23,9 +24,23 @@ run_script_if_present() {
 }
 
 if [[ ! -d "$WEB_DIR" || ! -f "$WEB_DIR/package.json" ]]; then
+  if [[ "$RELEASE_GATE" == "true" ]]; then
+    echo "FAIL: RELEASE_GATE=true 需要前端 package.json，发布候选不能跳过前端质量门禁：$WEB_DIR"
+    exit 1
+  fi
   echo "SKIP: 前端目录不存在或缺少 package.json：$WEB_DIR"
   echo "TODO: 从 frontend-template/web 派生 apps/desktop/web 后启用前端质量门禁。"
   exit 0
+fi
+
+if [[ "$RELEASE_GATE" == "true" && "$RUN_COVERAGE" != "true" ]]; then
+  echo "FAIL: RELEASE_GATE=true 需要 RUN_COVERAGE=true，发布候选不能跳过前端覆盖率门禁。"
+  exit 1
+fi
+
+if [[ "$RELEASE_GATE" == "true" && "$RUN_E2E" != "true" ]]; then
+  echo "FAIL: RELEASE_GATE=true 需要 RUN_E2E=true，发布候选不能跳过 Playwright E2E。"
+  exit 1
 fi
 
 cd "$WEB_DIR"
