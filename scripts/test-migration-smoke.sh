@@ -226,6 +226,60 @@ run_migration_json verify verify --old "$OLD_DATABASE_URL" --new "$NEW_DATABASE_
 section "Verify avatar files"
 run_migration_json verify-files verify-files --old-avatar-dir "$OLD_AVATAR_DIR" --new-avatar-dir "$NEW_AVATAR_DIR"
 
+section "Assert legacy audit report"
+MIGRATION_SMOKE_REPORT_DIR="$MIGRATION_SMOKE_REPORT_DIR" node <<'NODE'
+const { readFileSync } = require('node:fs')
+const reportDir = process.env.MIGRATION_SMOKE_REPORT_DIR
+
+function readReport(name) {
+  return JSON.parse(readFileSync(`${reportDir}/${name}.json`, 'utf8'))
+}
+
+function assert(condition, message) {
+  if (!condition) {
+    console.error(`Migration smoke audit assertion failed: ${message}`)
+    process.exit(1)
+  }
+}
+
+function duplicate(report, name) {
+  return report.duplicates.find((entry) => entry.name === name)
+}
+
+function orphan(report, name) {
+  return report.orphans.find((entry) => entry.name === name)
+}
+
+function statusValues(report, field) {
+  return new Set(
+    report.statusDistributions
+      .find((entry) => entry.field === field)
+      ?.values.map((entry) => entry.value) ?? [],
+  )
+}
+
+const inspectOld = readReport('inspect-old')
+const dryRun = readReport('dry-run')
+const verify = readReport('verify')
+const verifyFiles = readReport('verify-files')
+
+assert(duplicate(inspectOld, 'memory.name')?.rows.some((row) => row.value === '迁移收货人' && row.count === 2), 'inspect-old must report duplicate memory.name fixture marker')
+assert(duplicate(inspectOld, 'role_permission.role_id_permission_id')?.rows.some((row) => row.value === '2:12' && row.count === 2), 'inspect-old must report duplicate role_permission fixture marker')
+assert(orphan(inspectOld, 'company_order.order_id')?.count === 1, 'inspect-old must report orphan company_order.order_id fixture marker')
+assert(orphan(inspectOld, 'receipt.oddnumber')?.count === 1, 'inspect-old must report orphan receipt.oddnumber fixture marker')
+assert(orphan(inspectOld, 'avatar.user_id')?.count === 1, 'inspect-old must report orphan avatar.user_id fixture marker')
+
+assert(statusValues(inspectOld, 'receipt.recoverystate').has('异常回收'), 'inspect-old must preserve non-standard receipt recoverystate')
+assert(statusValues(inspectOld, 'receipt.issuestate').has('已发放'), 'inspect-old must preserve legacy issued receipt state')
+assert(statusValues(inspectOld, 'receipt.poststate').has('已退回'), 'inspect-old must preserve non-standard receipt poststate')
+
+assert(dryRun.targetPreflight?.isEmpty === true, 'dry-run must confirm the target schema is reachable and empty')
+assert(verify.status === 'passed', 'verify report must pass after applying dirty-but-copyable fixture data')
+assert(verifyFiles.status === 'passed', 'verify-files report must pass after copying avatar files')
+
+console.log('Migration smoke legacy audit assertions OK')
+NODE
+
 section "Smoke reports"
 ls -1 "$MIGRATION_SMOKE_REPORT_DIR"/*.json
 cat >"$MIGRATION_SMOKE_REPORT_DIR/manifest.txt" <<EOF

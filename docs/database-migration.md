@@ -264,7 +264,7 @@ RUN_MIGRATION_SMOKE=true scripts/test-migration.sh
 scripts/test-migration-smoke.sh
 ```
 
-该脚本使用 `scripts/seed-migration-fixture.sql`，覆盖 11 张兼容表、管理员/普通用户、角色菜单关系、两个订单、一个回单、中文 `issuestate='已接收'`、旧 MD5 密码、头像 DB 记录和头像文件复制。发布候选必须保留这条可重建 smoke，证明迁移 CLI 在没有生产旧库的情况下也能重复完成 dry-run/apply/verify/files 闭环。
+该脚本使用 `scripts/seed-migration-fixture.sql`，覆盖 11 张兼容表、管理员/普通用户、角色菜单关系、两个订单、一个正常回单、中文 `issuestate='已接收'`、旧 MD5 密码、头像 DB 记录和头像文件复制。fixture 还必须保留一组“旧库可存在但必须被审计出来”的脏数据 marker：重复 `memory.name`、重复 `role_permission(role_id, permission_id)`、孤儿 `company_order.order_id`、孤儿 `receipt.oddnumber`、孤儿 `avatar.user_id`，以及非标准回单状态 `异常回收/已发放/已退回`。`scripts/test-migration-smoke.sh` 会在 `inspect-old`、dry-run、apply、verify 和 verify-files 之后解析 JSON 报告，断言这些重复、孤儿和状态分布都被报告，同时确认 dirty-but-copyable fixture 迁移后 `verify.status` 与 `verify-files.status` 仍为 `passed`。发布候选必须保留这条可重建 smoke，证明迁移 CLI 在没有生产旧库的情况下也能重复完成 dry-run/apply/verify/files 闭环，并且不会静默漏掉真实旧库常见脏数据。
 
 如果设置 `NEW_AVATAR_DIR`，脚本还会执行：
 
