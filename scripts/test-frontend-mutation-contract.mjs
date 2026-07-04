@@ -27,6 +27,7 @@ function assertNotMatches(content, pattern, message) {
 const mutationHook = read('apps/desktop/web/src/lib/use-mutation-action.ts')
 const mutationHookTest = read('apps/desktop/web/src/lib/use-mutation-action.test.tsx')
 const companiesList = read('apps/desktop/web/src/pages/CompaniesList.tsx')
+const rolesList = read('apps/desktop/web/src/pages/RolesList.tsx')
 const rebuildPlan = read('docs/rebuild-plan.md')
 
 assertIncludes(mutationHook, 'export function useMutationAction', 'shared mutation action hook must be exported')
@@ -42,15 +43,22 @@ assertIncludes(mutationHookTest, 'runs confirmed mutations after confirmation su
 assertIncludes(mutationHookTest, 'normalizes mutation errors through the shared error toast', 'mutation hook tests must cover error toast behavior')
 assertIncludes(mutationHookTest, 'shared pending state, success toast, and success callback', 'mutation hook tests must cover pending/success callback behavior')
 
-assertIncludes(companiesList, "import { useMutationAction } from '@/lib/use-mutation-action'", 'CompaniesList must import the shared mutation hook')
-assertIncludes(companiesList, 'pending: submitting', 'CompaniesList must derive dialog submitting state from the shared mutation hook')
-assertIncludes(companiesList, 'runMutation(', 'CompaniesList create/update path must use the shared mutation runner')
-assertIncludes(companiesList, 'runConfirmedMutation(', 'CompaniesList delete path must use the shared confirmed mutation runner')
-assertNotMatches(companiesList, /useConfirm/, 'CompaniesList must not wire confirm directly after migrating deletion to the hook')
-assertNotMatches(companiesList, /const\s+\[\s*submitting\s*,\s*setSubmitting\s*\]\s*=\s*useState\s*\(/, 'CompaniesList must not keep local submitting state')
-assertNotMatches(companiesList, /setSubmitting\s*\(/, 'CompaniesList must not manually toggle submitting state')
+const migratedPages = [
+  ['CompaniesList', companiesList],
+  ['RolesList', rolesList],
+]
+
+for (const [pageName, pageContent] of migratedPages) {
+  assertIncludes(pageContent, "import { useMutationAction } from '@/lib/use-mutation-action'", `${pageName} must import the shared mutation hook`)
+  assertIncludes(pageContent, 'pending: submitting', `${pageName} must derive submitting state from the shared mutation hook`)
+  assertIncludes(pageContent, 'runMutation(', `${pageName} create/update or assignment path must use the shared mutation runner`)
+  assertIncludes(pageContent, 'runConfirmedMutation(', `${pageName} destructive action path must use the shared confirmed mutation runner`)
+  assertNotMatches(pageContent, /useConfirm/, `${pageName} must not wire confirm directly after migrating destructive actions to the hook`)
+  assertNotMatches(pageContent, /const\s+\[\s*submitting\s*,\s*setSubmitting\s*\]\s*=\s*useState\s*\(/, `${pageName} must not keep local submitting state`)
+  assertNotMatches(pageContent, /setSubmitting\s*\(/, `${pageName} must not manually toggle submitting state`)
+}
 
 assertIncludes(rebuildPlan, 'src/lib/use-mutation-action.ts', 'rebuild plan must document the shared mutation action hook')
-assertIncludes(rebuildPlan, 'CompaniesList', 'rebuild plan must document the current migrated page')
+assertIncludes(rebuildPlan, 'CompaniesList、RolesList', 'rebuild plan must document the current migrated pages')
 
 console.log('Frontend mutation contract OK')

@@ -234,6 +234,20 @@ describe('RolesList', () => {
     expect(showToast).toHaveBeenCalledWith('success', '删除权限角色成功！', { translate: false })
   })
 
+  it('does not delete roles when the confirmation is cancelled', async () => {
+    const user = userEvent.setup()
+    const confirm = vi.fn().mockResolvedValue(false)
+    renderRolesList({ confirm })
+
+    await screen.findByText('超级管理员')
+    await user.click(screen.getByRole('button', { name: '删除角色' }))
+
+    await waitFor(() => {
+      expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: '删除角色', variant: 'destructive' }))
+    })
+    expect(deleteRoleMock).not.toHaveBeenCalled()
+  })
+
   it('renders the empty state', async () => {
     listRolesMock.mockResolvedValueOnce({ rows: [], total: 0 })
     renderRolesList()

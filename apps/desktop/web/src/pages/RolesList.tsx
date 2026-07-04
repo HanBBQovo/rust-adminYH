@@ -45,8 +45,8 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState } from '@/components/ui/error-state'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useConfirm } from '@/components/ui/use-confirm'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
+import { useMutationAction } from '@/lib/use-mutation-action'
 import { usePaginatedResource } from '@/lib/use-paginated-resource'
 import { useResource } from '@/lib/use-resource'
 
@@ -274,15 +274,14 @@ function AssignMenusDialog({ open, role, submitting = false, onOpenChange, onSub
 }
 
 export default function RolesList() {
-  const confirm = useConfirm()
   const { showToast } = useGlobalToast()
+  const { pending: submitting, runMutation, runConfirmedMutation } = useMutationAction()
   const [filterDraft, setFilterDraft] = useState<RoleFilterDraft>(() => emptyFilters())
   const [filters, setFilters] = useState<Pick<RoleListParams, 'name' | 'intro' | 'createAt'>>({})
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<RoleFormMode>('create')
   const [assignOpen, setAssignOpen] = useState(false)
   const [selectedRole, setSelectedRole] = useState<LegacyRole | null>(null)
-  const [submitting, setSubmitting] = useState(false)
 
   const { data, loading, error, refresh, page, pageSize, setPage, rows, pagination } = usePaginatedResource({
     pageSize: PAGE_SIZE,
@@ -321,40 +320,35 @@ export default function RolesList() {
   }
 
   const submitRole = async (values: RoleMutationPayload) => {
-    setSubmitting(true)
-    try {
-      if (dialogMode === 'edit' && selectedRole) {
-        await updateRole(selectedRole.id, values)
-        showToast('success', '修改角色信息成功!', { translate: false })
-      } else {
-        await createRole(values)
-        showToast('success', '创建权限角色成功！', { translate: false })
-      }
-      setDialogOpen(false)
-      refresh()
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '角色保存失败', { translate: false })
-    } finally {
-      setSubmitting(false)
-    }
+    const roleId = dialogMode === 'edit' ? selectedRole?.id : undefined
+    await runMutation(
+      () => (roleId ? updateRole(roleId, values) : createRole(values)),
+      {
+        successMessage: roleId ? '修改角色信息成功!' : '创建权限角色成功！',
+        errorMessage: '角色保存失败',
+        onSuccess: () => {
+          setDialogOpen(false)
+          refresh()
+        },
+      },
+    )
   }
 
   const removeRole = async (role: LegacyRole) => {
-    const confirmed = await confirm({
-      title: '删除角色',
-      description: `确认删除角色 ${role.name}？该操作会同时清理角色菜单关系。`,
-      confirmText: '删除',
-      variant: 'destructive',
-    })
-    if (!confirmed) return
-
-    try {
-      await deleteRole(role.id)
-      showToast('success', '删除权限角色成功！', { translate: false })
-      refresh()
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '角色删除失败', { translate: false })
-    }
+    await runConfirmedMutation(
+      () => deleteRole(role.id),
+      {
+        confirm: {
+          title: '删除角色',
+          description: `确认删除角色 ${role.name}？该操作会同时清理角色菜单关系。`,
+          confirmText: '删除',
+          variant: 'destructive',
+        },
+        successMessage: '删除权限角色成功！',
+        errorMessage: '角色删除失败',
+        onSuccess: refresh,
+      },
+    )
   }
 
   const openAssignDialog = (role: LegacyRole) => {
@@ -364,16 +358,15 @@ export default function RolesList() {
 
   const submitAssignedMenus = async (menuIds: number[]) => {
     if (!selectedRole) return
-    setSubmitting(true)
-    try {
-      await assignRoleMenus({ roleId: selectedRole.id, menuList: menuIds })
-      showToast('success', '分配权限成功！', { translate: false })
-      setAssignOpen(false)
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '权限分配失败', { translate: false })
-    } finally {
-      setSubmitting(false)
-    }
+    const roleId = selectedRole.id
+    await runMutation(
+      () => assignRoleMenus({ roleId, menuList: menuIds }),
+      {
+        successMessage: '分配权限成功！',
+        errorMessage: '权限分配失败',
+        onSuccess: () => setAssignOpen(false),
+      },
+    )
   }
 
   return (
