@@ -11,6 +11,7 @@ use admin_core::{
 };
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row};
 
+use crate::pagination::{push_limit_offset, Page};
 use crate::transaction::{transaction_sql_error, with_mysql_transaction, MySqlTransaction};
 
 const RECEIPT_STATUS_ISSUE_DONE: &str = "已接收";
@@ -34,10 +35,8 @@ impl OrderStore for MySqlOrderRepository {
     ) -> ServiceFuture<'a, AppResult<Vec<OrderRecord>>> {
         Box::pin(async move {
             let mut query = order_select_builder(input);
-            query.push(" ORDER BY `id` DESC LIMIT ");
-            query.push_bind(input.size as i64);
-            query.push(" OFFSET ");
-            query.push_bind(input.offset as i64);
+            query.push(" ORDER BY `id` DESC");
+            push_limit_offset(&mut query, Page::from_offset_size(input.offset, input.size))?;
 
             query
                 .build()
@@ -183,10 +182,8 @@ impl OrderStore for MySqlOrderRepository {
     ) -> ServiceFuture<'a, AppResult<Vec<ReceiptRecord>>> {
         Box::pin(async move {
             let mut query = receipt_select_builder(input);
-            query.push(" ORDER BY `id` DESC LIMIT ");
-            query.push_bind(input.size as i64);
-            query.push(" OFFSET ");
-            query.push_bind(input.offset as i64);
+            query.push(" ORDER BY `id` DESC");
+            push_limit_offset(&mut query, Page::from_offset_size(input.offset, input.size))?;
 
             query
                 .build()

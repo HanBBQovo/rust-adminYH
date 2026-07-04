@@ -7,6 +7,7 @@ use admin_core::{
 };
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row};
 
+use crate::pagination::{push_limit_offset, Page};
 use crate::transaction::{transaction_sql_error, with_mysql_transaction, MySqlTransaction};
 
 #[derive(Debug, Clone)]
@@ -27,10 +28,8 @@ impl RoleStore for MySqlRoleRepository {
     ) -> ServiceFuture<'a, AppResult<Vec<RoleRecord>>> {
         Box::pin(async move {
             let mut query = role_select_builder(input);
-            query.push(" ORDER BY `id` ASC LIMIT ");
-            query.push_bind(input.size as i64);
-            query.push(" OFFSET ");
-            query.push_bind(input.offset as i64);
+            query.push(" ORDER BY `id` ASC");
+            push_limit_offset(&mut query, Page::from_offset_size(input.offset, input.size))?;
 
             query
                 .build()

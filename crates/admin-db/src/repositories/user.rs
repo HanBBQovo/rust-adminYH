@@ -13,6 +13,7 @@ use admin_core::{
 };
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row};
 
+use crate::pagination::{push_limit_offset, Page};
 use crate::transaction::{transaction_sql_error, with_mysql_transaction, MySqlTransaction};
 
 #[derive(Debug, Clone)]
@@ -116,10 +117,8 @@ impl UserStore for MySqlUserRepository {
     ) -> UserServiceFuture<'a, AppResult<Vec<LegacyUserRecord>>> {
         Box::pin(async move {
             let mut query = user_select_builder(input);
-            query.push(" ORDER BY u.`id` ASC LIMIT ");
-            query.push_bind(input.size as i64);
-            query.push(" OFFSET ");
-            query.push_bind(input.offset as i64);
+            query.push(" ORDER BY u.`id` ASC");
+            push_limit_offset(&mut query, Page::from_offset_size(input.offset, input.size))?;
 
             query
                 .build()

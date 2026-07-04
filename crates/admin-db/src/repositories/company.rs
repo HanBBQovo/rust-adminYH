@@ -3,7 +3,9 @@ use admin_core::{
     services::{company::ServiceFuture, CompanyStore},
     AppError, AppResult,
 };
-use sqlx::{MySqlPool, Row};
+use sqlx::{MySql, MySqlPool, QueryBuilder, Row};
+
+use crate::pagination::{push_limit_offset, Page};
 
 #[derive(Debug, Clone)]
 pub struct MySqlCompanyRepository {
@@ -23,7 +25,7 @@ impl CompanyStore for MySqlCompanyRepository {
         size: usize,
     ) -> ServiceFuture<'a, AppResult<Vec<Company>>> {
         Box::pin(async move {
-            sqlx::query(
+            let mut query = QueryBuilder::<MySql>::new(
                 r#"
                 SELECT
                     c.`id`,
@@ -35,15 +37,16 @@ impl CompanyStore for MySqlCompanyRepository {
                 LEFT JOIN `company_order` co ON co.`com_name` = c.`name`
                 GROUP BY c.`id`, c.`name`, c.`createAt`, c.`updateAt`
                 ORDER BY c.`id` ASC
-                LIMIT ? OFFSET ?
                 "#,
-            )
-            .bind(size as i64)
-            .bind(offset as i64)
-            .map(company_from_row)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(db_error)
+            );
+            push_limit_offset(&mut query, Page::from_offset_size(offset, size))?;
+
+            query
+                .build()
+                .map(company_from_row)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(db_error)
         })
     }
 
