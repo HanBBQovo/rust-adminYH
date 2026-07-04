@@ -1,5 +1,5 @@
 import { Eye, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import {
   createCompany,
@@ -36,7 +36,7 @@ import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useConfirm } from '@/components/ui/use-confirm'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
-import { useResource } from '@/lib/use-resource'
+import { usePaginatedResource } from '@/lib/use-paginated-resource'
 
 type CompanyFormMode = 'create' | 'edit' | 'view'
 
@@ -131,16 +131,15 @@ function CompanyFormDialog({
 export default function CompaniesList() {
   const confirm = useConfirm()
   const { showToast } = useGlobalToast()
-  const [page, setPage] = useState(1)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<CompanyFormMode>('create')
   const [selectedCompany, setSelectedCompany] = useState<LegacyCompany | undefined>()
   const [submitting, setSubmitting] = useState(false)
-
-  const query = useMemo(() => ({ page, pageSize: PAGE_SIZE }), [page])
-  const { data, loading, error, refresh } = useResource(() => listCompanies(query), [query])
-  const rows = data?.rows ?? []
-  const total = data?.total ?? 0
+  const { data, loading, error, refresh, page, pageSize, rows, pagination } = usePaginatedResource({
+    pageSize: PAGE_SIZE,
+    buildQuery: ({ page, pageSize }) => ({ page, pageSize }),
+    fetcher: listCompanies,
+  })
 
   const openCreateDialog = () => {
     setSelectedCompany(undefined)
@@ -224,7 +223,7 @@ export default function CompaniesList() {
         emptyTitle="暂无发货公司"
         emptyDescription="点击新建发货公司补充基础资料。"
         onRetry={refresh}
-        pagination={data ? { page, pageSize: PAGE_SIZE, total, onPageChange: setPage } : undefined}
+        pagination={pagination}
       >
         <Table>
           <TableHeader>
@@ -240,7 +239,7 @@ export default function CompaniesList() {
           <TableBody>
             {rows.map((row, index) => (
               <TableRow key={row.id}>
-                <DataTableRowNumberCell value={(page - 1) * PAGE_SIZE + index + 1} />
+                <DataTableRowNumberCell value={(page - 1) * pageSize + index + 1} />
                 <StickyActionCell>
                   <DataTableActionGroup>
                     <DataTableIconAction label="查看发货公司" icon={Eye} onClick={() => openCompanyDialog('view', row)} />
