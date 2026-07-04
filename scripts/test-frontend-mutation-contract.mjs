@@ -30,6 +30,7 @@ const companiesList = read('apps/desktop/web/src/pages/CompaniesList.tsx')
 const ordersList = read('apps/desktop/web/src/pages/OrdersList.tsx')
 const rolesList = read('apps/desktop/web/src/pages/RolesList.tsx')
 const menusList = read('apps/desktop/web/src/pages/MenusList.tsx')
+const usersList = read('apps/desktop/web/src/pages/UsersList.tsx')
 const rebuildPlan = read('docs/rebuild-plan.md')
 
 assertIncludes(mutationHook, 'export function useMutationAction', 'shared mutation action hook must be exported')
@@ -50,6 +51,7 @@ const migratedPages = [
   ['OrdersList', ordersList],
   ['RolesList', rolesList],
   ['MenusList', menusList],
+  ['UsersList', usersList],
 ]
 
 for (const [pageName, pageContent] of migratedPages) {
@@ -63,6 +65,6 @@ for (const [pageName, pageContent] of migratedPages) {
 }
 
 assertIncludes(rebuildPlan, 'src/lib/use-mutation-action.ts', 'rebuild plan must document the shared mutation action hook')
-assertIncludes(rebuildPlan, 'CompaniesList、OrdersList、RolesList、MenusList', 'rebuild plan must document the current migrated pages')
+assertIncludes(rebuildPlan, 'CompaniesList、OrdersList、RolesList、MenusList、UsersList', 'rebuild plan must document the current migrated pages')
 
 console.log('Frontend mutation contract OK')

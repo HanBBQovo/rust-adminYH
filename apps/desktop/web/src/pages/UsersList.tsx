@@ -50,8 +50,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useConfirm } from '@/components/ui/use-confirm'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
+import { useMutationAction } from '@/lib/use-mutation-action'
 import { usePaginatedResource } from '@/lib/use-paginated-resource'
 import { useResource } from '@/lib/use-resource'
 
@@ -306,8 +306,8 @@ function PasswordDialog({
 }
 
 export default function UsersList() {
-  const confirm = useConfirm()
   const { showToast } = useGlobalToast()
+  const { pending: submitting, runMutation, runConfirmedMutation } = useMutationAction()
   const [draft, setDraft] = useState<UserFilterDraft>(() => emptyFilters())
   const [filters, setFilters] = useState<UserListFilters>({})
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -315,7 +315,6 @@ export default function UsersList() {
   const [selectedUser, setSelectedUser] = useState<LegacyUserDetail | null>()
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
   const [passwordUser, setPasswordUser] = useState<LegacyUserListItem | undefined>()
-  const [submitting, setSubmitting] = useState(false)
 
   const { data, loading, error, refresh, page, pageSize, setPage, rows, pagination } = usePaginatedResource({
     pageSize: PAGE_SIZE,
@@ -374,32 +373,26 @@ export default function UsersList() {
   }
 
   const submitCreate = async (values: UserCreatePayload) => {
-    setSubmitting(true)
-    try {
-      await createUser(values)
-      showToast('success', '创建用户成功！', { translate: false })
-      setDialogOpen(false)
-      refresh()
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '用户保存失败', { translate: false })
-    } finally {
-      setSubmitting(false)
-    }
+    await runMutation(() => createUser(values), {
+      successMessage: '创建用户成功！',
+      errorMessage: '用户保存失败',
+      onSuccess: () => {
+        setDialogOpen(false)
+        refresh()
+      },
+    })
   }
 
   const submitUpdate = async (values: UserUpdatePayload) => {
     if (!selectedUser) return
-    setSubmitting(true)
-    try {
-      await updateUser(selectedUser.id, values)
-      showToast('success', '修改用户信息成功!', { translate: false })
-      setDialogOpen(false)
-      refresh()
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '用户保存失败', { translate: false })
-    } finally {
-      setSubmitting(false)
-    }
+    await runMutation(() => updateUser(selectedUser.id, values), {
+      successMessage: '修改用户信息成功!',
+      errorMessage: '用户保存失败',
+      onSuccess: () => {
+        setDialogOpen(false)
+        refresh()
+      },
+    })
   }
 
   const openPasswordDialog = (user: LegacyUserListItem) => {
@@ -409,16 +402,11 @@ export default function UsersList() {
 
   const submitPassword = async (password: string) => {
     if (!passwordUser) return
-    setSubmitting(true)
-    try {
-      await updateUserPassword(passwordUser.id, { password })
-      showToast('success', '修改密码成功！', { translate: false })
-      setPasswordDialogOpen(false)
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '密码修改失败', { translate: false })
-    } finally {
-      setSubmitting(false)
-    }
+    await runMutation(() => updateUserPassword(passwordUser.id, { password }), {
+      successMessage: '修改密码成功！',
+      errorMessage: '密码修改失败',
+      onSuccess: () => setPasswordDialogOpen(false),
+    })
   }
 
   const removeUser = async (user: LegacyUserListItem) => {
@@ -427,21 +415,17 @@ export default function UsersList() {
       return
     }
 
-    const confirmed = await confirm({
-      title: '删除用户',
-      description: `确认删除用户 ${user.name}？用户 58 为旧系统保护账号，不允许删除。`,
-      confirmText: '删除',
-      variant: 'destructive',
+    await runConfirmedMutation(() => deleteUser(user.id), {
+      confirm: {
+        title: '删除用户',
+        description: `确认删除用户 ${user.name}？用户 58 为旧系统保护账号，不允许删除。`,
+        confirmText: '删除',
+        variant: 'destructive',
+      },
+      successMessage: '删除用户成功！',
+      errorMessage: '用户删除失败',
+      onSuccess: refresh,
     })
-    if (!confirmed) return
-
-    try {
-      await deleteUser(user.id)
-      showToast('success', '删除用户成功！', { translate: false })
-      refresh()
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '用户删除失败', { translate: false })
-    }
   }
 
   return (
