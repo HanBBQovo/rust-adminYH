@@ -492,10 +492,78 @@ async fn json_request(
     (status, json)
 }
 
+async fn request_status(
+    app: axum::Router,
+    method: &str,
+    uri: &str,
+    token: Option<&str>,
+    body: &str,
+) -> StatusCode {
+    let mut builder = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header(CONTENT_TYPE, "application/json");
+    if let Some(token) = token {
+        builder = builder.header("authorization", format!("Bearer {token}"));
+    }
+
+    app.oneshot(
+        builder
+            .body(Body::from(body.to_owned()))
+            .expect("request should build"),
+    )
+    .await
+    .expect("request should succeed")
+    .status()
+}
+
+fn concrete_uri(route_path: &str) -> String {
+    route_path
+        .replace("{user_id}", "58")
+        .replace("{role_id}", "1")
+        .replace("{menu_id}", "1")
+        .replace("{company_id}", "1")
+        .replace("{order_id}", "1")
+        .replace("{receipt_id}", "1")
+}
+
+fn sample_body(method: &str, route_path: &str) -> &'static str {
+    match (method, route_path) {
+        ("POST", "/login") => r#"{"name":"admin","password":"wrong"}"#,
+        ("POST", "/users") => r#"{"name":"u","password":"p","roleId":2}"#,
+        ("POST", "/role") => r#"{"name":"role"}"#,
+        ("POST", "/role/assign") => r#"{"roleId":2,"menuList":[1]}"#,
+        ("POST", "/menu") => r#"{"name":"menu","url":"/menu","type":1}"#,
+        ("POST", "/company") => r#"{"name":"跨越速运"}"#,
+        ("POST", "/order") => r#"{"oddnumber":"YD1","consignee":"收","consignor":"发"}"#,
+        ("PATCH", "/users/{user_id}") => r#"{"name":"operator","roleId":2}"#,
+        ("PATCH", "/users/{user_id}/password") => r#"{"password":"new-secret"}"#,
+        ("PATCH", "/role/{role_id}") => r#"{"name":"role"}"#,
+        ("PATCH", "/menu/{menu_id}") => r#"{"name":"menu","type":1}"#,
+        ("PATCH", "/company/{company_id}") => r#"{"name":"跨越速运"}"#,
+        ("PATCH", "/order/{order_id}") => {
+            r#"{"oddnumber":"YD1","consignee":"收","consignor":"发"}"#
+        }
+        ("PATCH", "/receipt/{receipt_id}") => r#"{"recoverystate":"已回收"}"#,
+        ("PATCH", "/receipt/batch/status") => r#"{"receiptIds":[1],"recoverystate":"已回收"}"#,
+        ("POST", _) => r#"{"offset":0,"size":1}"#,
+        _ => "",
+    }
+}
+
 #[test]
 fn documented_route_matrix_is_registered_in_router() {
     let docs = include_str!("../../../docs/api-compatibility.md");
     let routes = include_str!("../src/routes/mod.rs");
+
+    assert!(
+        routes.contains("fn compat_route("),
+        "router must use the shared compat_route helper"
+    );
+    assert!(
+        routes.contains("format!(\"/api{legacy_path}\")"),
+        "compat_route must derive /api paths from the legacy path"
+    );
 
     for spec in DOCUMENTED_ROUTES {
         assert!(
@@ -517,16 +585,51 @@ fn documented_route_matrix_is_registered_in_router() {
             spec.legacy_route_path
         );
         assert!(
-            routes.contains(&format!("\"{}\"", spec.api_route_path)),
-            "{} missing api route {} in router",
+            spec.api_route_path == format!("/api{}", spec.legacy_route_path),
+            "{} api route {} must be derived from legacy route {}",
             spec.label,
-            spec.api_route_path
+            spec.api_route_path,
+            spec.legacy_route_path
         );
         assert!(
             ["GET", "POST", "PATCH", "DELETE"].contains(&spec.method),
             "{} has unsupported method {}",
             spec.label,
             spec.method
+        );
+    }
+}
+
+#[tokio::test]
+async fn documented_routes_are_live_on_legacy_and_api_paths() {
+    let app = build_router(admin_state());
+
+    for spec in DOCUMENTED_ROUTES {
+        let legacy_uri = concrete_uri(spec.legacy_route_path);
+        let api_uri = concrete_uri(spec.api_route_path);
+        let body = sample_body(spec.method, spec.legacy_route_path);
+
+        let legacy_status = request_status(app.clone(), spec.method, &legacy_uri, None, body).await;
+        let api_status = request_status(app.clone(), spec.method, &api_uri, None, body).await;
+
+        assert_ne!(
+            legacy_status,
+            StatusCode::NOT_FOUND,
+            "{} legacy route {} must be live",
+            spec.label,
+            legacy_uri
+        );
+        assert_ne!(
+            api_status,
+            StatusCode::NOT_FOUND,
+            "{} api route {} must be live",
+            spec.label,
+            api_uri
+        );
+        assert_eq!(
+            api_status, legacy_status,
+            "{} legacy and api paths must share route behavior",
+            spec.label
         );
     }
 }

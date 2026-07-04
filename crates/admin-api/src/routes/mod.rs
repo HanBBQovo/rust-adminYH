@@ -1,6 +1,6 @@
 use axum::{
     http::{HeaderName, HeaderValue},
-    routing::{get, post},
+    routing::{get, post, MethodRouter},
     Router,
 };
 use tower_http::{
@@ -24,158 +24,109 @@ pub fn build_router(state: AppState) -> Router {
         .expect("request id header config must be a valid HTTP header name");
     let cors = cors_layer(&state.config.http.cors_origins);
 
-    Router::new()
-        .route("/health", get(health::health_check))
-        .route("/api/health", get(health::health_check))
-        .route("/login", post(auth::login))
-        .route("/api/login", post(auth::login))
-        .route("/code", get(auth::code))
-        .route("/api/code", get(auth::code))
-        .route("/users/me", get(auth::me))
-        .route("/api/users/me", get(auth::me))
-        .route("/admin/resources", get(resources::list))
-        .route("/api/admin/resources", get(resources::list))
-        .route("/users", post(user::create))
-        .route("/api/users", post(user::create))
-        .route("/users/list", post(user::list))
-        .route("/api/users/list", post(user::list))
-        .route(
-            "/users/{user_id}",
-            get(user::detail).patch(user::update).delete(user::remove),
-        )
-        .route(
-            "/api/users/{user_id}",
-            get(user::detail).patch(user::update).delete(user::remove),
-        )
-        .route(
-            "/users/{user_id}/password",
-            axum::routing::patch(user::update_password),
-        )
-        .route(
-            "/api/users/{user_id}/password",
-            axum::routing::patch(user::update_password),
-        )
-        .route("/users/{user_id}/avatar", get(user::avatar))
-        .route("/api/users/{user_id}/avatar", get(user::avatar))
-        .route("/upload/avatar", post(user::upload_avatar))
-        .route("/api/upload/avatar", post(user::upload_avatar))
-        .route("/role", post(role::create))
-        .route("/api/role", post(role::create))
-        .route("/role/list", post(role::list))
-        .route("/api/role/list", post(role::list))
-        .route("/role/assign", post(role::assign))
-        .route("/api/role/assign", post(role::assign))
-        .route(
-            "/role/{role_id}",
-            get(role::detail).patch(role::update).delete(role::remove),
-        )
-        .route(
-            "/api/role/{role_id}",
-            get(role::detail).patch(role::update).delete(role::remove),
-        )
-        .route("/role/{role_id}/menu", get(menu::role_menu))
-        .route("/api/role/{role_id}/menu", get(menu::role_menu))
-        .route("/role/{role_id}/menuIds", get(menu::role_menu_ids))
-        .route("/api/role/{role_id}/menuIds", get(menu::role_menu_ids))
-        .route("/menu", post(menu::create))
-        .route("/api/menu", post(menu::create))
-        .route(
-            "/menu/{menu_id}",
-            get(menu::detail).patch(menu::update).delete(menu::remove),
-        )
-        .route(
-            "/api/menu/{menu_id}",
-            get(menu::detail).patch(menu::update).delete(menu::remove),
-        )
-        .route("/menu/tree", get(menu::menu_tree))
-        .route("/api/menu/tree", get(menu::menu_tree))
-        .route("/chart/headerList", get(chart::header_list))
-        .route("/api/chart/headerList", get(chart::header_list))
-        .route(
-            "/chart/company/order/count",
-            get(chart::company_order_count),
-        )
-        .route(
-            "/api/chart/company/order/count",
-            get(chart::company_order_count),
-        )
-        .route(
-            "/chart/company/order/sumfreight",
-            get(chart::company_order_sumfreight),
-        )
-        .route(
-            "/api/chart/company/order/sumfreight",
-            get(chart::company_order_sumfreight),
-        )
-        .route(
-            "/chart/company/receipt/sumreceipt",
-            get(chart::company_receipt_sumreceipt),
-        )
-        .route(
-            "/api/chart/company/receipt/sumreceipt",
-            get(chart::company_receipt_sumreceipt),
-        )
-        .route("/order", post(order::create))
-        .route("/api/order", post(order::create))
-        .route("/order/list", post(order::list))
-        .route("/api/order/list", post(order::list))
-        .route(
-            "/order/{order_id}",
-            get(order::detail)
-                .patch(order::update)
-                .delete(order::remove),
-        )
-        .route(
-            "/api/order/{order_id}",
-            get(order::detail)
-                .patch(order::update)
-                .delete(order::remove),
-        )
-        .route("/receipt/list", post(receipt::list))
-        .route("/api/receipt/list", post(receipt::list))
-        .route(
-            "/receipt/batch/status",
-            axum::routing::patch(receipt::update_statuses),
-        )
-        .route(
-            "/api/receipt/batch/status",
-            axum::routing::patch(receipt::update_statuses),
-        )
-        .route(
-            "/receipt/{receipt_id}",
-            axum::routing::patch(receipt::update_status),
-        )
-        .route(
-            "/api/receipt/{receipt_id}",
-            axum::routing::patch(receipt::update_status),
-        )
-        .route("/notrecovery/list", post(receipt::not_recovery))
-        .route("/api/notrecovery/list", post(receipt::not_recovery))
-        .route("/recovery/list", post(receipt::recovery))
-        .route("/api/recovery/list", post(receipt::recovery))
-        .route("/memory/list", post(memory::list))
-        .route("/api/memory/list", post(memory::list))
-        .route("/company", post(company::create))
-        .route("/api/company", post(company::create))
-        .route(
-            "/company/{company_id}",
-            get(company::detail)
-                .patch(company::update)
-                .delete(company::remove),
-        )
-        .route(
-            "/api/company/{company_id}",
-            get(company::detail)
-                .patch(company::update)
-                .delete(company::remove),
-        )
-        .route("/company/list", post(company::list))
-        .route("/api/company/list", post(company::list))
+    let router = Router::new();
+    let router = compat_route(router, "/health", get(health::health_check));
+    let router = compat_route(router, "/login", post(auth::login));
+    let router = compat_route(router, "/code", get(auth::code));
+    let router = compat_route(router, "/users/me", get(auth::me));
+    let router = compat_route(router, "/admin/resources", get(resources::list));
+    let router = compat_route(router, "/users", post(user::create));
+    let router = compat_route(router, "/users/list", post(user::list));
+    let router = compat_route(
+        router,
+        "/users/{user_id}",
+        get(user::detail).patch(user::update).delete(user::remove),
+    );
+    let router = compat_route(
+        router,
+        "/users/{user_id}/password",
+        axum::routing::patch(user::update_password),
+    );
+    let router = compat_route(router, "/users/{user_id}/avatar", get(user::avatar));
+    let router = compat_route(router, "/upload/avatar", post(user::upload_avatar));
+    let router = compat_route(router, "/role", post(role::create));
+    let router = compat_route(router, "/role/list", post(role::list));
+    let router = compat_route(router, "/role/assign", post(role::assign));
+    let router = compat_route(
+        router,
+        "/role/{role_id}",
+        get(role::detail).patch(role::update).delete(role::remove),
+    );
+    let router = compat_route(router, "/role/{role_id}/menu", get(menu::role_menu));
+    let router = compat_route(router, "/role/{role_id}/menuIds", get(menu::role_menu_ids));
+    let router = compat_route(router, "/menu", post(menu::create));
+    let router = compat_route(
+        router,
+        "/menu/{menu_id}",
+        get(menu::detail).patch(menu::update).delete(menu::remove),
+    );
+    let router = compat_route(router, "/menu/tree", get(menu::menu_tree));
+    let router = compat_route(router, "/chart/headerList", get(chart::header_list));
+    let router = compat_route(
+        router,
+        "/chart/company/order/count",
+        get(chart::company_order_count),
+    );
+    let router = compat_route(
+        router,
+        "/chart/company/order/sumfreight",
+        get(chart::company_order_sumfreight),
+    );
+    let router = compat_route(
+        router,
+        "/chart/company/receipt/sumreceipt",
+        get(chart::company_receipt_sumreceipt),
+    );
+    let router = compat_route(router, "/order", post(order::create));
+    let router = compat_route(router, "/order/list", post(order::list));
+    let router = compat_route(
+        router,
+        "/order/{order_id}",
+        get(order::detail)
+            .patch(order::update)
+            .delete(order::remove),
+    );
+    let router = compat_route(router, "/receipt/list", post(receipt::list));
+    let router = compat_route(
+        router,
+        "/receipt/batch/status",
+        axum::routing::patch(receipt::update_statuses),
+    );
+    let router = compat_route(
+        router,
+        "/receipt/{receipt_id}",
+        axum::routing::patch(receipt::update_status),
+    );
+    let router = compat_route(router, "/notrecovery/list", post(receipt::not_recovery));
+    let router = compat_route(router, "/recovery/list", post(receipt::recovery));
+    let router = compat_route(router, "/memory/list", post(memory::list));
+    let router = compat_route(router, "/company", post(company::create));
+    let router = compat_route(
+        router,
+        "/company/{company_id}",
+        get(company::detail)
+            .patch(company::update)
+            .delete(company::remove),
+    );
+    let router = compat_route(router, "/company/list", post(company::list));
+
+    router
         .with_state(state)
         .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
         .layer(SetRequestIdLayer::new(request_id_header, MakeRequestUuid))
         .layer(TraceLayer::new_for_http())
         .layer(cors)
+}
+
+fn compat_route(
+    router: Router<AppState>,
+    legacy_path: &'static str,
+    method_router: MethodRouter<AppState>,
+) -> Router<AppState> {
+    let api_path = format!("/api{legacy_path}");
+    router
+        .route(legacy_path, method_router.clone())
+        .route(&api_path, method_router)
 }
 
 fn cors_layer(origins: &CorsOrigins) -> CorsLayer {
