@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ThemeProvider } from '@/components/theme'
+import { ConfirmDialogContext } from '@/components/ui/confirm-dialog-context'
 import { GlobalToastContext } from '@/components/ui/global-toast-context'
 import ReceiptsList from '@/pages/ReceiptsList'
 
@@ -75,18 +76,21 @@ const FOURTH_RECEIPT_ROW = {
   consignee: '钱七',
 }
 
-function renderReceiptsList(options?: { showToast?: ReturnType<typeof vi.fn> }) {
+function renderReceiptsList(options?: { confirm?: () => Promise<boolean>; showToast?: ReturnType<typeof vi.fn> }) {
+  const confirm = options?.confirm || vi.fn().mockResolvedValue(true)
   const showToast = options?.showToast || vi.fn()
 
   render(
     <ThemeProvider>
       <GlobalToastContext.Provider value={{ showToast }}>
-        <ReceiptsList />
+        <ConfirmDialogContext.Provider value={{ confirm }}>
+          <ReceiptsList />
+        </ConfirmDialogContext.Provider>
       </GlobalToastContext.Provider>
     </ThemeProvider>,
   )
 
-  return { showToast }
+  return { confirm, showToast }
 }
 
 describe('ReceiptsList', () => {

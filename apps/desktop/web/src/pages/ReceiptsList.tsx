@@ -34,6 +34,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
+import { useMutationAction } from '@/lib/use-mutation-action'
 import { usePaginatedResource } from '@/lib/use-paginated-resource'
 
 interface ReceiptFilterDraft {
@@ -121,6 +122,7 @@ function renderCell(row: LegacyReceipt, column: ReceiptColumn) {
 
 export default function ReceiptsList() {
   const { showToast } = useGlobalToast()
+  const { runMutation } = useMutationAction()
   const [mode, setMode] = useState<ReceiptListMode>('all')
   const [draft, setDraft] = useState<ReceiptFilterDraft>(() => emptyFilters())
   const [filters, setFilters] = useState<ReceiptListFilters>({})
@@ -190,15 +192,12 @@ export default function ReceiptsList() {
 
   const patchStatus = async (row: LegacyReceipt, kind: ReceiptStatusAction) => {
     setUpdatingId(row.id)
-    try {
-      await updateReceiptStatus(row.id, receiptStatusPatch(kind))
-      showToast('success', receiptStatusMessage(kind), { translate: false })
-      refresh()
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '回单状态更新失败', { translate: false })
-    } finally {
-      setUpdatingId(null)
-    }
+    await runMutation(() => updateReceiptStatus(row.id, receiptStatusPatch(kind)), {
+      successMessage: receiptStatusMessage(kind),
+      errorMessage: '回单状态更新失败',
+      onSuccess: refresh,
+    })
+    setUpdatingId(null)
   }
 
   const patchSelectedStatuses = async (kind: ReceiptStatusAction) => {
@@ -208,20 +207,27 @@ export default function ReceiptsList() {
     }
 
     setBatchUpdating(kind)
-    try {
-      await updateReceiptStatuses(
-        selectedRows.map((row) => row.id),
-        receiptStatusPatch(kind),
-      )
-      showToast('success', `${receiptStatusMessage(kind)}已批量更新 ${selectedRows.length} 条回单。`, { translate: false })
-      setSelectedIds([])
+    let succeeded = false
+    await runMutation(
+      () =>
+        updateReceiptStatuses(
+          selectedRows.map((row) => row.id),
+          receiptStatusPatch(kind),
+        ),
+      {
+        successMessage: `${receiptStatusMessage(kind)}已批量更新 ${selectedRows.length} 条回单。`,
+        errorMessage: '批量回单状态更新失败',
+        onSuccess: () => {
+          succeeded = true
+          setSelectedIds([])
+          refresh()
+        },
+      },
+    )
+    if (!succeeded) {
       refresh()
-    } catch (err) {
-      showToast('error', err instanceof Error ? err.message : '批量回单状态更新失败', { translate: false })
-      refresh()
-    } finally {
-      setBatchUpdating(null)
     }
+    setBatchUpdating(null)
   }
 
   const batchDisabled = loading || batchUpdating !== null || selectedRows.length === 0

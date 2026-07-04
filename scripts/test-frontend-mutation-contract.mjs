@@ -31,6 +31,7 @@ const ordersList = read('apps/desktop/web/src/pages/OrdersList.tsx')
 const rolesList = read('apps/desktop/web/src/pages/RolesList.tsx')
 const menusList = read('apps/desktop/web/src/pages/MenusList.tsx')
 const usersList = read('apps/desktop/web/src/pages/UsersList.tsx')
+const receiptsList = read('apps/desktop/web/src/pages/ReceiptsList.tsx')
 const rebuildPlan = read('docs/rebuild-plan.md')
 
 assertIncludes(mutationHook, 'export function useMutationAction', 'shared mutation action hook must be exported')
@@ -54,6 +55,8 @@ const migratedPages = [
   ['UsersList', usersList],
 ]
 
+const unconfirmedMigratedPages = [['ReceiptsList', receiptsList]]
+
 for (const [pageName, pageContent] of migratedPages) {
   assertIncludes(pageContent, "import { useMutationAction } from '@/lib/use-mutation-action'", `${pageName} must import the shared mutation hook`)
   assertIncludes(pageContent, 'pending: submitting', `${pageName} must derive submitting state from the shared mutation hook`)
@@ -64,7 +67,15 @@ for (const [pageName, pageContent] of migratedPages) {
   assertNotMatches(pageContent, /setSubmitting\s*\(/, `${pageName} must not manually toggle submitting state`)
 }
 
+for (const [pageName, pageContent] of unconfirmedMigratedPages) {
+  assertIncludes(pageContent, "import { useMutationAction } from '@/lib/use-mutation-action'", `${pageName} must import the shared mutation hook`)
+  assertIncludes(pageContent, 'runMutation(', `${pageName} status mutation paths must use the shared mutation runner`)
+  assertNotMatches(pageContent, /setSubmitting\s*\(/, `${pageName} must not manually toggle generic submitting state`)
+  assertNotMatches(pageContent, /showToast\('success'/, `${pageName} must not hand-roll success toasts for migrated mutation paths`)
+  assertNotMatches(pageContent, /err instanceof Error \? err\.message/, `${pageName} must not hand-roll mutation error normalization`)
+}
+
 assertIncludes(rebuildPlan, 'src/lib/use-mutation-action.ts', 'rebuild plan must document the shared mutation action hook')
-assertIncludes(rebuildPlan, 'CompaniesList、OrdersList、RolesList、MenusList、UsersList', 'rebuild plan must document the current migrated pages')
+assertIncludes(rebuildPlan, 'CompaniesList、OrdersList、ReceiptsList、RolesList、MenusList、UsersList', 'rebuild plan must document the current migrated pages')
 
 console.log('Frontend mutation contract OK')
