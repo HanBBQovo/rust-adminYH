@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ThemeProvider } from '@/components/theme'
@@ -66,5 +67,34 @@ describe('ResourceRegistry', () => {
     await waitFor(() => {
       expect(screen.queryByText(/src\/|切片|后续新增/)).not.toBeInTheDocument()
     })
+  })
+
+  it('filters by API path, owner, and legacy module label without exposing legacy paths', async () => {
+    const user = userEvent.setup()
+    renderRegistry()
+
+    expect(await screen.findByText('/order/list')).toBeVisible()
+    const search = screen.getByPlaceholderText('搜索模块、API 或负责人...')
+
+    await user.type(search, '系统设置')
+    expect(screen.getByText('菜单资源')).toBeVisible()
+    expect(screen.getByText('/menu/tree')).toBeVisible()
+    expect(screen.queryByText('/order/list')).not.toBeInTheDocument()
+
+    await user.clear(search)
+    await user.type(search, '/order')
+    expect(screen.getByText('/order/list')).toBeVisible()
+    expect(screen.queryByText('/menu/tree')).not.toBeInTheDocument()
+
+    await user.clear(search)
+    await user.type(search, '菜单权限')
+    expect(screen.getByText('菜单资源')).toBeVisible()
+    expect(screen.getByText('菜单权限')).toBeVisible()
+    expect(screen.queryByText('adminYh/src/router')).not.toBeInTheDocument()
+
+    await user.clear(search)
+    await user.type(search, '不存在')
+    expect(screen.getByText('没有匹配模块')).toBeVisible()
+    expect(screen.getByText('请调整关键词或刷新模块数据。')).toBeVisible()
   })
 })

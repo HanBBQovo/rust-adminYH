@@ -57,6 +57,12 @@ function lineNumber(content, index) {
   return content.slice(0, index).split('\n').length
 }
 
+function assertIncludes(content, expected, message) {
+  if (!content.includes(expected)) {
+    addViolation('src/pages/ResourceRegistry.tsx', 1, message)
+  }
+}
+
 for (const absolutePath of listSourceFiles(sourceRoot)) {
   const file = toRelative(absolutePath)
   const content = readFileSync(absolutePath, 'utf8')
@@ -104,6 +110,23 @@ for (const absolutePath of listSourceFiles(sourceRoot)) {
     }
   }
 }
+
+const resourceRegistry = readFileSync(`${sourceRoot}/pages/ResourceRegistry.tsx`, 'utf8')
+assertIncludes(
+  resourceRegistry,
+  "import { DataTableSurface } from '@/components/layout/DataTableSurface'",
+  '页面注册表必须复用 DataTableSurface 管理 loading/error/empty/table 外壳',
+)
+assertIncludes(
+  resourceRegistry,
+  '<DataTableSurface',
+  '页面注册表必须通过 DataTableSurface 渲染注册表表格',
+)
+assertIncludes(
+  resourceRegistry,
+  'toolbar={',
+  '页面注册表必须通过 DataTableSurface toolbar 插槽保留搜索工具条',
+)
 
 if (violations.length > 0) {
   console.error('Frontend architecture gate failed:')

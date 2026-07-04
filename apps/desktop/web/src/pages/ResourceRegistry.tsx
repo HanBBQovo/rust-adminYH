@@ -1,13 +1,11 @@
 import { RefreshCw } from 'lucide-react'
 
 import { listResourceSummaries, type ResourceSummary } from '@/api/registry'
-import { InlineLoader } from '@/components/PageLoader'
+import { DataTableSurface } from '@/components/layout/DataTableSurface'
 import { DataTableToolbar } from '@/components/layout/DataTableToolbar'
-import { PageShell, PageSurface } from '@/components/layout/PageScaffold'
+import { PageShell } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatNumber } from '@/lib/formatters'
 import { useResource } from '@/lib/use-resource'
@@ -51,60 +49,55 @@ export default function ResourceRegistry() {
         </Button>
       }
     >
-      <PageSurface>
-        <DataTableToolbar
-          title="业务模块"
-          description="集中查看可用业务模块、兼容接口、数据量和维护归属。"
-          searchValue={keyword}
-          onSearchChange={setKeyword}
-          searchPlaceholder="搜索模块、API 或负责人..."
-        />
-        {error ? (
-          <div className="p-5">
-            <ErrorState message={error} onRetry={refresh} />
-          </div>
-        ) : loading && !data ? (
-          <div className="flex h-48 items-center justify-center">
-            <InlineLoader />
-          </div>
-        ) : rows.length ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>模块</TableHead>
-                <TableHead>兼容 API</TableHead>
-                <TableHead>旧模块</TableHead>
-                <TableHead>负责人</TableHead>
-                <TableHead className="text-right">记录数</TableHead>
-                <TableHead>状态</TableHead>
+      <DataTableSurface
+        title="业务模块"
+        description="集中查看可用业务模块、兼容接口、数据量和维护归属。"
+        loading={loading && !data}
+        error={error}
+        emptyTitle="没有匹配模块"
+        emptyDescription="请调整关键词或刷新模块数据。"
+        isEmpty={!rows.length}
+        onRetry={refresh}
+        toolbar={
+          <DataTableToolbar
+            searchValue={keyword}
+            onSearchChange={setKeyword}
+            searchPlaceholder="搜索模块、API 或负责人..."
+          />
+        }
+      >
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>模块</TableHead>
+              <TableHead>兼容 API</TableHead>
+              <TableHead>旧模块</TableHead>
+              <TableHead>负责人</TableHead>
+              <TableHead className="text-right">记录数</TableHead>
+              <TableHead>状态</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((item) => (
+              <TableRow key={item.key}>
+                <TableCell>
+                  <div className="flex flex-col gap-1">
+                    <span className="font-medium">{item.title}</span>
+                    <span className="max-w-md text-xs text-muted-foreground">{item.description}</span>
+                  </div>
+                </TableCell>
+                <TableCell className="font-mono text-xs">{item.apiPath}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{legacyModuleLabels[item.key]}</TableCell>
+                <TableCell>{item.owner}</TableCell>
+                <TableCell className="text-right font-mono">{formatNumber(item.count)}</TableCell>
+                <TableCell>
+                  <Badge variant={statusMeta[item.status].variant}>{statusMeta[item.status].label}</Badge>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((item) => (
-                <TableRow key={item.key}>
-                  <TableCell>
-                    <div className="flex flex-col gap-1">
-                      <span className="font-medium">{item.title}</span>
-                      <span className="max-w-md text-xs text-muted-foreground">{item.description}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">{item.apiPath}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{legacyModuleLabels[item.key]}</TableCell>
-                  <TableCell>{item.owner}</TableCell>
-                  <TableCell className="text-right font-mono">{formatNumber(item.count)}</TableCell>
-                  <TableCell>
-                    <Badge variant={statusMeta[item.status].variant}>{statusMeta[item.status].label}</Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : (
-          <div className="p-5">
-            <EmptyState title="没有匹配模块" description="请调整关键词或刷新模块数据。" />
-          </div>
-        )}
-      </PageSurface>
+            ))}
+          </TableBody>
+        </Table>
+      </DataTableSurface>
     </PageShell>
   )
 }

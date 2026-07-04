@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -52,6 +52,24 @@ describe('DataTableSurface', () => {
     expect(screen.getByText('加载中')).toBeInTheDocument()
     expect(screen.queryByText('操作按钮')).not.toBeInTheDocument()
     expect(screen.queryByText('暂无数据')).not.toBeInTheDocument()
+  })
+
+  it('keeps the toolbar visible across loading, error, and empty states', () => {
+    const toolbar = <div>列表工具条</div>
+
+    renderTableSurface({ loading: true, toolbar })
+    expect(screen.getByText('列表工具条')).toBeInTheDocument()
+    expect(screen.getByText('加载中')).toBeInTheDocument()
+
+    cleanup()
+    renderTableSurface({ error: '加载失败', toolbar })
+    expect(screen.getByText('列表工具条')).toBeInTheDocument()
+    expect(screen.getAllByText('加载失败')).toHaveLength(2)
+
+    cleanup()
+    renderTableSurface({ isEmpty: true, toolbar })
+    expect(screen.getByText('列表工具条')).toBeInTheDocument()
+    expect(screen.getByText('暂无数据')).toBeInTheDocument()
   })
 
   it('renders the error state and retries', async () => {
