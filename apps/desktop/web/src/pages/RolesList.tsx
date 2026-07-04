@@ -45,7 +45,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState } from '@/components/ui/error-state'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useDetailLoader } from '@/lib/use-detail-loader'
+import { useDetailDialog } from '@/lib/use-detail-dialog'
 import { useMutationAction } from '@/lib/use-mutation-action'
 import { usePaginatedResource } from '@/lib/use-paginated-resource'
 import { useResource } from '@/lib/use-resource'
@@ -274,14 +274,25 @@ function AssignMenusDialog({ open, role, submitting = false, onOpenChange, onSub
 }
 
 export default function RolesList() {
-  const { loadDetail, resetDetail } = useDetailLoader()
+  const {
+    close: closeDialog,
+    detail: selectedRole,
+    mode: dialogMode,
+    onOpenChange: handleDialogOpenChange,
+    open: dialogOpen,
+    openCreate: openCreateDialog,
+    openDetail: openRoleDialog,
+    setDetail: setSelectedRole,
+  } = useDetailDialog<LegacyRole, LegacyRole, RoleFormMode, null>({
+    createMode: 'create',
+    emptyDetail: null,
+    fallbackMessage: '角色详情加载失败',
+    loadDetail: (role) => getRole(role.id),
+  })
   const { pending: submitting, runMutation, runConfirmedMutation } = useMutationAction()
   const [filterDraft, setFilterDraft] = useState<RoleFilterDraft>(() => emptyFilters())
   const [filters, setFilters] = useState<Pick<RoleListParams, 'name' | 'intro' | 'createAt'>>({})
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [dialogMode, setDialogMode] = useState<RoleFormMode>('create')
   const [assignOpen, setAssignOpen] = useState(false)
-  const [selectedRole, setSelectedRole] = useState<LegacyRole | null>(null)
 
   const { data, loading, error, refresh, page, pageSize, setPage, rows, pagination } = usePaginatedResource({
     pageSize: PAGE_SIZE,
@@ -299,33 +310,6 @@ export default function RolesList() {
     setFilterDraft(emptyFilters())
     setFilters({})
     setPage(1)
-  }
-
-  const openCreateDialog = () => {
-    resetDetail()
-    setSelectedRole(null)
-    setDialogMode('create')
-    setDialogOpen(true)
-  }
-
-  const closeDialog = () => {
-    resetDetail()
-    setDialogOpen(false)
-  }
-
-  const handleDialogOpenChange = (open: boolean) => {
-    if (!open) resetDetail()
-    setDialogOpen(open)
-  }
-
-  const openRoleDialog = async (mode: Extract<RoleFormMode, 'edit' | 'view'>, role: LegacyRole) => {
-    setDialogMode(mode)
-    setSelectedRole(role)
-    setDialogOpen(true)
-    await loadDetail(() => getRole(role.id), {
-      fallbackMessage: '角色详情加载失败',
-      onLoaded: setSelectedRole,
-    })
   }
 
   const submitRole = async (values: RoleMutationPayload) => {

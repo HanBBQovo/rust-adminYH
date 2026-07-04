@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useDetailLoader } from '@/lib/use-detail-loader'
+import { useDetailDialog } from '@/lib/use-detail-dialog'
 import { useMutationAction } from '@/lib/use-mutation-action'
 import { usePaginatedResource } from '@/lib/use-paginated-resource'
 
@@ -129,43 +129,26 @@ function CompanyFormDialog({
 }
 
 export default function CompaniesList() {
-  const { loadDetail, resetDetail } = useDetailLoader()
+  const {
+    close: closeDialog,
+    detail: selectedCompany,
+    mode: dialogMode,
+    onOpenChange: handleDialogOpenChange,
+    open: dialogOpen,
+    openCreate: openCreateDialog,
+    openDetail: openCompanyDialog,
+  } = useDetailDialog<LegacyCompany, LegacyCompany, CompanyFormMode>({
+    createMode: 'create',
+    emptyDetail: undefined,
+    fallbackMessage: '发货公司详情加载失败',
+    loadDetail: (company) => getCompany(company.id),
+  })
   const { pending: submitting, runMutation, runConfirmedMutation } = useMutationAction()
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [dialogMode, setDialogMode] = useState<CompanyFormMode>('create')
-  const [selectedCompany, setSelectedCompany] = useState<LegacyCompany | undefined>()
   const { data, loading, error, refresh, page, pageSize, rows, pagination } = usePaginatedResource({
     pageSize: PAGE_SIZE,
     buildQuery: ({ page, pageSize }) => ({ page, pageSize }),
     fetcher: listCompanies,
   })
-
-  const openCreateDialog = () => {
-    resetDetail()
-    setSelectedCompany(undefined)
-    setDialogMode('create')
-    setDialogOpen(true)
-  }
-
-  const closeDialog = () => {
-    resetDetail()
-    setDialogOpen(false)
-  }
-
-  const handleDialogOpenChange = (open: boolean) => {
-    if (!open) resetDetail()
-    setDialogOpen(open)
-  }
-
-  const openCompanyDialog = async (mode: Extract<CompanyFormMode, 'edit' | 'view'>, company: LegacyCompany) => {
-    setDialogMode(mode)
-    setSelectedCompany(company)
-    setDialogOpen(true)
-    await loadDetail(() => getCompany(company.id), {
-      fallbackMessage: '发货公司详情加载失败',
-      onLoaded: setSelectedCompany,
-    })
-  }
 
   const submitCompany = async (values: CompanyMutationPayload) => {
     const selectedCompanyId = dialogMode === 'edit' ? selectedCompany?.id : undefined

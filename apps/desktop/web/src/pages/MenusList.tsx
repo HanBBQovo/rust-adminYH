@@ -9,6 +9,7 @@ import {
   getMenu,
   listMenuTree,
   normalizeMenuTree,
+  type LegacyMenuNode,
   type MenuCreateFormValues,
   type MenuCreatePayload,
   type MenuTreeItem,
@@ -45,7 +46,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useDetailLoader } from '@/lib/use-detail-loader'
+import { useDetailDialog } from '@/lib/use-detail-dialog'
 import { useMutationAction } from '@/lib/use-mutation-action'
 import { useResource } from '@/lib/use-resource'
 
@@ -224,43 +225,29 @@ function MenuFormDialog({ mode, open, menu, rootMenus, submitting = false, onOpe
 }
 
 export default function MenusList() {
-  const { loadDetail, resetDetail } = useDetailLoader()
+  const {
+    close: closeDialog,
+    detail: selectedMenu,
+    mode: dialogMode,
+    onOpenChange: handleDialogOpenChange,
+    open: dialogOpen,
+    openCreate: openCreateDialog,
+    openDetail: openMenuDialog,
+  } = useDetailDialog<MenuTreeItem, MenuTreeItem, MenuFormMode, null, LegacyMenuNode>({
+    createMode: 'create',
+    emptyDetail: null,
+    fallbackMessage: '菜单详情加载失败',
+    loadDetail: (menu) => getMenu(menu.id),
+    mapLoaded: (detail, seed) => normalizeMenuTree([detail])[0] ?? seed,
+  })
   const { pending: submitting, runMutation, runConfirmedMutation } = useMutationAction()
-  const [dialogMode, setDialogMode] = useState<MenuFormMode>('create')
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [selectedMenu, setSelectedMenu] = useState<MenuTreeItem | null>(null)
   const { data, loading, error, refresh } = useResource(listMenuTree)
   const tree = useMemo(() => normalizeMenuTree(data ?? []), [data])
   const flatRows = useMemo(() => flattenMenuTree(tree), [tree])
   const rootMenus = useMemo(() => tree.filter((node) => node.type === 1), [tree])
   const childCount = flatRows.filter((node) => node.depth > 0).length
 
-  const openCreateDialog = () => {
-    resetDetail()
-    setDialogMode('create')
-    setSelectedMenu(null)
-    setDialogOpen(true)
-  }
-
-  const closeDialog = () => {
-    resetDetail()
-    setDialogOpen(false)
-  }
-
-  const handleDialogOpenChange = (open: boolean) => {
-    if (!open) resetDetail()
-    setDialogOpen(open)
-  }
-
-  const openEditDialog = async (menu: MenuTreeItem) => {
-    setDialogMode('edit')
-    setSelectedMenu(menu)
-    setDialogOpen(true)
-    await loadDetail(() => getMenu(menu.id), {
-      fallbackMessage: '菜单详情加载失败',
-      onLoaded: (detail) => setSelectedMenu(normalizeMenuTree([detail])[0] ?? menu),
-    })
-  }
+  const openEditDialog = (menu: MenuTreeItem) => openMenuDialog('edit', menu)
 
   const submitMenu = async (values: MenuCreatePayload) => {
     const menuId = dialogMode === 'edit' ? selectedMenu?.id : undefined

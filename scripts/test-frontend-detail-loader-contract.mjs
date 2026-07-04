@@ -26,6 +26,8 @@ function assertNotMatches(content, pattern, message) {
 
 const detailLoader = read('apps/desktop/web/src/lib/use-detail-loader.ts')
 const detailLoaderTest = read('apps/desktop/web/src/lib/use-detail-loader.test.tsx')
+const detailDialog = read('apps/desktop/web/src/lib/use-detail-dialog.ts')
+const detailDialogTest = read('apps/desktop/web/src/lib/use-detail-dialog.test.tsx')
 const rebuildPlan = read('docs/rebuild-plan.md')
 
 const detailPages = [
@@ -46,15 +48,33 @@ assertIncludes(detailLoaderTest, 'ignores stale responses after resetDetail is c
 assertIncludes(detailLoaderTest, 'ignores empty detail responses without replacing the optimistic row', 'detail loader tests must cover empty detail fallback')
 assertIncludes(detailLoaderTest, 'uses the fallback message for non-error rejections', 'detail loader tests must cover non-Error fallback messages')
 
+assertIncludes(detailDialog, 'export function useDetailDialog', 'shared detail dialog hook must be exported')
+assertIncludes(detailDialog, 'useDetailLoader()', 'detail dialog hook must reuse the shared detail loader')
+assertIncludes(detailDialog, 'openCreate', 'detail dialog hook must centralize create dialog lifecycle')
+assertIncludes(detailDialog, 'openDetail', 'detail dialog hook must centralize detail dialog lifecycle')
+assertIncludes(detailDialog, 'seedDetail', 'detail dialog hook must support optimistic row seeding')
+assertIncludes(detailDialog, 'mapLoaded', 'detail dialog hook must support transformed detail API shapes')
+assertIncludes(detailDialog, 'onOpenChange', 'detail dialog hook must centralize close reset behavior')
+assertIncludes(detailDialogTest, 'seeds the selected row before replacing it with loaded detail', 'detail dialog tests must cover optimistic seed replacement')
+assertIncludes(detailDialogTest, 'keeps the seeded row open and shows the legacy fallback toast when loading fails', 'detail dialog tests must cover failed load behavior')
+assertIncludes(detailDialogTest, 'clears detail on close and ignores stale detail responses', 'detail dialog tests must cover close invalidation behavior')
+assertIncludes(detailDialogTest, 'maps loaded detail before storing it for pages with transformed API shapes', 'detail dialog tests must cover transformed detail payloads')
+
 for (const [pageName, pageContent, getterName, fallbackMessage] of detailPages) {
-  assertIncludes(pageContent, "import { useDetailLoader } from '@/lib/use-detail-loader'", `${pageName} must import the shared detail loader hook`)
-  assertIncludes(pageContent, 'loadDetail', `${pageName} must load row details through the shared detail loader`)
-  assertIncludes(pageContent, 'resetDetail', `${pageName} must reset stale detail requests on create/close flows`)
+  assertIncludes(pageContent, "import { useDetailDialog } from '@/lib/use-detail-dialog'", `${pageName} must import the shared detail dialog hook`)
+  assertIncludes(pageContent, 'useDetailDialog', `${pageName} must centralize detail dialog lifecycle through the shared hook`)
+  assertIncludes(pageContent, 'openCreate: openCreateDialog', `${pageName} must derive create dialog opener from the shared hook`)
+  assertIncludes(pageContent, 'onOpenChange: handleDialogOpenChange', `${pageName} must derive close reset handler from the shared hook`)
+  assertIncludes(pageContent, 'open: dialogOpen', `${pageName} must derive dialog open state from the shared hook`)
+  assertNotMatches(pageContent, /useDetailLoader/, `${pageName} must not wire detail loader directly after migrating dialog lifecycle`)
+  assertNotMatches(pageContent, /setDialogOpen\s*\(/, `${pageName} must not manually toggle detail dialog open state`)
+  assertNotMatches(pageContent, /setDialogMode\s*\(/, `${pageName} must not manually toggle detail dialog mode`)
   assertIncludes(pageContent, `fallbackMessage: '${fallbackMessage}'`, `${pageName} must keep its legacy detail fallback message`)
   assertNotMatches(pageContent, new RegExp(`try\\s*\\{[\\s\\S]{0,240}await\\s+${getterName}\\(`), `${pageName} must not hand-roll detail try/catch around ${getterName}`)
   assertNotMatches(pageContent, new RegExp(`showToast\\('error',[\\s\\S]{0,120}${fallbackMessage}`), `${pageName} must not hand-roll detail failure toast`)
 }
 
 assertIncludes(rebuildPlan, 'src/lib/use-detail-loader.ts', 'rebuild plan must document the shared detail loader hook')
+assertIncludes(rebuildPlan, 'src/lib/use-detail-dialog.ts', 'rebuild plan must document the shared detail dialog hook')
 
 console.log('Frontend detail loader contract OK')

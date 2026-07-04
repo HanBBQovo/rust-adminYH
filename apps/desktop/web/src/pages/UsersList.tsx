@@ -51,7 +51,7 @@ import {
 } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
-import { useDetailLoader } from '@/lib/use-detail-loader'
+import { useDetailDialog } from '@/lib/use-detail-dialog'
 import { useMutationAction } from '@/lib/use-mutation-action'
 import { usePaginatedResource } from '@/lib/use-paginated-resource'
 import { useResource } from '@/lib/use-resource'
@@ -308,13 +308,9 @@ function PasswordDialog({
 
 export default function UsersList() {
   const { showToast } = useGlobalToast()
-  const { loadDetail, resetDetail } = useDetailLoader()
   const { pending: submitting, runMutation, runConfirmedMutation } = useMutationAction()
   const [draft, setDraft] = useState<UserFilterDraft>(() => emptyFilters())
   const [filters, setFilters] = useState<UserListFilters>({})
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [dialogMode, setDialogMode] = useState<UserFormMode>('create')
-  const [selectedUser, setSelectedUser] = useState<LegacyUserDetail | null>()
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
   const [passwordUser, setPasswordUser] = useState<LegacyUserListItem | undefined>()
 
@@ -326,6 +322,35 @@ export default function UsersList() {
   })
   const { data: rawRoleOptions, error: roleError, refresh: refreshRoles } = useResource(listAssignableRoles, [])
   const roleOptions = rawRoleOptions ?? []
+  const {
+    close: closeDialog,
+    detail: selectedUser,
+    mode: dialogMode,
+    onOpenChange: handleDialogOpenChange,
+    open: dialogOpen,
+    openCreate: openCreateDialog,
+    openDetail: openUserDialog,
+  } = useDetailDialog<LegacyUserListItem, LegacyUserDetail, UserFormMode, null>({
+    createMode: 'create',
+    emptyDetail: null,
+    fallbackMessage: '用户详情加载失败',
+    loadDetail: (user) => getUser(user.id),
+    seedDetail: (user) => ({
+      id: user.id,
+      name: user.name,
+      avatarUrl: user.avatarUrl,
+      enable: user.enable,
+      createAt: user.createAt,
+      updateAt: user.updateAt,
+      role: {
+        id: user.roleId,
+        name: roleName(user.roleId, roleOptions),
+        intro: '',
+        createAt: '',
+        updateAt: '',
+      },
+    }),
+  })
 
   const updateDraft = <K extends keyof UserFilterDraft>(key: K, value: UserFilterDraft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -340,47 +365,6 @@ export default function UsersList() {
     setDraft(emptyFilters())
     setPage(1)
     setFilters({})
-  }
-
-  const openCreateDialog = () => {
-    resetDetail()
-    setSelectedUser(null)
-    setDialogMode('create')
-    setDialogOpen(true)
-  }
-
-  const closeDialog = () => {
-    resetDetail()
-    setDialogOpen(false)
-  }
-
-  const handleDialogOpenChange = (open: boolean) => {
-    if (!open) resetDetail()
-    setDialogOpen(open)
-  }
-
-  const openUserDialog = async (mode: Extract<UserFormMode, 'edit' | 'view'>, user: LegacyUserListItem) => {
-    setDialogMode(mode)
-    setSelectedUser({
-      id: user.id,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-      enable: user.enable,
-      createAt: user.createAt,
-      updateAt: user.updateAt,
-      role: {
-        id: user.roleId,
-        name: roleName(user.roleId, roleOptions),
-        intro: '',
-        createAt: '',
-        updateAt: '',
-      },
-    })
-    setDialogOpen(true)
-    await loadDetail(() => getUser(user.id), {
-      fallbackMessage: '用户详情加载失败',
-      onLoaded: setSelectedUser,
-    })
   }
 
   const submitCreate = async (values: UserCreatePayload) => {

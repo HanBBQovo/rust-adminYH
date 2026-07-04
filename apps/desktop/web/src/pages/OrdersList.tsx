@@ -28,7 +28,7 @@ import { Button } from '@/components/ui/button'
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useDetailLoader } from '@/lib/use-detail-loader'
+import { useDetailDialog } from '@/lib/use-detail-dialog'
 import { useMutationAction } from '@/lib/use-mutation-action'
 import { usePaginatedResource } from '@/lib/use-paginated-resource'
 import { OrderFormDialog } from '@/pages/orders/OrderFormDialog'
@@ -86,13 +86,23 @@ function renderCell(row: LegacyOrder, column: OrderColumn) {
 }
 
 export default function OrdersList() {
-  const { loadDetail, resetDetail } = useDetailLoader()
+  const {
+    close: closeDialog,
+    detail: selectedOrder,
+    mode: dialogMode,
+    onOpenChange: handleDialogOpenChange,
+    open: dialogOpen,
+    openCreate: openCreateDialog,
+    openDetail: openOrderDialog,
+  } = useDetailDialog<LegacyOrder, LegacyOrder, OrderFormMode>({
+    createMode: 'create',
+    emptyDetail: undefined,
+    fallbackMessage: '订单详情加载失败',
+    loadDetail: (order) => getOrder(order.id),
+  })
   const { pending: submitting, runMutation, runConfirmedMutation } = useMutationAction()
   const [draft, setDraft] = useState<OrderFilterDraft>(() => emptyFilters())
   const [filters, setFilters] = useState<OrderListFilters>({})
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [dialogMode, setDialogMode] = useState<OrderFormMode>('create')
-  const [selectedOrder, setSelectedOrder] = useState<LegacyOrder | undefined>()
   const { pending: exporting, runMutation: runExportMutation } = useMutationAction()
 
   const { data, loading, error, refresh, page, pageSize, setPage, rows, total, pagination } = usePaginatedResource({
@@ -115,33 +125,6 @@ export default function OrdersList() {
     setDraft(emptyFilters())
     setPage(1)
     setFilters({})
-  }
-
-  const openCreateDialog = () => {
-    resetDetail()
-    setSelectedOrder(undefined)
-    setDialogMode('create')
-    setDialogOpen(true)
-  }
-
-  const closeDialog = () => {
-    resetDetail()
-    setDialogOpen(false)
-  }
-
-  const handleDialogOpenChange = (open: boolean) => {
-    if (!open) resetDetail()
-    setDialogOpen(open)
-  }
-
-  const openOrderDialog = async (mode: Extract<OrderFormMode, 'edit' | 'view'>, order: LegacyOrder) => {
-    setDialogMode(mode)
-    setSelectedOrder(order)
-    setDialogOpen(true)
-    await loadDetail(() => getOrder(order.id), {
-      fallbackMessage: '订单详情加载失败',
-      onLoaded: setSelectedOrder,
-    })
   }
 
   const submitOrder = async (values: OrderMutationPayload) => {
