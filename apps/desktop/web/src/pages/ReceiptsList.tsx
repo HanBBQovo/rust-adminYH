@@ -12,7 +12,6 @@ import {
   type LegacyReceipt,
   type ReceiptListFilters,
   type ReceiptListMode,
-  type ReceiptListParams,
   type ReceiptStatusAction,
 } from '@/api/receipts'
 import {
@@ -35,7 +34,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
-import { useResource } from '@/lib/use-resource'
+import { usePaginatedResource } from '@/lib/use-paginated-resource'
 
 interface ReceiptFilterDraft {
   oddnumber: string
@@ -55,7 +54,6 @@ interface ReceiptColumn {
 
 const PAGE_SIZE = 10
 const ANY_VALUE = '__any__'
-const EMPTY_ROWS: LegacyReceipt[] = []
 
 const MODE_META: Record<ReceiptListMode, { title: string; description: string }> = {
   all: {
@@ -126,16 +124,17 @@ export default function ReceiptsList() {
   const [mode, setMode] = useState<ReceiptListMode>('all')
   const [draft, setDraft] = useState<ReceiptFilterDraft>(() => emptyFilters())
   const [filters, setFilters] = useState<ReceiptListFilters>({})
-  const [page, setPage] = useState(1)
   const [updatingId, setUpdatingId] = useState<number | null>(null)
   const [batchUpdating, setBatchUpdating] = useState<ReceiptStatusAction | null>(null)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
 
   const meta = MODE_META[mode]
-  const query = useMemo<ReceiptListParams>(() => ({ mode, page, pageSize: PAGE_SIZE, ...filters }), [filters, mode, page])
-  const { data, loading, error, refresh } = useResource(() => listReceipts(query), [query])
-  const rows = data?.rows ?? EMPTY_ROWS
-  const total = data?.total ?? 0
+  const { data, loading, error, refresh, page, pageSize, setPage, rows, pagination } = usePaginatedResource({
+    pageSize: PAGE_SIZE,
+    queryDeps: [mode, filters],
+    buildQuery: ({ page, pageSize }) => ({ mode, page, pageSize, ...filters }),
+    fetcher: listReceipts,
+  })
   const visibleIds = useMemo(() => rows.map((row) => row.id), [rows])
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
   const selectedRows = useMemo(() => rows.filter((row) => selectedSet.has(row.id)), [rows, selectedSet])
@@ -143,7 +142,10 @@ export default function ReceiptsList() {
   const someVisibleSelected = visibleIds.some((id) => selectedSet.has(id))
 
   useEffect(() => {
-    setSelectedIds((current) => current.filter((id) => visibleIds.includes(id)))
+    setSelectedIds((current) => {
+      const next = current.filter((id) => visibleIds.includes(id))
+      return next.length === current.length ? current : next
+    })
   }, [visibleIds])
 
   const updateDraft = <K extends keyof ReceiptFilterDraft>(key: K, value: ReceiptFilterDraft[K]) => {
@@ -352,7 +354,7 @@ export default function ReceiptsList() {
         emptyTitle="暂无回单"
         emptyDescription="调整筛选条件或切换回单状态后重新查询。"
         onRetry={refresh}
-        pagination={data ? { page, pageSize: PAGE_SIZE, total, onPageChange: setPage } : undefined}
+        pagination={pagination}
       >
         <Table>
           <TableHeader>
@@ -377,7 +379,7 @@ export default function ReceiptsList() {
                   label={`选择回单 ${row.oddnumber}`}
                   onCheckedChange={(value) => toggleRow(row.id, value === true)}
                 />
-                <DataTableRowNumberCell value={(page - 1) * PAGE_SIZE + index + 1} />
+                <DataTableRowNumberCell value={(page - 1) * pageSize + index + 1} />
                 <StickyActionCell>{renderStateActions(row)}</StickyActionCell>
                 {RECEIPT_COLUMNS.map((column) => (
                   <TableCell key={column.key} className={column.className}>{renderCell(row, column)}</TableCell>

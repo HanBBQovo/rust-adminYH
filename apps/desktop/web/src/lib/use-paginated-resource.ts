@@ -15,6 +15,8 @@ export interface PaginatedResourceData<TRow> {
 
 type PaginatedRows<TData> = TData extends PaginatedResourceData<infer TRow> ? readonly TRow[] : readonly never[]
 
+const EMPTY_ROWS: readonly never[] = []
+
 export interface UsePaginatedResourceOptions<
   TQuery extends PaginatedResourceQuery,
   TData extends PaginatedResourceData<unknown>,
@@ -54,7 +56,7 @@ export function usePaginatedResource<
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const query = useMemo(() => buildQuery({ page, pageSize }), [page, pageSize, ...queryDeps])
   const resource = useResource(() => fetcher(query), [query])
-  const rows = (resource.data?.rows ?? []) as PaginatedRows<TData>
+  const rows = (resource.data?.rows ?? EMPTY_ROWS) as PaginatedRows<TData>
   const total = resource.data?.total ?? 0
 
   return {

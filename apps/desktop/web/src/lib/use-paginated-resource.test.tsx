@@ -33,6 +33,25 @@ describe('usePaginatedResource', () => {
     expect(result.current.pagination).toMatchObject({ page: 1, pageSize: 10, total: 25 })
   })
 
+  it('keeps empty rows stable while the first request is loading', () => {
+    fetcher.mockReturnValue(new Promise(() => undefined))
+    const { rerender, result } = renderHook(
+      ({ marker }) =>
+        usePaginatedResource({
+          pageSize: 10,
+          queryDeps: [marker],
+          buildQuery: ({ page, pageSize }) => ({ page, pageSize, marker }),
+          fetcher,
+        }),
+      { initialProps: { marker: 'same-query' } },
+    )
+
+    const firstRows = result.current.rows
+    rerender({ marker: 'same-query' })
+
+    expect(result.current.rows).toBe(firstRows)
+  })
+
   it('changes pages through the shared page setter', async () => {
     const { result } = renderHook(() =>
       usePaginatedResource({

@@ -61,6 +61,20 @@ const SECOND_RECEIPT_ROW = {
   recoverynumber: 3,
 }
 
+const THIRD_RECEIPT_ROW = {
+  ...RECEIPT_ROW,
+  id: 3,
+  oddnumber: 'YD20260101003',
+  consignee: '赵六',
+}
+
+const FOURTH_RECEIPT_ROW = {
+  ...RECEIPT_ROW,
+  id: 4,
+  oddnumber: 'YD20260101004',
+  consignee: '钱七',
+}
+
 function renderReceiptsList(options?: { showToast?: ReturnType<typeof vi.fn> }) {
   const showToast = options?.showToast || vi.fn()
 
@@ -110,6 +124,27 @@ describe('ReceiptsList', () => {
     await waitFor(() => {
       expect(listReceiptsMock).toHaveBeenLastCalledWith({ mode: 'recovered', page: 1, pageSize: 10 })
     })
+  })
+
+  it('resets pagination and selected rows when switching receipt modes', async () => {
+    const user = userEvent.setup()
+    renderReceiptsList()
+
+    await screen.findByText('YD20260101001')
+    await user.click(screen.getByLabelText('选择回单 YD20260101001'))
+    expect(screen.getByText('已选 1 条')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /下一页/ }))
+    await waitFor(() => {
+      expect(listReceiptsMock).toHaveBeenLastCalledWith({ mode: 'all', page: 2, pageSize: 10 })
+    })
+
+    await user.click(screen.getByRole('tab', { name: '未回收' }))
+
+    await waitFor(() => {
+      expect(listReceiptsMock).toHaveBeenLastCalledWith({ mode: 'pending', page: 1, pageSize: 10 })
+    })
+    expect(screen.getByText('已选 0 条')).toBeInTheDocument()
   })
 
   it('applies filters and keeps pagination through the API wrapper', async () => {
@@ -172,6 +207,45 @@ describe('ReceiptsList', () => {
         }),
       )
     })
+  })
+
+  it('resets filters, pagination, and selected rows together', async () => {
+    const user = userEvent.setup()
+    renderReceiptsList()
+
+    await screen.findByText('YD20260101001')
+    await user.type(screen.getByLabelText('回单运单号'), 'YD2026')
+    await user.click(screen.getByRole('button', { name: '查询' }))
+    await waitFor(() => {
+      expect(listReceiptsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          mode: 'all',
+          page: 1,
+          pageSize: 10,
+          oddnumber: 'YD2026',
+        }),
+      )
+    })
+
+    await user.click(screen.getByRole('button', { name: /下一页/ }))
+    await waitFor(() => {
+      expect(listReceiptsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          page: 2,
+          pageSize: 10,
+          oddnumber: 'YD2026',
+        }),
+      )
+    })
+
+    await user.click(screen.getByLabelText('选择回单 YD20260101001'))
+    expect(screen.getByText('已选 1 条')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '重置' }))
+
+    await waitFor(() => {
+      expect(listReceiptsMock).toHaveBeenLastCalledWith({ mode: 'all', page: 1, pageSize: 10 })
+    })
+    expect(screen.getByText('已选 0 条')).toBeInTheDocument()
   })
 
   it('updates recovery, issue, and post statuses then refreshes the list', async () => {
@@ -248,6 +322,76 @@ describe('ReceiptsList', () => {
     expect(updateReceiptStatusesMock).toHaveBeenCalledTimes(2)
     expect(showToast).toHaveBeenCalledWith('success', '回单寄出成功！已批量更新 2 条回单。', { translate: false })
     expect(listReceiptsMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('keeps batch selection scoped to the currently visible page', async () => {
+    listReceiptsMock.mockImplementation(async (query: { page: number }) => ({
+      rows: query.page === 2 ? [THIRD_RECEIPT_ROW, FOURTH_RECEIPT_ROW] : [RECEIPT_ROW, SECOND_RECEIPT_ROW],
+      total: 22,
+    }))
+    const user = userEvent.setup()
+    renderReceiptsList()
+
+    await screen.findByText('YD20260101001')
+    await user.click(screen.getByLabelText('选择当前页回单'))
+    expect(screen.getByText('已选 2 条')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /下一页/ }))
+    expect(await screen.findByText('YD20260101003')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('已选 0 条')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByLabelText('选择当前页回单'))
+    await user.click(screen.getByRole('button', { name: /批量接收/ }))
+
+    await waitFor(() => {
+      expect(updateReceiptStatusesMock).toHaveBeenCalledWith([3, 4], { issuestate: '已接收' })
+    })
+    expect(updateReceiptStatusesMock).not.toHaveBeenCalledWith([1, 2, 3, 4], expect.anything())
+  })
+
+  it('refreshes status updates with the current filters and page', async () => {
+    const user = userEvent.setup()
+    renderReceiptsList()
+
+    await screen.findByText('YD20260101001')
+    await user.type(screen.getByLabelText('回单运单号'), 'YD2026')
+    await user.click(screen.getByRole('button', { name: '查询' }))
+    await waitFor(() => {
+      expect(listReceiptsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          page: 1,
+          pageSize: 10,
+          oddnumber: 'YD2026',
+        }),
+      )
+    })
+
+    await user.click(screen.getByRole('button', { name: /下一页/ }))
+    await waitFor(() => {
+      expect(listReceiptsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          page: 2,
+          pageSize: 10,
+          oddnumber: 'YD2026',
+        }),
+      )
+    })
+
+    await user.click(screen.getAllByRole('button', { name: '回收' })[0])
+
+    await waitFor(() => {
+      expect(updateReceiptStatusMock).toHaveBeenCalledWith(1, { recoverystate: '已回收' })
+      expect(listReceiptsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          mode: 'all',
+          page: 2,
+          pageSize: 10,
+          oddnumber: 'YD2026',
+        }),
+      )
+    })
   })
 
   it('keeps selected rows on screen and reports batch failures', async () => {
