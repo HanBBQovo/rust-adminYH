@@ -26,19 +26,12 @@ import {
   StickyActionCell,
   StickyActionHead,
 } from '@/components/layout/DataTableSurface'
-import { FilterBar, FilterField } from '@/components/layout/FilterBar'
+import { FilterBar, FilterField, SelectFilterField } from '@/components/layout/FilterBar'
 import { PageShell } from '@/components/layout/PageScaffold'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { DateRangePicker, type DateRangeValue } from '@/components/ui/date-range-picker'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useGlobalToast } from '@/components/ui/use-global-toast'
@@ -292,45 +285,27 @@ export default function ReceiptsList() {
         <FilterField label="发货人">
           <Input aria-label="回单发货人" value={draft.consignor} placeholder="请输入发货人" onChange={(event) => updateDraft('consignor', event.target.value)} />
         </FilterField>
-        <FilterField label="回收状态">
-          <Select value={draft.recoverystate || ANY_VALUE} onValueChange={(value) => updateDraft('recoverystate', value === ANY_VALUE ? '' : value)}>
-            <SelectTrigger aria-label="回收状态">
-              <SelectValue placeholder="请选择回收状态" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ANY_VALUE}>全部</SelectItem>
-              {RECEIPT_STATUS_OPTIONS.recoverystate.map((value) => (
-                <SelectItem key={value} value={value}>{value}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FilterField>
-        <FilterField label="发放状态">
-          <Select value={draft.issuestate || ANY_VALUE} onValueChange={(value) => updateDraft('issuestate', value === ANY_VALUE ? '' : value)}>
-            <SelectTrigger aria-label="发放状态">
-              <SelectValue placeholder="请选择发放状态" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ANY_VALUE}>全部</SelectItem>
-              {RECEIPT_STATUS_OPTIONS.issuestate.map((value) => (
-                <SelectItem key={value} value={value}>{value}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FilterField>
-        <FilterField label="寄出状态">
-          <Select value={draft.poststate || ANY_VALUE} onValueChange={(value) => updateDraft('poststate', value === ANY_VALUE ? '' : value)}>
-            <SelectTrigger aria-label="寄出状态">
-              <SelectValue placeholder="请选择寄出状态" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ANY_VALUE}>全部</SelectItem>
-              {RECEIPT_STATUS_OPTIONS.poststate.map((value) => (
-                <SelectItem key={value} value={value}>{value}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FilterField>
+        <SelectFilterField
+          label="回收状态"
+          value={draft.recoverystate}
+          allValue={ANY_VALUE}
+          options={RECEIPT_STATUS_OPTIONS.recoverystate}
+          onValueChange={(value) => updateDraft('recoverystate', value)}
+        />
+        <SelectFilterField
+          label="发放状态"
+          value={draft.issuestate}
+          allValue={ANY_VALUE}
+          options={RECEIPT_STATUS_OPTIONS.issuestate}
+          onValueChange={(value) => updateDraft('issuestate', value)}
+        />
+        <SelectFilterField
+          label="寄出状态"
+          value={draft.poststate}
+          allValue={ANY_VALUE}
+          options={RECEIPT_STATUS_OPTIONS.poststate}
+          onValueChange={(value) => updateDraft('poststate', value)}
+        />
         <FilterField label="开单时间">
           <DateRangePicker value={draft.createAt} onChange={(value) => updateDraft('createAt', value)} />
         </FilterField>

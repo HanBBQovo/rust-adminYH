@@ -119,6 +119,12 @@ describe('ReceiptsList', () => {
     await screen.findByText('YD20260101001')
     await user.type(screen.getByLabelText('回单运单号'), 'YD2026')
     await user.type(screen.getByLabelText('回单收货人'), '张三')
+    await user.click(screen.getByRole('combobox', { name: '回收状态' }))
+    await user.click(await screen.findByRole('option', { name: '已回收' }))
+    await user.click(screen.getByRole('combobox', { name: '发放状态' }))
+    await user.click(await screen.findByRole('option', { name: '已接收' }))
+    await user.click(screen.getByRole('combobox', { name: '寄出状态' }))
+    await user.click(await screen.findByRole('option', { name: '未寄出' }))
     await user.click(screen.getByRole('button', { name: '查询' }))
 
     await waitFor(() => {
@@ -129,9 +135,27 @@ describe('ReceiptsList', () => {
           pageSize: 10,
           oddnumber: 'YD2026',
           consignee: '张三',
+          recoverystate: '已回收',
+          issuestate: '已接收',
+          poststate: '未寄出',
         }),
       )
     })
+
+    await user.click(screen.getByRole('combobox', { name: '回收状态' }))
+    await user.click(await screen.findByRole('option', { name: '全部' }))
+    await user.click(screen.getByRole('button', { name: '查询' }))
+
+    await waitFor(() => {
+      expect(listReceiptsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          recoverystate: '',
+          issuestate: '已接收',
+          poststate: '未寄出',
+        }),
+      )
+    })
+    expect(listReceiptsMock).not.toHaveBeenLastCalledWith(expect.objectContaining({ recoverystate: '__any__' }))
 
     await user.click(screen.getByRole('button', { name: /下一页/ }))
     await waitFor(() => {
@@ -142,6 +166,9 @@ describe('ReceiptsList', () => {
           pageSize: 10,
           oddnumber: 'YD2026',
           consignee: '张三',
+          recoverystate: '',
+          issuestate: '已接收',
+          poststate: '未寄出',
         }),
       )
     })

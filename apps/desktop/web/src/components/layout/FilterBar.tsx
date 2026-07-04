@@ -2,6 +2,13 @@ import type { ReactNode } from 'react'
 import { SlidersHorizontal, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 
 export interface FilterBarProps {
@@ -40,5 +47,54 @@ export function FilterField({ label, children, className }: { label: string; chi
       </span>
       {children}
     </div>
+  )
+}
+
+export interface SelectFilterOption {
+  value: string
+  label: ReactNode
+  disabled?: boolean
+}
+
+export function SelectFilterField({
+  allLabel = '全部',
+  allValue = '__any__',
+  ariaLabel,
+  className,
+  label,
+  onValueChange,
+  options,
+  placeholder,
+  value,
+}: {
+  allLabel?: ReactNode
+  allValue?: string
+  ariaLabel?: string
+  className?: string
+  label: string
+  onValueChange: (value: string) => void
+  options: readonly (string | SelectFilterOption)[]
+  placeholder?: string
+  value: string
+}) {
+  return (
+    <FilterField label={label} className={className}>
+      <Select value={value || allValue} onValueChange={(nextValue) => onValueChange(nextValue === allValue ? '' : nextValue)}>
+        <SelectTrigger aria-label={ariaLabel ?? label}>
+          <SelectValue placeholder={placeholder ?? `请选择${label}`} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={allValue}>{allLabel}</SelectItem>
+          {options.map((option) => {
+            const normalized = typeof option === 'string' ? { value: option, label: option } : option
+            return (
+              <SelectItem key={normalized.value} value={normalized.value} disabled={normalized.disabled}>
+                {normalized.label}
+              </SelectItem>
+            )
+          })}
+        </SelectContent>
+      </Select>
+    </FilterField>
   )
 }
