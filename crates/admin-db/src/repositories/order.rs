@@ -11,10 +11,7 @@ use admin_core::{
 };
 use sqlx::{MySql, MySqlPool, QueryBuilder, Row};
 
-use crate::transaction::{
-    begin_mysql_transaction, commit_mysql_transaction, transaction_sql_error,
-    with_mysql_transaction, MySqlTransaction,
-};
+use crate::transaction::{transaction_sql_error, with_mysql_transaction, MySqlTransaction};
 
 const RECEIPT_STATUS_ISSUE_DONE: &str = "已接收";
 const RECEIPT_STATUS_ISSUE_LEGACY_DONE: &str = "已发放";
@@ -97,21 +94,28 @@ impl OrderStore for MySqlOrderRepository {
         input: NormalizedOrderInput,
     ) -> ServiceFuture<'a, AppResult<()>> {
         Box::pin(async move {
-            let mut tx = begin_mysql_transaction(&self.pool, "order.update").await?;
-            let previous_order =
-                sqlx::query("SELECT * FROM `order_list` WHERE `id` = ? FOR UPDATE")
-                    .bind(order_id)
-                    .map(order_from_row)
-                    .fetch_optional(tx.as_mut())
-                    .await
-                    .map_err(db_error)?
-                    .ok_or_else(|| AppError::NotFound(format!("order {order_id}")))?;
-            update_order_row(&mut tx, order_id, &input).await?;
-            upsert_company_order(&mut tx, &input.company, order_id).await?;
-            reconcile_receipt_after_order_update(&mut tx, &previous_order, &input).await?;
-            insert_memory_if_missing(&mut tx, &input.consignee).await?;
-            insert_memory_if_missing(&mut tx, &input.consignor).await?;
-            commit_mysql_transaction(tx).await
+            with_mysql_transaction(&self.pool, "order.update", |tx| {
+                Box::pin(async move {
+                    let scope = tx.scope();
+                    let previous_order =
+                        sqlx::query("SELECT * FROM `order_list` WHERE `id` = ? FOR UPDATE")
+                            .bind(order_id)
+                            .map(order_from_row)
+                            .fetch_optional(tx.as_mut())
+                            .await
+                            .map_err(|error| {
+                                transaction_sql_error(scope, "fetch_order_for_update", error)
+                            })?
+                            .ok_or_else(|| AppError::NotFound(format!("order {order_id}")))?;
+                    update_order_row(tx, order_id, &input).await?;
+                    upsert_company_order(tx, &input.company, order_id).await?;
+                    reconcile_receipt_after_order_update(tx, &previous_order, &input).await?;
+                    insert_memory_if_missing(tx, &input.consignee).await?;
+                    insert_memory_if_missing(tx, &input.consignor).await?;
+                    Ok(())
+                })
+            })
+            .await
         })
     }
 
@@ -569,6 +573,7 @@ async fn update_order_row(
     order_id: i64,
     input: &NormalizedOrderInput,
 ) -> AppResult<()> {
+    let scope = tx.scope();
     let result = sqlx::query(
         r#"
         UPDATE `order_list`
@@ -585,7 +590,7 @@ async fn update_order_row(
     .bind(order_id)
     .execute(tx.as_mut())
     .await
-    .map_err(db_error)?;
+    .map_err(|error| transaction_sql_error(scope, "update_order_row", error))?;
     if result.rows_affected() == 0 {
         return Err(AppError::NotFound(format!("order {order_id}")));
     }
@@ -654,12 +659,13 @@ async fn upsert_company_order(
     company: &str,
     order_id: i64,
 ) -> AppResult<()> {
+    let scope = tx.scope();
     let result = sqlx::query("UPDATE `company_order` SET `com_name` = ? WHERE `order_id` = ?")
         .bind(company)
         .bind(order_id)
         .execute(tx.as_mut())
         .await
-        .map_err(db_error)?;
+        .map_err(|error| transaction_sql_error(scope, "update_company_order", error))?;
     if result.rows_affected() == 0 {
         insert_company_order(tx, company, order_id).await?;
     }
@@ -697,6 +703,7 @@ async fn upsert_receipt_from_order(
     input: &NormalizedOrderInput,
     previous_oddnumber: Option<&str>,
 ) -> AppResult<()> {
+    let scope = tx.scope();
     let lookup_oddnumber = previous_oddnumber.unwrap_or(input.oddnumber.as_str());
     let result = sqlx::query(
         r#"
@@ -716,7 +723,7 @@ async fn upsert_receipt_from_order(
     .bind(lookup_oddnumber)
     .execute(tx.as_mut())
     .await
-    .map_err(db_error)?;
+    .map_err(|error| transaction_sql_error(scope, "update_receipt_from_order", error))?;
     if result.rows_affected() == 0 {
         insert_receipt_from_order(tx, input).await?;
     }
@@ -754,11 +761,12 @@ async fn delete_receipt_if_no_positive_need(
     if oddnumber_has_positive_receipt_need(tx, oddnumber).await? {
         return Ok(());
     }
+    let scope = tx.scope();
     sqlx::query("DELETE FROM `receipt` WHERE `oddnumber` = ?")
         .bind(oddnumber)
         .execute(tx.as_mut())
         .await
-        .map_err(db_error)?;
+        .map_err(|error| transaction_sql_error(scope, "delete_receipt", error))?;
     Ok(())
 }
 
@@ -766,15 +774,16 @@ async fn oddnumber_has_positive_receipt_need(
     tx: &mut MySqlTransaction<'_>,
     oddnumber: &str,
 ) -> AppResult<bool> {
+    let scope = tx.scope();
     let count = sqlx::query(
         "SELECT COUNT(*) AS total FROM `order_list` WHERE `oddnumber` = ? AND `receiptnum` > 0",
     )
     .bind(oddnumber)
     .fetch_one(tx.as_mut())
     .await
-    .map_err(db_error)?
+    .map_err(|error| transaction_sql_error(scope, "count_positive_receipt_need", error))?
     .try_get::<i64, _>("total")
-    .map_err(db_error)?;
+    .map_err(|error| transaction_sql_error(scope, "read_positive_receipt_need_count", error))?;
     Ok(count > 0)
 }
 

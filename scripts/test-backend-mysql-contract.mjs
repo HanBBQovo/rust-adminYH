@@ -338,6 +338,50 @@ assertIncludes(
 )
 assertIncludes(
   orderRepository,
+  'with_mysql_transaction(&self.pool, "order.update"',
+  'order.update must use the shared transaction runner',
+)
+assert(
+  !orderRepository.includes('begin_mysql_transaction(&self.pool, "order.update"'),
+  'order.update must not hand-roll begin/commit after runner migration',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "fetch_order_for_update"',
+  'order.update must include scoped SQL error context for old order lookup',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "update_order_row"',
+  'order.update must include scoped SQL error context for order update',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "update_company_order"',
+  'order.update must include scoped SQL error context for company_order update',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "update_receipt_from_order"',
+  'order.update must include scoped SQL error context for receipt update',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "delete_receipt"',
+  'order.update must include scoped SQL error context for receipt delete',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "count_positive_receipt_need"',
+  'order.update must include scoped SQL error context for receipt need count',
+)
+assertIncludes(
+  orderRepository,
+  'transaction_sql_error(scope, "read_positive_receipt_need_count"',
+  'order.update must include scoped SQL error context for receipt need count decode',
+)
+assertIncludes(
+  orderRepository,
   'with_mysql_transaction(&self.pool, "receipt.batch_status"',
   'receipt.batch_status must use the shared transaction runner',
 )
