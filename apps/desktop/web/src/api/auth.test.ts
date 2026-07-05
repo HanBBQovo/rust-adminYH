@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchCaptchaCode, loginSession, restoreSession } from '@/api/auth'
+import { loginSession, restoreSession } from '@/api/auth'
 import { getAuthToken } from '@/api/client'
 import { readStoredSession } from '@/session/session-store'
 
@@ -17,17 +17,6 @@ afterEach(() => {
 })
 
 describe('auth session API', () => {
-  it('fetches the old data-only captcha SVG response', async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ data: '<svg>ABCD</svg>' }),
-    })
-
-    await expect(fetchCaptchaCode()).resolves.toBe('<svg>ABCD</svg>')
-    expect(fetchMock).toHaveBeenCalledWith('/api/code', expect.any(Object))
-  })
-
   it('logs in, stores the token, and returns a session', async () => {
     fetchMock
       .mockResolvedValueOnce({
@@ -47,10 +36,12 @@ describe('auth session API', () => {
       })
 
     const session = await loginSession({ name: 'admin', password: 'secret' })
+    const loginInit = fetchMock.mock.calls[0]?.[1] as RequestInit
 
     expect(session.user).toEqual({ id: 58, name: 'admin', avatarUrl: '/users/58/avatar', roles: ['1'], roleIds: [1] })
     expect(session.token).toBe('token-123')
     expect(getAuthToken()).toBe('token-123')
+    expect(JSON.parse(String(loginInit.body))).toEqual({ name: 'admin', password: 'secret' })
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
       '/api/role/1/menu',
@@ -58,31 +49,6 @@ describe('auth session API', () => {
         headers: expect.objectContaining({ authorization: 'Bearer token-123' }),
       }),
     )
-  })
-
-  it('passes an optional legacy captcha code without changing the login flow', async () => {
-    fetchMock
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ code: 0, data: { id: 58, name: 'admin', token: 'token-123' } }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ code: 0, data: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] } }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ code: 0, data: [] }),
-      })
-
-    await loginSession({ name: 'admin', password: 'secret', code: 'A1B2' })
-
-    const loginInit = fetchMock.mock.calls[0]?.[1] as RequestInit
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/login', expect.any(Object))
-    expect(JSON.parse(String(loginInit.body))).toEqual({ name: 'admin', password: 'secret', code: 'A1B2' })
   })
 
   it('restores current user with the stored token', async () => {

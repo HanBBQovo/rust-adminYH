@@ -13,7 +13,6 @@ import type { AdminSession, LegacyMenuItem, SessionUser } from '@/session/types'
 export interface LoginInput {
   name: string
   password: string
-  code?: string
 }
 
 export interface CurrentUser {
@@ -84,10 +83,6 @@ export async function loginSession(input: LoginInput): Promise<AdminSession> {
   }
   saveSession(session)
   return session
-}
-
-export async function fetchCaptchaCode(): Promise<string> {
-  return apiRequest<string>('/code')
 }
 
 export async function restoreSession(): Promise<AdminSession | null> {

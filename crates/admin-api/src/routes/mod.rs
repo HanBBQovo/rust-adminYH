@@ -27,7 +27,6 @@ pub fn build_router(state: AppState) -> Router {
     let router = Router::new();
     let router = compat_route(router, "/health", get(health::health_check));
     let router = compat_route(router, "/login", post(auth::login));
-    let router = compat_route(router, "/code", get(auth::code));
     let router = compat_route(router, "/users/me", get(auth::me));
     let router = compat_route(router, "/admin/resources", get(resources::list));
     let router = compat_route(router, "/users", post(user::create));

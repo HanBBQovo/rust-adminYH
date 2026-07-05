@@ -32,14 +32,6 @@ const DOCUMENTED_ROUTES: &[RouteSpec] = &[
         api_route_path: "/api/login",
     },
     RouteSpec {
-        label: "code",
-        method: "GET",
-        legacy_doc_path: "/code",
-        api_doc_path: "/api/code",
-        legacy_route_path: "/code",
-        api_route_path: "/api/code",
-    },
-    RouteSpec {
         label: "users create",
         method: "POST",
         legacy_doc_path: "/users",
@@ -654,30 +646,6 @@ async fn legacy_and_api_paths_share_missing_auth_envelopes() {
         );
         assert_eq!(api_json["data"], legacy_json["data"], "{}", case.label);
     }
-}
-
-#[tokio::test]
-async fn public_legacy_and_api_paths_share_data_only_shapes() {
-    let app = build_router(admin_state());
-
-    let (legacy_code_status, legacy_code_json) =
-        json_request(app.clone(), "GET", "/code", None, "").await;
-    let (api_code_status, api_code_json) = json_request(app, "GET", "/api/code", None, "").await;
-
-    assert_eq!(legacy_code_status, StatusCode::OK);
-    assert_eq!(api_code_status, StatusCode::OK);
-    assert!(legacy_code_json["data"]
-        .as_str()
-        .expect("legacy code data should be a string")
-        .starts_with("<svg"));
-    assert!(api_code_json["data"]
-        .as_str()
-        .expect("api code data should be a string")
-        .starts_with("<svg"));
-    assert!(legacy_code_json["code"].is_null());
-    assert!(api_code_json["code"].is_null());
-    assert!(legacy_code_json["message"].is_null());
-    assert!(api_code_json["message"].is_null());
 }
 
 #[tokio::test]

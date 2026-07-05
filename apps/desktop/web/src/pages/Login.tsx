@@ -1,7 +1,7 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react'
-import { Boxes, Loader2, LogIn, RefreshCw } from 'lucide-react'
+import { FormEvent, useState } from 'react'
+import { Boxes, Loader2, LogIn } from 'lucide-react'
 
-import { fetchCaptchaCode, loginSession } from '@/api/auth'
+import { loginSession } from '@/api/auth'
 import { ThemeToggleButton } from '@/components/theme'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -21,35 +21,12 @@ export default function Login({ onAuthenticated }: LoginProps) {
   const [password, setPassword] = useState('')
   const [name, setName] = useState(() => readRememberedLoginName())
   const [rememberName, setRememberName] = useState(() => Boolean(readRememberedLoginName()))
-  const [code, setCode] = useState('')
-  const [captchaSvg, setCaptchaSvg] = useState('')
-  const [captchaError, setCaptchaError] = useState('')
-  const [captchaLoading, setCaptchaLoading] = useState(false)
   const { pending: submitting, error, runAction: runLoginAction } = useAsyncAction()
-  const captchaSrc = captchaSvg ? `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(captchaSvg)}` : ''
-
-  const refreshCaptcha = useCallback(async () => {
-    setCaptchaError('')
-    setCaptchaLoading(true)
-    try {
-      setCaptchaSvg(await fetchCaptchaCode())
-    } catch {
-      setCaptchaSvg('')
-      setCaptchaError('验证码加载失败，可直接登录或稍后刷新')
-    } finally {
-      setCaptchaLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    void refreshCaptcha()
-  }, [refreshCaptcha])
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
-    const trimmedCode = code.trim()
     await runLoginAction(
-      () => loginSession({ name, password, ...(trimmedCode ? { code: trimmedCode } : {}) }),
+      () => loginSession({ name, password }),
       {
         errorMessage: '登录失败',
         onSuccess: (session) => {
@@ -108,41 +85,6 @@ export default function Login({ onAuthenticated }: LoginProps) {
             autoComplete="current-password"
             placeholder="请输入密码"
           />
-        </div>
-
-        <div className="mt-4 flex flex-col gap-2">
-          <Label htmlFor="code">验证码</Label>
-          <div className="grid grid-cols-[1fr_auto] gap-2">
-            <Input
-              id="code"
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              autoComplete="off"
-              inputMode="text"
-              placeholder="请输入验证码"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              className="h-10 gap-2 px-3"
-              onClick={() => void refreshCaptcha()}
-              disabled={captchaLoading}
-              aria-label="刷新验证码"
-            >
-              {captchaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              <span className="hidden sm:inline">刷新</span>
-            </Button>
-          </div>
-          <div className="flex h-11 items-center rounded-md border bg-muted/40 px-3">
-            {captchaSrc ? (
-              <img src={captchaSrc} alt="验证码" className="h-10 w-[100px] rounded object-contain" />
-            ) : (
-              <span className="text-sm text-muted-foreground">
-                {captchaLoading ? '验证码加载中...' : '验证码未加载'}
-              </span>
-            )}
-          </div>
-          {captchaError ? <div className="text-xs text-muted-foreground">{captchaError}</div> : null}
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-3 text-sm">

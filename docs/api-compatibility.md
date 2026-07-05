@@ -43,8 +43,7 @@
 
 | 模块 | 方法 | 旧路径 | 新兼容路径 | 权限 | 备注 |
 |---|---:|---|---|---|---|
-| Auth | POST | `/login` | `/api/login` | 无 | 登录；旧验证码校验已注释，不要假设强验证码 |
-| Auth | GET | `/code` | `/api/code` | 无 | 兼容旧 `{ data: "<svg...>" }` 响应；登录暂不强制校验验证码 |
+| Auth | POST | `/login` | `/api/login` | 无 | 登录；验证码功能已移除，不再展示或校验 |
 | Chart | GET | `/chart/headerList` | `/api/chart/headerList` | 登录 | 顶部统计 |
 | Chart | GET | `/chart/company/order/count` | `/api/chart/company/order/count` | 登录 | 公司订单数量 |
 | Chart | GET | `/chart/company/order/sumfreight` | `/api/chart/company/order/sumfreight` | 登录 | 公司运费汇总 |
@@ -232,7 +231,7 @@ POST /api/recovery/list
 - `/api/order/list`、`/api/order/:orderId`、`POST/PATCH/DELETE /api/order`、`/api/receipt/list`、`PATCH /api/receipt/:receiptId`、`PATCH /api/receipt/batch/status`、`/api/notrecovery/list`、`/api/recovery/list` 已先落地内存订单/回单仓储和集成测试，兼容旧运单字段、`billingAt` 日期格式、回单状态文案、订单创建联动 `company_order/receipt/memory`；订单删除已升级为事务级联清理 `company_order` 和安全匹配的 `receipt`，批量回单状态已升级为事务提交，不再延续旧系统只删主表或前端逐条 PATCH 导致孤儿/半更新数据的行为。
 - `/api/memory/list` 已先落地内存记忆词条仓储和集成测试，兼容旧 `{ data: [{ value }] }` 这种不带 `code/message` 的响应结构，并复用订单创建副作用写入的 memory 数据。
 - `/api/chart/headerList`、`/api/chart/company/order/count`、`/api/chart/company/order/sumfreight`、`/api/chart/company/receipt/sumreceipt` 已先落地内存图表统计仓储和集成测试，兼容旧顶部统计标题、公司维度字段名 `ordercount/sumfreight/sumReceipt`、登录鉴权要求。
-- 前端登录页已通过 `src/api/auth.ts` 封装接入旧 `/api/code` 验证码展示和刷新，SVG 使用 data URL 渲染，不在页面层直接 `fetch` 或注入 HTML；登录 payload 仅在用户填写时携带可选 `code` 字段，继续保持旧系统“展示验证码但不强制校验”的兼容语义。
+- 前端登录页已移除验证码展示和刷新；登录 payload 只发送 `name/password`，认证请求仍统一通过 `src/api/auth.ts` 封装，页面层不直接拼接口。
 - 前端登录页已保留旧系统账号回填体验，但按企业级安全要求降级为“记住账号”：只通过 `session-store` 封装保存账号名，不保存旧系统曾明文缓存的密码；页面文案明确“不会保存密码”，测试锁定密码不会写入 localStorage。
 - 前端恢复登录态必须在 `/api/users/me` 成功后重新请求当前角色的 `/api/role/:roleId/menu`，并用最新菜单覆盖本地 session；角色菜单接口失败时降级为空菜单，不允许复用旧缓存菜单继续授予已撤销页面。
 - 前端数据概览已拆回旧菜单的两个入口：`/main/analysis/overview` 映射到独立 `SystemOverview` 只读说明页，复用 `PageShell/PageSurface/Table/Badge` 模板组件展示当前 Rust + Tauri 技术栈、前后端封装规范和发布门禁；`/main/analysis/workbench` 继续映射到 `Workspace` 工作台，通过 `src/api/dashboard.ts` 封装读取旧 `chart` 接口组合统计数据，不再依赖未实现的 `/chart/dashboard`。配套 `menu-adapter.test.ts`、`Dashboard.test.tsx`、`SystemOverview.test.tsx` 和 `dashboard.test.ts` 覆盖旧字段映射、旧菜单 URL 映射、页面渲染和实际请求路径。
@@ -276,7 +275,7 @@ POST /api/recovery/list
 - 生产认证不再使用开发态 `dev-{user_id}-{uuid}` token：`production_auth_service` 和 `admin-api` 数据库启动路径统一使用 `SecureTokenIssuer` 生成 32 字节随机 opaque token，并继续写回 `user.token` 保留旧单点登录语义；开发/测试内存服务仍保留 `DevelopmentTokenIssuer` 便于断言。
 - `admin-api` 权限中间件已引入 `AuthPolicy` / `require_policy` 作为统一策略入口，`require_admin` 与 `require_self_or_admin` 只保留语义化薄封装；策略单测和 `authorization_matrix` 同时锁定管理员、本人或管理员、普通登录读取、公开头像以及 `/api`/旧路径同权限边界，后续新增 handler 不得再散写 `is_super_admin` 判断。
 - 生产 CORS 必须通过 `APP_HTTP__CORS_ORIGINS` 显式配置允许来源；`APP_ENV=production` 下未配置或配置 `*` 会启动失败，避免企业交付时继续使用任意来源跨域。桌面默认保留 loopback 来源，Docker CI 使用 Web 容器端口来源。
-- `/api/code` 与旧 `/code` 验证码接口已补齐兼容路由，响应保持旧系统 data-only 形状 `{ data: "<svg...>" }`，不额外包 `{ code, message }`，避免旧前端或迁移期页面因响应形状变化崩溃；登录接口继续兼容旧后端“验证码字段存在但未强制校验”的行为。
+- 验证码接口已从新系统移除；`/code` 与 `/api/code` 不再作为登录能力暴露，避免保留无校验的安全伪功能。
 - `/admin/resources` 与 `/api/admin/resources` 支撑生产环境资源注册表页，响应保持 frontend-template 的 `key/title/description/count/status/apiPath/legacyPath/owner` 字段形态，并由 Rust 服务聚合实时数量，避免生产包依赖前端 mock。
 - 菜单服务通过 `MenuService` / `MenuStore` 抽象解耦；生产路径已装配 `MySqlMenuRepository`，API 集成测试继续使用内存菜单仓储验证旧响应形状和权限边界。
 - 公司服务通过 `CompanyService` / `CompanyStore` 抽象解耦；生产路径已装配 `MySqlCompanyRepository`，测试保留内存仓储用于接口兼容回归。

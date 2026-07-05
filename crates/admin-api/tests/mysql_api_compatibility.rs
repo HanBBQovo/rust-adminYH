@@ -59,10 +59,7 @@ async fn mysql_api_compatibility_uses_real_database_services() {
         "POST",
         "/api/login",
         None,
-        &format!(
-            r#"{{"name":"{}","password":"secret","code":"ignored"}}"#,
-            scope.admin_name
-        ),
+        &format!(r#"{{"name":"{}","password":"secret"}}"#, scope.admin_name),
     )
     .await;
     assert_eq!(login_status, StatusCode::OK);
@@ -876,10 +873,7 @@ async fn mysql_api_order_patch_delete_reconciles_legacy_side_effects_through_htt
         "POST",
         "/api/login",
         None,
-        &format!(
-            r#"{{"name":"{}","password":"secret","code":"ignored"}}"#,
-            scope.admin_name
-        ),
+        &format!(r#"{{"name":"{}","password":"secret"}}"#, scope.admin_name),
     )
     .await;
     assert_eq!(login_status, StatusCode::OK);
