@@ -1,8 +1,10 @@
 import { Building2, ClipboardList, FileCheck2, Info, KeyRound, LayoutDashboard, ListTree, PackageCheck, Settings, Users } from 'lucide-react'
 
-import type { AppPage, LegacyMenuItem, SessionNavItem } from '@/session/types'
+import type { AdminSession, AppPage, LegacyMenuItem, SessionNavItem } from '@/session/types'
 
-const FALLBACK_NAV_ITEMS: SessionNavItem[] = [
+export const SUPER_ADMIN_ROLE_ID = 1
+
+export const STATIC_NAV_ITEMS: SessionNavItem[] = [
   { key: 'overview', label: '系统概览', icon: Info },
   { key: 'workspace', label: '工作台', icon: LayoutDashboard },
   { key: 'orders', label: '订单列表', icon: PackageCheck },
@@ -32,16 +34,20 @@ function flattenMenus(menus: LegacyMenuItem[]): LegacyMenuItem[] {
   return menus.flatMap((menu) => [menu, ...flattenMenus([...(menu.children || []), ...(menu.chilren || [])])])
 }
 
+function menuChildren(menu: LegacyMenuItem): LegacyMenuItem[] {
+  return [...(menu.children || []), ...(menu.chilren || [])]
+}
+
 function menuText(menu: LegacyMenuItem): string {
   return [menu.name, menu.title, menu.url, menu.path].filter(Boolean).join(' ')
 }
 
 function isPageMenu(menu: LegacyMenuItem): boolean {
-  return menu.type === undefined || menu.type === null || menu.type === 2
+  return menu.type === undefined || menu.type === null || menu.type === 2 || menuChildren(menu).length === 0
 }
 
 function labelForPage(page: AppPage, source?: LegacyMenuItem): string {
-  const fallback = FALLBACK_NAV_ITEMS.find((item) => item.key === page)?.label || page
+  const fallback = STATIC_NAV_ITEMS.find((item) => item.key === page)?.label || page
   return source?.name || source?.title || fallback
 }
 
@@ -60,4 +66,16 @@ export function adaptLegacyMenus(menus: LegacyMenuItem[]): SessionNavItem[] {
     keys.add(item.key)
     return true
   })
+}
+
+export function isSuperAdminRole(roleIds: number[]): boolean {
+  return roleIds.includes(SUPER_ADMIN_ROLE_ID)
+}
+
+export function navigationForSession(session: Pick<AdminSession, 'user' | 'menus'>): SessionNavItem[] {
+  if (isSuperAdminRole(session.user.roleIds)) {
+    return [...STATIC_NAV_ITEMS]
+  }
+
+  return adaptLegacyMenus(session.menus)
 }

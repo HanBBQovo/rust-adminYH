@@ -9,7 +9,7 @@ import { PageShell, PageSurface } from '@/components/layout/PageScaffold'
 import { EmptyState } from '@/components/ui/empty-state'
 import { BRAND_NAME } from '@/config'
 import { motion } from '@/lib/motion'
-import { adaptLegacyMenus } from '@/session/menu-adapter'
+import { navigationForSession } from '@/session/menu-adapter'
 import { readStoredPage, saveStoredPage } from '@/session/session-store'
 import type { AdminSession, AppPage } from '@/session/types'
 
@@ -39,7 +39,7 @@ interface DashboardProps {
 
 export default function Dashboard({ session, onLogout }: DashboardProps) {
   const [activeSession, setActiveSession] = useState(session)
-  const navItems = useMemo(() => adaptLegacyMenus(activeSession.menus), [activeSession.menus])
+  const navItems = useMemo(() => navigationForSession(activeSession), [activeSession])
   const [currentPage, setCurrentPage] = useState<AppPage>(() => readStoredPage(navItems))
 
   const currentItem = useMemo(
@@ -70,7 +70,7 @@ export default function Dashboard({ session, onLogout }: DashboardProps) {
         <EmptyState
           icon={<ShieldAlert className="h-5 w-5" />}
           title="暂无可用菜单"
-          description="请联系管理员检查当前账号的角色和菜单授权。系统不会在空菜单时回退显示默认管理入口。"
+          description="请联系管理员检查当前账号的角色和菜单授权。超级管理员会自动拥有全部系统入口。"
         />
       </PageSurface>
     </PageShell>

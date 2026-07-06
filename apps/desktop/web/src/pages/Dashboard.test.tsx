@@ -39,10 +39,24 @@ function renderDashboard(session: AdminSession) {
 }
 
 describe('Dashboard', () => {
-  it('does not expose default admin nav when the session has no menus', () => {
+  it('exposes every admin nav item when the super admin session has no menus', () => {
     renderDashboard({
       token: 'token-123',
-      user: { id: 58, name: 'admin', roles: [], roleIds: [] },
+      user: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] },
+      menus: [],
+    })
+
+    expect(screen.getByRole('button', { name: '用户管理' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '角色权限' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '菜单管理' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '页面注册表' })).toBeInTheDocument()
+    expect(screen.queryByText('暂无可用菜单')).not.toBeInTheDocument()
+  })
+
+  it('does not expose default admin nav when a regular role has no menus', () => {
+    renderDashboard({
+      token: 'token-123',
+      user: { id: 59, name: 'operator', roles: ['2'], roleIds: [2] },
       menus: [],
     })
 
@@ -50,13 +64,12 @@ describe('Dashboard', () => {
     expect(screen.queryByRole('button', { name: '用户管理' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '角色权限' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '菜单管理' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '页面注册表' })).not.toBeInTheDocument()
   })
 
   it('renders only menus returned by the authenticated role', () => {
     renderDashboard({
       token: 'token-123',
-      user: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] },
+      user: { id: 59, name: 'operator', roles: ['2'], roleIds: [2] },
       menus: [
         { id: 1, name: '工作台', url: '/main/workbench' },
         { id: 2, name: '订单列表', url: '/main/order/orders' },

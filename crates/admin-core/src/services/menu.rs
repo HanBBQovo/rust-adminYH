@@ -6,6 +6,7 @@ use std::{
 };
 
 use crate::{
+    auth::is_super_admin,
     domain::MenuNode,
     dto::{LegacyMenuNode, MenuMutationRequest, RoleMenuIdsResponse},
     AppError, AppResult,
@@ -96,9 +97,16 @@ impl MenuService for CompatMenuService {
     ) -> ServiceFuture<'a, AppResult<Vec<LegacyMenuNode>>> {
         let store = Arc::clone(&self.store);
         Box::pin(async move {
+            let roots = store.menu_tree().await?;
+            if is_super_admin(&[role_id]) {
+                return Ok(roots
+                    .into_iter()
+                    .map(LegacyMenuNode::from_role_menu)
+                    .collect());
+            }
+
             let allowed_ids = store.menu_ids_for_role(role_id).await?;
             let allowed = allowed_ids.iter().copied().collect::<HashSet<_>>();
-            let roots = store.menu_tree().await?;
             Ok(filter_menu_tree(roots, &allowed)
                 .into_iter()
                 .map(LegacyMenuNode::from_role_menu)
@@ -190,7 +198,11 @@ impl MenuService for CompatMenuService {
                 .role_summary(role_id)
                 .await?
                 .ok_or_else(|| AppError::NotFound(format!("role {role_id}")))?;
-            let menu_ids = store.menu_ids_for_role(role_id).await?;
+            let menu_ids = if is_super_admin(&[role_id]) {
+                collect_menu_ids(&store.menu_tree().await?)
+            } else {
+                store.menu_ids_for_role(role_id).await?
+            };
 
             Ok(RoleMenuIdsResponse {
                 id: role.id,
@@ -421,6 +433,13 @@ fn filter_menu_tree(roots: Vec<MenuNode>, allowed: &HashSet<i64>) -> Vec<MenuNod
         .collect()
 }
 
+fn collect_menu_ids(nodes: &[MenuNode]) -> Vec<i64> {
+    nodes
+        .iter()
+        .flat_map(|node| std::iter::once(node.id).chain(collect_menu_ids(&node.children)))
+        .collect()
+}
+
 fn normalize_menu(input: MenuMutationRequest) -> AppResult<MenuCreateRecord> {
     let name = input.name.trim();
     if name.is_empty() {
@@ -537,6 +556,19 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn super_admin_role_menu_tree_returns_all_registered_menus() {
+        let service = development_menu_service();
+
+        let menus = service
+            .role_menu_tree(1)
+            .await
+            .expect("role menus should load");
+
+        assert!(menus.iter().any(|menu| menu.name == "订单管理"));
+        assert!(menus.iter().any(|menu| menu.name == "系统设置"));
+    }
+
+    #[tokio::test]
     async fn full_menu_tree_keeps_old_chilren_typo_for_compatibility() {
         let service = development_menu_service();
 
@@ -563,6 +595,7 @@ mod tests {
         assert_eq!(response.id, 1);
         assert_eq!(response.name, "超级管理员");
         assert!(response.menu_ids.contains(&21));
+        assert!(response.menu_ids.contains(&31));
     }
 
     #[tokio::test]

@@ -1,10 +1,28 @@
 import { describe, expect, it } from 'vitest'
 
-import { adaptLegacyMenus } from '@/session/menu-adapter'
+import { adaptLegacyMenus, navigationForSession, STATIC_NAV_ITEMS } from '@/session/menu-adapter'
 
 describe('adaptLegacyMenus', () => {
   it('does not grant template nav permissions when old menus are empty', () => {
     expect(adaptLegacyMenus([])).toEqual([])
+  })
+
+  it('grants every static page to the super admin role even when menus are empty', () => {
+    const items = navigationForSession({
+      user: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] },
+      menus: [],
+    })
+
+    expect(items.map((item) => item.key)).toEqual(STATIC_NAV_ITEMS.map((item) => item.key))
+  })
+
+  it('keeps regular roles constrained to backend menu permissions', () => {
+    const items = navigationForSession({
+      user: { id: 59, name: 'operator', roles: ['2'], roleIds: [2] },
+      menus: [{ name: '订单列表', url: '/main/order/orders' }],
+    })
+
+    expect(items.map((item) => item.key)).toEqual(['orders'])
   })
 
   it('does not grant template nav permissions when menus do not match known pages', () => {
@@ -92,6 +110,13 @@ describe('adaptLegacyMenus', () => {
 
     expect(items.map((item) => item.key)).toEqual(['companies'])
     expect(items[0].label).toBe('发货公司')
+  })
+
+  it('maps legacy type 1 leaf menus into concrete template pages', () => {
+    const items = adaptLegacyMenus([{ name: '订单管理', type: 1, url: '/main/order/list' }])
+
+    expect(items.map((item) => item.key)).toEqual(['orders'])
+    expect(items[0].label).toBe('订单管理')
   })
 
   it('does not map old type 1 system directories as registry pages', () => {
