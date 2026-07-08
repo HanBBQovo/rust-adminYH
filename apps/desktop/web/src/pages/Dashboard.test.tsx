@@ -82,35 +82,35 @@ describe('Dashboard', () => {
     expect(screen.queryByRole('button', { name: '角色权限' })).not.toBeInTheDocument()
   })
 
-  it('keeps the old analysis overview page separate from the workbench page', async () => {
+  it('ignores removed overview menus and renders the workbench page', async () => {
     renderDashboard({
       token: 'token-123',
-      user: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] },
+      user: { id: 59, name: 'operator', roles: ['2'], roleIds: [2] },
       menus: [
         { id: 1, name: '系统概览', url: '/main/analysis/overview' },
         { id: 2, name: '工作台', url: '/main/analysis/workbench' },
       ],
     })
 
-    expect(screen.getByRole('button', { name: '系统概览' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '系统概览' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '工作台' })).toBeInTheDocument()
-    await expect(screen.findByRole('heading', { level: 1, name: '系统概览' }, { timeout: 5000 })).resolves.toBeInTheDocument()
+    await expect(screen.findByRole('heading', { level: 1, name: '工作台' }, { timeout: 5000 })).resolves.toBeInTheDocument()
   })
 
   it('restores the last page through the session store wrapper', async () => {
-    window.localStorage.setItem(lastPageStorageKey(), 'overview')
+    window.localStorage.setItem(lastPageStorageKey(), 'orders')
 
     renderDashboard({
       token: 'token-123',
       user: { id: 58, name: 'admin', roles: ['1'], roleIds: [1] },
       menus: [
         { id: 1, name: '工作台', url: '/main/workbench' },
-        { id: 2, name: '系统概览', url: '/main/analysis/overview' },
+        { id: 2, name: '订单列表', url: '/main/order/orders' },
       ],
     })
 
-    expect(screen.getByRole('button', { name: '系统概览' })).toHaveAttribute('data-active', 'true')
-    await expect(screen.findByRole('heading', { level: 1, name: '系统概览' }, { timeout: 5000 })).resolves.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '订单列表' })).toHaveAttribute('data-active', 'true')
+    await expect(screen.findByRole('heading', { level: 1, name: '订单列表' }, { timeout: 5000 })).resolves.toBeInTheDocument()
   })
 
   it('applies persisted appearance preferences to the template shell', async () => {

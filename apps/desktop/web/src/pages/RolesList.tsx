@@ -434,25 +434,17 @@ export default function RolesList() {
           <TableHeader>
             <TableRow>
               <DataTableRowNumberHead />
-              <StickyActionHead className="min-w-[180px]" />
               <TableHead className="min-w-[160px]">角色名</TableHead>
               <TableHead className="min-w-[220px]">权限介绍</TableHead>
               <TableHead className="min-w-[220px]">创建时间</TableHead>
               <TableHead className="min-w-[220px]">更新时间</TableHead>
+              <StickyActionHead className="min-w-[180px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((row, index) => (
               <TableRow key={row.id}>
                 <DataTableRowNumberCell value={(page - 1) * pageSize + index + 1} />
-                <StickyActionCell>
-                  <DataTableActionGroup>
-                    <DataTableIconAction label="查看角色" icon={Eye} onClick={() => openRoleDialog('view', row)} />
-                    <DataTableIconAction label="编辑角色" icon={Pencil} onClick={() => openRoleDialog('edit', row)} />
-                    <DataTableIconAction label="分配权限" icon={ShieldCheck} onClick={() => openAssignDialog(row)} />
-                    <DataTableIconAction label="删除角色" icon={Trash2} destructive onClick={() => removeRole(row)} />
-                  </DataTableActionGroup>
-                </StickyActionCell>
                 <TableCell className="font-medium">{row.name}</TableCell>
                 <TableCell>
                   <Badge variant="outline" className="max-w-[18rem] truncate">
@@ -461,6 +453,14 @@ export default function RolesList() {
                 </TableCell>
                 <DataTableDateCell value={row.createAt} />
                 <DataTableDateCell value={row.updateAt} />
+                <StickyActionCell>
+                  <DataTableActionGroup>
+                    <DataTableIconAction label="查看角色" icon={Eye} onClick={() => openRoleDialog('view', row)} />
+                    <DataTableIconAction label="编辑角色" icon={Pencil} onClick={() => openRoleDialog('edit', row)} />
+                    <DataTableIconAction label="分配权限" icon={ShieldCheck} onClick={() => openAssignDialog(row)} />
+                    <DataTableIconAction label="删除角色" icon={Trash2} destructive onClick={() => removeRole(row)} />
+                  </DataTableActionGroup>
+                </StickyActionCell>
               </TableRow>
             ))}
           </TableBody>

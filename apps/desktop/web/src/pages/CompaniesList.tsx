@@ -219,17 +219,23 @@ export default function CompaniesList() {
           <TableHeader>
             <TableRow>
               <DataTableRowNumberHead />
-              <StickyActionHead className="min-w-[160px]" />
               <TableHead className="min-w-[180px]">发货公司</TableHead>
               <TableHead className="min-w-[120px] text-right">订单数量</TableHead>
               <TableHead className="min-w-[220px]">创建时间</TableHead>
               <TableHead className="min-w-[220px]">更新时间</TableHead>
+              <StickyActionHead className="min-w-[160px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((row, index) => (
               <TableRow key={row.id}>
                 <DataTableRowNumberCell value={(page - 1) * pageSize + index + 1} />
+                <TableCell className="font-medium">{row.name}</TableCell>
+                <TableCell className="text-right">
+                  <Badge variant="outline">{row.Countorder}</Badge>
+                </TableCell>
+                <DataTableDateCell value={row.createAt} />
+                <DataTableDateCell value={row.updateAt} />
                 <StickyActionCell>
                   <DataTableActionGroup>
                     <DataTableIconAction label="查看发货公司" icon={Eye} onClick={() => openCompanyDialog('view', row)} />
@@ -237,12 +243,6 @@ export default function CompaniesList() {
                     <DataTableIconAction label="删除发货公司" icon={Trash2} destructive onClick={() => removeCompany(row)} />
                   </DataTableActionGroup>
                 </StickyActionCell>
-                <TableCell className="font-medium">{row.name}</TableCell>
-                <TableCell className="text-right">
-                  <Badge variant="outline">{row.Countorder}</Badge>
-                </TableCell>
-                <DataTableDateCell value={row.createAt} />
-                <DataTableDateCell value={row.updateAt} />
               </TableRow>
             ))}
           </TableBody>

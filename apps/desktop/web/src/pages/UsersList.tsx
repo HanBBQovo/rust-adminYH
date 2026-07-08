@@ -495,27 +495,19 @@ export default function UsersList() {
           <TableHeader>
             <TableRow>
               <DataTableRowNumberHead />
-              <StickyActionHead className="min-w-[220px]" />
               <TableHead className="min-w-[120px]">用户名</TableHead>
               <TableHead className="min-w-[120px]">权限身份</TableHead>
               <TableHead className="min-w-[120px]">头像</TableHead>
               <TableHead className="min-w-[100px]">状态</TableHead>
               <TableHead className="min-w-[220px]">创建时间</TableHead>
               <TableHead className="min-w-[220px]">更新时间</TableHead>
+              <StickyActionHead className="min-w-[220px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((row, index) => (
               <TableRow key={row.id}>
                 <DataTableRowNumberCell value={(page - 1) * pageSize + index + 1} />
-                <StickyActionCell>
-                  <DataTableActionGroup>
-                    <DataTableIconAction label="查看用户" icon={Eye} onClick={() => openUserDialog('view', row)} />
-                    <DataTableIconAction label="编辑用户" icon={Pencil} onClick={() => openUserDialog('edit', row)} />
-                    <DataTableIconAction label="重置密码" icon={KeyRound} onClick={() => openPasswordDialog(row)} />
-                    <DataTableIconAction label="删除用户" icon={Trash2} destructive onClick={() => removeUser(row)} />
-                  </DataTableActionGroup>
-                </StickyActionCell>
                 <TableCell className="font-medium">{row.name}</TableCell>
                 <TableCell>{roleName(row.roleId, roleOptions)}</TableCell>
                 <TableCell>
@@ -529,6 +521,14 @@ export default function UsersList() {
                 </TableCell>
                 <DataTableDateCell value={row.createAt} />
                 <DataTableDateCell value={row.updateAt} />
+                <StickyActionCell>
+                  <DataTableActionGroup>
+                    <DataTableIconAction label="查看用户" icon={Eye} onClick={() => openUserDialog('view', row)} />
+                    <DataTableIconAction label="编辑用户" icon={Pencil} onClick={() => openUserDialog('edit', row)} />
+                    <DataTableIconAction label="重置密码" icon={KeyRound} onClick={() => openPasswordDialog(row)} />
+                    <DataTableIconAction label="删除用户" icon={Trash2} destructive onClick={() => removeUser(row)} />
+                  </DataTableActionGroup>
+                </StickyActionCell>
               </TableRow>
             ))}
           </TableBody>

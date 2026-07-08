@@ -24,7 +24,6 @@ export interface LegacyMenuItem {
 }
 
 export type AppPage =
-  | 'overview'
   | 'workspace'
   | 'orders'
   | 'receipts'

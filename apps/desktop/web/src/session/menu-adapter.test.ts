@@ -37,18 +37,18 @@ describe('adaptLegacyMenus', () => {
       { name: '系统设置', url: '/main/settings' },
     ])
 
-    expect(items.map((item) => item.key)).toEqual(['overview', 'workspace', 'orders', 'settings'])
-    expect(items[2].label).toBe('订单管理')
+    expect(items.map((item) => item.key)).toEqual(['workspace', 'orders', 'settings'])
+    expect(items[1].label).toBe('订单管理')
   })
 
-  it('keeps the old overview route separate from the workbench dashboard', () => {
+  it('ignores the removed old overview route and keeps the workbench page', () => {
     const items = adaptLegacyMenus([
       { name: '概览', url: '/main/analysis/overview' },
       { name: '工作台', url: '/main/analysis/workbench' },
     ])
 
-    expect(items.map((item) => item.key)).toEqual(['overview', 'workspace'])
-    expect(items[0].label).toBe('概览')
+    expect(items.map((item) => item.key)).toEqual(['workspace'])
+    expect(items[0].label).toBe('工作台')
   })
 
   it('maps role and menu permission entries as separate template pages', () => {

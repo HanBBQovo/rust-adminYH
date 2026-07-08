@@ -116,11 +116,13 @@ describe('DataTableSurface', () => {
 
     expect(screen.getByRole('columnheader', { name: '操作' })).toHaveClass(
       'sticky',
-      'left-0',
+      'right-0',
       'z-10',
+      'border-l',
       'bg-background',
+      'text-right',
     )
-    expect(screen.getByText('操作按钮').closest('td')).toHaveClass('sticky', 'left-0', 'z-10', 'bg-background')
+    expect(screen.getByText('操作按钮').closest('td')).toHaveClass('sticky', 'right-0', 'z-10', 'border-l', 'bg-background')
   })
 
   it('centralizes common table cell primitives', () => {
@@ -148,7 +150,7 @@ describe('DataTableSurface', () => {
       'text-xs',
       'text-muted-foreground',
     )
-    expect(screen.getByRole('button', { name: '编辑' }).parentElement).toHaveClass('flex', 'items-center', 'gap-1')
+    expect(screen.getByRole('button', { name: '编辑' }).parentElement).toHaveClass('flex', 'items-center', 'justify-end', 'gap-1')
     expect(screen.getByRole('button', { name: '编辑' }).querySelector('svg')).toHaveClass('h-4', 'w-4')
     expect(screen.getByRole('button', { name: '删除' }).querySelector('svg')).toHaveClass('text-destructive')
     expect(screen.getByText('2026-07-03 12:00:00').closest('td')).toHaveClass('font-mono', 'text-xs')

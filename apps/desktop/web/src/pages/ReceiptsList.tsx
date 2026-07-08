@@ -377,10 +377,10 @@ export default function ReceiptsList() {
                 onCheckedChange={(value) => toggleVisibleRows(value === true)}
               />
               <DataTableRowNumberHead />
-              <StickyActionHead className="min-w-[220px]">状态操作</StickyActionHead>
               {RECEIPT_COLUMNS.map((column) => (
                 <TableHead key={column.key} className={column.className}>{column.label}</TableHead>
               ))}
+              <StickyActionHead className="min-w-[220px]">状态操作</StickyActionHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -392,10 +392,10 @@ export default function ReceiptsList() {
                   onCheckedChange={(value) => toggleRow(row.id, value === true)}
                 />
                 <DataTableRowNumberCell value={(page - 1) * pageSize + index + 1} />
-                <StickyActionCell>{renderStateActions(row)}</StickyActionCell>
                 {RECEIPT_COLUMNS.map((column) => (
                   <TableCell key={column.key} className={column.className}>{renderCell(row, column)}</TableCell>
                 ))}
+                <StickyActionCell>{renderStateActions(row)}</StickyActionCell>
               </TableRow>
             ))}
           </TableBody>

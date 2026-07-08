@@ -328,7 +328,6 @@ export default function MenusList() {
           <TableHeader>
             <TableRow>
               <DataTableRowNumberHead>ID</DataTableRowNumberHead>
-              <StickyActionHead className="min-w-[120px]" />
               <TableHead className="min-w-[220px]">菜单名称</TableHead>
               <TableHead className="min-w-[110px]">类型</TableHead>
               <TableHead className="min-w-[240px]">菜单url</TableHead>
@@ -337,18 +336,13 @@ export default function MenusList() {
               <TableHead className="min-w-[90px] text-right">排序</TableHead>
               <TableHead className="min-w-[220px]">创建时间</TableHead>
               <TableHead className="min-w-[220px]">更新时间</TableHead>
+              <StickyActionHead className="min-w-[120px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {flatRows.map((row) => (
               <TableRow key={row.id}>
                 <DataTableRowNumberCell value={row.id} />
-                <StickyActionCell>
-                  <DataTableActionGroup>
-                    <DataTableIconAction label="编辑菜单" icon={Pencil} onClick={() => openEditDialog(row)} />
-                    <DataTableIconAction label="删除菜单" icon={Trash2} destructive onClick={() => removeMenu(row)} />
-                  </DataTableActionGroup>
-                </StickyActionCell>
                 <TableCell>
                   <TreeIndent depth={row.depth} className="flex items-center gap-2">
                     <FolderTree className="h-4 w-4 text-primary" />
@@ -364,6 +358,12 @@ export default function MenusList() {
                 <TableCell className="text-right font-mono text-xs">{row.sort}</TableCell>
                 <DataTableDateCell value={row.createAt} />
                 <DataTableDateCell value={row.updateAt} />
+                <StickyActionCell>
+                  <DataTableActionGroup>
+                    <DataTableIconAction label="编辑菜单" icon={Pencil} onClick={() => openEditDialog(row)} />
+                    <DataTableIconAction label="删除菜单" icon={Trash2} destructive onClick={() => removeMenu(row)} />
+                  </DataTableActionGroup>
+                </StickyActionCell>
               </TableRow>
             ))}
           </TableBody>

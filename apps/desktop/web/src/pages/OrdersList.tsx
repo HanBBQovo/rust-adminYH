@@ -1,5 +1,5 @@
 import { Download, Eye, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import {
   createOrder,
@@ -17,6 +17,8 @@ import {
   DataTableIconAction,
   DataTableRowNumberCell,
   DataTableRowNumberHead,
+  DataTableSelectionCell,
+  DataTableSelectionHead,
   DataTableSurface,
   StickyActionCell,
   StickyActionHead,
@@ -105,6 +107,7 @@ export default function OrdersList() {
   const [draft, setDraft] = useState<OrderFilterDraft>(() => emptyFilters())
   const [filters, setFilters] = useState<OrderListFilters>({})
   const { pending: exporting, runMutation: runExportMutation } = useMutationAction()
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
 
   const { data, loading, error, refresh, page, pageSize, setPage, rows, total, pagination } = usePaginatedResource({
     pageSize: PAGE_SIZE,
@@ -112,6 +115,17 @@ export default function OrdersList() {
     buildQuery: ({ page, pageSize }) => ({ page, pageSize, ...filters }),
     fetcher: listOrders,
   })
+  const visibleIds = useMemo(() => rows.map((row) => row.id), [rows])
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedSet.has(id))
+  const someVisibleSelected = visibleIds.some((id) => selectedSet.has(id))
+
+  useEffect(() => {
+    setSelectedIds((current) => {
+      const next = current.filter((id) => visibleIds.includes(id))
+      return next.length === current.length ? current : next
+    })
+  }, [visibleIds])
 
   const updateDraft = <K extends keyof OrderFilterDraft>(key: K, value: OrderFilterDraft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -126,6 +140,25 @@ export default function OrdersList() {
     setDraft(emptyFilters())
     setPage(1)
     setFilters({})
+    setSelectedIds([])
+  }
+
+  const toggleRow = (rowId: number, checked: boolean) => {
+    setSelectedIds((current) => {
+      if (checked) return Array.from(new Set([...current, rowId]))
+      return current.filter((id) => id !== rowId)
+    })
+  }
+
+  const toggleVisibleRows = (checked: boolean) => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      visibleIds.forEach((id) => {
+        if (checked) next.add(id)
+        else next.delete(id)
+      })
+      return Array.from(next)
+    })
   }
 
   const submitOrder = async (values: OrderMutationPayload) => {
@@ -251,17 +284,30 @@ export default function OrdersList() {
         <Table>
           <TableHeader>
             <TableRow>
+              <DataTableSelectionHead
+                checked={allVisibleSelected || (someVisibleSelected ? 'indeterminate' : false)}
+                label="选择当前页订单"
+                onCheckedChange={(value) => toggleVisibleRows(value === true)}
+              />
               <DataTableRowNumberHead />
-              <StickyActionHead className="min-w-[160px]" />
               {ORDER_COLUMNS.map((column) => (
                 <TableHead key={column.key} className={column.className}>{column.label}</TableHead>
               ))}
+              <StickyActionHead className="min-w-[160px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((row, index) => (
               <TableRow key={row.id}>
+                <DataTableSelectionCell
+                  checked={selectedSet.has(row.id)}
+                  label={`选择订单 ${row.oddnumber}`}
+                  onCheckedChange={(value) => toggleRow(row.id, value === true)}
+                />
                 <DataTableRowNumberCell value={(page - 1) * pageSize + index + 1} />
+                {ORDER_COLUMNS.map((column) => (
+                  <TableCell key={column.key} className={column.className}>{renderCell(row, column)}</TableCell>
+                ))}
                 <StickyActionCell>
                   <DataTableActionGroup>
                     <DataTableIconAction label="查看订单" icon={Eye} onClick={() => openOrderDialog('view', row)} />
@@ -269,9 +315,6 @@ export default function OrdersList() {
                     <DataTableIconAction label="删除订单" icon={Trash2} destructive onClick={() => removeOrder(row)} />
                   </DataTableActionGroup>
                 </StickyActionCell>
-                {ORDER_COLUMNS.map((column) => (
-                  <TableCell key={column.key} className={column.className}>{renderCell(row, column)}</TableCell>
-                ))}
               </TableRow>
             ))}
           </TableBody>

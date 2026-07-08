@@ -71,15 +71,15 @@ export function StickyActionHead({
   className?: string
   children?: ReactNode
 }) {
-  return <TableHead className={cn('sticky left-0 z-10 bg-background', className)}>{children}</TableHead>
+  return <TableHead className={cn('sticky right-0 z-10 border-l bg-background text-right', className)}>{children}</TableHead>
 }
 
 export function StickyActionCell({ className, children }: { className?: string; children: ReactNode }) {
-  return <TableCell className={cn('sticky left-0 z-10 bg-background', className)}>{children}</TableCell>
+  return <TableCell className={cn('sticky right-0 z-10 border-l bg-background', className)}>{children}</TableCell>
 }
 
 export function DataTableActionGroup({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cn('flex items-center gap-1', className)}>{children}</div>
+  return <div className={cn('flex items-center justify-end gap-1', className)}>{children}</div>
 }
 
 export function DataTableIconAction({
